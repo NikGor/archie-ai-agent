@@ -1,7 +1,7 @@
 import logging
 from typing import List
 from fastapi import APIRouter, HTTPException, Query
-from .models import ChatMessage, Conversation, ChatRequest
+from .models import ChatMessage, Conversation, ChatRequest, CreateConversationRequest, CreateConversationResponse
 from .api_controller import handle_chat
 from .services.backend import get_database
 
@@ -40,6 +40,25 @@ async def get_conversations(limit: int = Query(50, description="Maximum number o
         return conversations
     except Exception as e:
         logger.error(f"Error fetching conversations: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@router.post("/conversations/create")
+async def create_conversation(request: CreateConversationRequest) -> CreateConversationResponse:
+    """Create a new conversation."""
+    try:
+        logger.info(f"Creating new conversation with ID: {request.conversation_id or 'auto-generated'}")
+        conversation = db.create_conversation(request.conversation_id)
+        logger.info(f"Successfully created conversation {conversation.conversation_id}")
+        
+        return CreateConversationResponse(
+            conversation_id=conversation.conversation_id,
+            created_at=conversation.created_at
+        )
+    except ValueError as e:
+        logger.warning(f"Validation error creating conversation: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating conversation: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @router.get("/conversations/{conversation_id}")

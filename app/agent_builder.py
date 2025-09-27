@@ -14,6 +14,7 @@ from agents.extensions.handoff_prompt import RECOMMENDED_PROMPT_PREFIX
 from .models import (
     Metadata, 
 )
+from .config import DEFAULT_USER_NAME, DEFAULT_PERSONA
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -31,14 +32,18 @@ _env = Environment(
 
 class AgentResponse(BaseModel):
     """Response model for AI agent output"""
-    response: str = Field(description="Main text response from the AI agent in the specified response format")
+    response: str = Field(
+        description="""
+        Main text response from the AI agent in the specified response format
+        Don't duplicate metadata information in the main response text.
+        """
+    )
     metadata: Metadata = Field(description="Additional metadata for enriching the response")
     
 # ==== Agent Builder ====
 
-def build_main_agent(
-    state: Dict[str, Any],
-) -> Agent:
+def build_main_agent() -> Agent:
+    state = get_state(user_name=DEFAULT_USER_NAME, persona="flirty")
     persona_key = state["persona"].lower().strip()
     persona_template_path = os.path.join(PROMPTS_DIR, f"persona_{persona_key}.jinja2")
     if not os.path.exists(persona_template_path):

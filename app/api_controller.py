@@ -15,8 +15,7 @@ PERSONA = DEFAULT_PERSONA
 USER_NAME = DEFAULT_USER_NAME
 
 logger.info(f"Initializing agent with persona: {PERSONA}, user: {USER_NAME}")
-app_state = get_state(user_name=USER_NAME, persona=PERSONA)
-main_agent = build_main_agent(app_state)
+main_agent = build_main_agent()
 logger.info("Main agent initialized successfully")
 
 # Database instance
@@ -49,9 +48,8 @@ async def handle_chat(user_message: ChatMessage) -> ChatMessage:
     # Process with agent
     logger.info("Processing message with AI agent...")
     
-    # Update app state with text format from the incoming message
-    app_state_with_format = {**app_state, "text_format": user_message.text_format}
-    format_aware_agent = build_main_agent(app_state_with_format)
+    # Create agent
+    format_aware_agent = build_main_agent()
     
     result = await Runner.run(
         format_aware_agent, 

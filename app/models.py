@@ -11,14 +11,12 @@ class ButtonOption(BaseModel):
 class DropdownOption(BaseModel):
     """Option for dropdown menu"""
     label: str = Field(description="Display text for the option")
-    value: str = Field(description="Value of the option")
     command: str = Field(None, description="Command to execute when selected")
     # url: Optional[str] = Field(None, description="URL to navigate to when selected")
     
 class ChecklistOption(BaseModel):
     """Checkbox option in a task list"""
     label: str = Field(description="Task text")
-    value: str = Field(description="Task value")
     checked: bool = Field(False, description="Checkbox state (checked/unchecked)")
     command: str = Field(None, description="Command to execute when state changes")
     # url: Optional[str] = Field(None, description="URL to navigate to when clicked")
@@ -32,7 +30,7 @@ class UIElements(BaseModel):
 class Card(BaseModel):
     """Card with information and interactive elements"""
     title: Optional[str] = Field(None, description="Card title")
-    subtitle: Optional[str] = Field(None, description="Card subtitle")
+    text: str = Field(None, description="Card main text content")
     # image_url: Optional[str] = Field(None, description="URL of the card image")
     options: Optional[UIElements] = Field(None, description="Interactive elements of the card")
 
@@ -97,3 +95,13 @@ class ChatRequest(BaseModel):
     text: str = Field(description="Content of the message")
     text_format: Literal["plain", "markdown", "html", "voice"] = Field("plain", description="Format of the message text")
     conversation_id: Optional[str] = Field(None, description="ID of the conversation this message belongs to")
+
+class CreateConversationRequest(BaseModel):
+    """Request model for creating a new conversation"""
+    conversation_id: Optional[str] = Field(None, description="Optional custom conversation ID. If not provided, will be auto-generated")
+
+class CreateConversationResponse(BaseModel):
+    """Response model for conversation creation"""
+    conversation_id: str = Field(description="ID of the created conversation")
+    created_at: datetime = Field(description="Timestamp when the conversation was created")
+    message: str = Field("Conversation created successfully", description="Success message")

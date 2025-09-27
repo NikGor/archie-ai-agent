@@ -249,6 +249,32 @@ class ChatDatabase:
             
             return Conversation(**conversation_dict)
     
+    def create_conversation(self, conversation_id: str = None) -> Conversation:
+        """Create a new conversation."""
+        import uuid
+        
+        if not conversation_id:
+            conversation_id = str(uuid.uuid4())
+        
+        created_at = datetime.now(timezone.utc)
+        
+        with sqlite3.connect(self.db_path) as conn:
+            try:
+                conn.execute("""
+                    INSERT INTO conversations (conversation_id, created_at)
+                    VALUES (?, ?)
+                """, (conversation_id, created_at.isoformat()))
+                conn.commit()
+                logger.info(f"Created new conversation {conversation_id}")
+                
+                return Conversation(
+                    conversation_id=conversation_id,
+                    messages=[],
+                    created_at=created_at
+                )
+            except sqlite3.IntegrityError:
+                raise ValueError(f"Conversation with ID {conversation_id} already exists")
+    
     def delete_conversation(self, conversation_id: str) -> None:
         """Delete a conversation and all its messages."""
         with sqlite3.connect(self.db_path) as conn:
