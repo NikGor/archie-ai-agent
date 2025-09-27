@@ -21,7 +21,7 @@ set_default_openai_key(OPENAI_API_KEY)
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "prompts")
 _env = Environment(
     loader=FileSystemLoader(PROMPTS_DIR),
-    autoescape=select_autoescape(enabled_extensions=("j2",)),
+    autoescape=select_autoescape(enabled_extensions=("jinja2",)),
 )
 
 def build_main_agent(

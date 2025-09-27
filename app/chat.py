@@ -22,9 +22,9 @@ async def chat():
     print(f"Active persona: {PERSONA}")
     history = []
     while True:
-        user_input = input("You: ")
+        user_input = input("**You**: ")
         if user_input.lower() == "exit":
-            print("Goodbye!")
+            print("**Assistant**: Goodbye!")
             break
         history.append({"role": "user", "content": user_input})
         result = await Runner.run(
@@ -32,7 +32,7 @@ async def chat():
             history,
         )
         assistant_reply = result.final_output if hasattr(result, "final_output") else str(result)
-        print(f"Assistant: {assistant_reply}")
+        print(f"**Assistant**: {assistant_reply}")
         history.append({"role": "assistant", "content": assistant_reply})
 
 def main():
