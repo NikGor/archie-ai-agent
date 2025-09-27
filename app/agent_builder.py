@@ -31,8 +31,8 @@ _env = Environment(
 
 class AgentResponse(BaseModel):
     """Response model for AI agent output"""
-    response: str = Field(description="Main text response from the AI agent")
-    metadata: Metadata = Field(None, description="Additional metadata for enriching the response")
+    response: str = Field(description="Main text response from the AI agent in the specified response format")
+    metadata: Metadata = Field(description="Additional metadata for enriching the response")
     
 # ==== Agent Builder ====
 
@@ -62,7 +62,7 @@ def build_main_agent(
         instructions=instructions,
         output_type=AgentResponse,
         tools=[WebSearchTool()],
-        model='gpt-4.1-mini',
+        model='gpt-4.1',
     )
     logger.info("Initialized MainAgent with persona '%s'", persona_key)
     return agent

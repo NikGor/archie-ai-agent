@@ -124,14 +124,16 @@ class ChatDatabase:
             conn.commit()
             logger.debug(f"Saved conversation {conversation.conversation_id} with {len(conversation.messages)} messages")
     
-    def get_conversation_history(self, conversation_id: str) -> List[ChatMessage]:
+    def get_conversation_history(self, conversation_id: str, order_desc: bool = False) -> List[ChatMessage]:
         """Load conversation history ordered by creation time."""
+        order_clause = "ORDER BY created_at DESC" if order_desc else "ORDER BY created_at ASC"
+        
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            cursor = conn.execute("""
+            cursor = conn.execute(f"""
                 SELECT * FROM messages 
                 WHERE conversation_id = ? 
-                ORDER BY created_at ASC
+                {order_clause}
             """, (conversation_id,))
             
             messages = []
@@ -154,8 +156,8 @@ class ChatDatabase:
             return messages
     
     def get_conversation_history_for_agent(self, conversation_id: str) -> List[Dict[str, str]]:
-        """Get conversation history in OpenAI API compatible format."""
-        messages = self.get_conversation_history(conversation_id)
+        """Get conversation history in OpenAI API compatible format (chronological order)."""
+        messages = self.get_conversation_history(conversation_id, order_desc=False)
         return [
             {"role": msg.role, "content": msg.text}
             for msg in messages
@@ -185,6 +187,67 @@ class ChatDatabase:
             """, (limit,))
             
             return [row[0] for row in cursor.fetchall()]
+    
+    def get_all_conversations(self, limit: int = 50) -> List[Conversation]:
+        """Get all conversations with their basic info (without messages)."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("""
+                SELECT conversation_id, created_at, llm_trace 
+                FROM conversations 
+                ORDER BY created_at DESC 
+                LIMIT ?
+            """, (limit,))
+            
+            conversations = []
+            for row in cursor.fetchall():
+                conversation_dict = dict(row)
+                
+                # Parse JSON fields
+                if conversation_dict['llm_trace']:
+                    conversation_dict['llm_trace'] = json.loads(conversation_dict['llm_trace'])
+                
+                # Convert datetime string back to datetime object
+                conversation_dict['created_at'] = datetime.fromisoformat(conversation_dict['created_at'])
+                
+                # Create conversation without messages (empty list)
+                conversation_dict['messages'] = []
+                
+                conversations.append(Conversation(**conversation_dict))
+            
+            logger.debug(f"Loaded {len(conversations)} conversations")
+            return conversations
+    
+    def get_conversation_with_messages(self, conversation_id: str) -> Optional[Conversation]:
+        """Get a complete conversation with all its messages."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            
+            # Get conversation info
+            cursor = conn.execute("""
+                SELECT conversation_id, created_at, llm_trace 
+                FROM conversations 
+                WHERE conversation_id = ?
+            """, (conversation_id,))
+            
+            conv_row = cursor.fetchone()
+            if not conv_row:
+                return None
+            
+            conversation_dict = dict(conv_row)
+            
+            # Parse JSON fields
+            if conversation_dict['llm_trace']:
+                conversation_dict['llm_trace'] = json.loads(conversation_dict['llm_trace'])
+            
+            # Convert datetime string back to datetime object
+            conversation_dict['created_at'] = datetime.fromisoformat(conversation_dict['created_at'])
+            
+            # Get messages for this conversation (sorted by newest first for API response)
+            messages = self.get_conversation_history(conversation_id, order_desc=True)
+            conversation_dict['messages'] = messages
+            
+            return Conversation(**conversation_dict)
     
     def delete_conversation(self, conversation_id: str) -> None:
         """Delete a conversation and all its messages."""

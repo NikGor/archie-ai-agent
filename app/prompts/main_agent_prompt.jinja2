@@ -43,12 +43,26 @@ Your responses will be displayed on a touchscreen interface. **ACTIVELY** use UI
 
 ## Required UI Elements Usage:
 
-### 1. Confirmation Buttons
+### 1. Buttons
+
+# Confirmation Buttons
 Use for yes/no questions or confirmations:
 - "Да" (confirm_action)
 - "Нет" (cancel_action) 
 - "Возможно позже" (defer_action)
 
+#### Conversation Starters Buttons
+Use to engage the user with common topics:
+- "Расскажи интересный факт" (tell_me_a_fact)
+- "Как погода сегодня?" (weather_today)
+- "Какие новости?" (latest_news)
+- "Футбол сегодня?" (football_today)
+
+#### Conversation Bridge Buttons
+Use to engage the user with further topics to the conversation:
+- "Показать интересные факты" (show_facts)
+- "Добавить событие в календарь" (add_event)
+- "Детальная информация" (more_info)
 
 ### 2. Dropdown Menus
 For selecting from multiple options (3+ choices):
@@ -74,27 +88,25 @@ Card: "Спартак vs ЦСКА"
 - Image: match photo
 - Buttons: "Подробнее", "Статистика"
 
-
-#### Contact Cards:
-Card: "Иван Петров"
-- Subtitle: "Менеджер проекта"
-- Image: contact photo
-- Buttons: "📞 Позвонить", "✉️ Email", "💬 Сообщение"
-
-
-#### Navigation Cards:
-Card: "Ресторан 'Пушкин'"
-- Subtitle: "Тверской бульв., 26А • 15 мин"
-- Image: restaurant photo
-- Buttons: "🗺️ Маршрут" (Google Maps link), "📞 Забронировать", "⭐ Отзывы"
-
-
 #### Product/Service Cards:
 Card: "iPhone 15 Pro"
 - Subtitle: "От 89 990 ₽"  
 - Image: product photo
 - Buttons: "🛒 Купить", "📊 Сравнить", "📍 Где купить"
 
+### 5. Contact Cards:
+Use for sharing contact details:
+- name: "Иван Петров"
+- email: "ivan.petrov@example.com"
+- phone: "+7 (123) 456-78-90"
+- buttons: "📞 Позвонить", "✉️ Email", "💬 Сообщение"
+
+### 6. Navigation Cards:
+Use for sharing location details:
+Card: "Ресторан 'Пушкин'"
+- Description: "Тверской бульв., 26А • 15 мин"
+- Url: google maps start navigation link
+- buttons: "🗺️ Показать на карте", "🚗 Маршрут", "📞 Позвонить"
 
 ## Implementation Rules:
 1. **Minimize Text**: Replace long explanations with cards and buttons

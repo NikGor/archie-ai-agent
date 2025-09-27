@@ -6,6 +6,7 @@ from .state import get_state
 from .services.backend import get_database
 from .models import ChatMessage
 from .config import DEFAULT_PERSONA, DEFAULT_USER_NAME, DEFAULT_CONVERSATION_ID
+from .utils import generate_message_id, generate_conversation_id
 
 logger = logging.getLogger(__name__)
 
@@ -25,16 +26,16 @@ logger.info("Database connection established")
 async def handle_chat(user_message: ChatMessage) -> ChatMessage:
     """Handle chat message with database persistence."""
     
-    conversation_id = user_message.conversation_id or DEFAULT_CONVERSATION_ID
+    # Generate conversation_id if not provided
+    conversation_id = user_message.conversation_id or generate_conversation_id()
     logger.info(f"Handling chat message for conversation: {conversation_id}")
     logger.debug(f"User message: {user_message.text}")
     
-    # Update user message with conversation_id and ensure message_id exists
+    # Update user message with conversation_id and generate message_id
     user_message.conversation_id = conversation_id
-    if not user_message.message_id:
-        user_message.message_id = str(uuid.uuid4())
+    user_message.message_id = generate_message_id()
     
-    # Load conversation history from database
+    # Load conversation history from database (in chronological order for agent)
     conversation_history = db.get_conversation_history_for_agent(conversation_id)
     logger.debug(f"Loaded {len(conversation_history)} messages from history")
     
@@ -64,10 +65,10 @@ async def handle_chat(user_message: ChatMessage) -> ChatMessage:
     
     # Save assistant response to database
     assistant_message = ChatMessage(
-        message_id=str(uuid.uuid4()),
+        message_id=generate_message_id(),
         role="assistant",
         text=response_text,
-        text_format=user_message.text_format,  # Use the same format as the incoming message
+        text_format=user_message.text_format,
         conversation_id=conversation_id,
         metadata=metadata
     )
