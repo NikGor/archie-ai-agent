@@ -1,0 +1,15 @@
+version: '3.9'
+
+services:
+  archie-ai-agent:
+    build: .
+    container_name: archie-ai-agent
+    ports:
+      - "8001:8000"
+    environment:
+      - PYTHONPATH=/app
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app/app
+    restart: unless-stopped

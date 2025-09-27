@@ -234,3 +234,6 @@ logs/
 test_recordings/
 temp/
 recordings/
+
+# Poetry specific
+poetry.lock

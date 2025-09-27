@@ -3,13 +3,12 @@
 Main entry point for the Archie AI Agent application.
 """
 
-import sys
-import os
+from fastapi import FastAPI
+from app.endpoints import router
 
-# Add the project root to Python path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from app.chat import main
+app = FastAPI()
+app.include_router(router)
 
 if __name__ == "__main__":
-    main()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
