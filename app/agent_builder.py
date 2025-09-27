@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import List, Dict, Any
+from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from .state import get_state
@@ -9,8 +9,11 @@ from agents import (
     WebSearchTool,
     set_default_openai_key,
 )
+from pydantic import BaseModel, Field
 from agents.extensions.handoff_prompt import RECOMMENDED_PROMPT_PREFIX
-from .tools import greet_user
+from .models import (
+    Metadata, 
+)
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -23,6 +26,15 @@ _env = Environment(
     loader=FileSystemLoader(PROMPTS_DIR),
     autoescape=select_autoescape(enabled_extensions=("jinja2",)),
 )
+
+# ==== Models ====  
+
+class AgentResponse(BaseModel):
+    """Response model for AI agent output"""
+    response: str = Field(description="Main text response from the AI agent")
+    metadata: Metadata = Field(None, description="Additional metadata for enriching the response")
+    
+# ==== Agent Builder ====
 
 def build_main_agent(
     state: Dict[str, Any],
@@ -40,7 +52,6 @@ def build_main_agent(
         recommended_prompt_prefix=RECOMMENDED_PROMPT_PREFIX,
         persona=persona_key,
     )
-    
     assistant_prompt = _env.get_template("assistant_prompt.jinja2").render(
         state=state,
     )
@@ -49,6 +60,7 @@ def build_main_agent(
     agent = Agent(
         name=f"MainAgent[{persona_key}]",
         instructions=instructions,
+        output_type=AgentResponse,
         tools=[WebSearchTool()],
         model='gpt-4.1-mini',
     )

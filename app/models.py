@@ -3,78 +3,90 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 class ButtonOption(BaseModel):
-    text: str
-    command: Optional[str] = None
-    url: Optional[str] = None
+    """Button option for user interface"""
+    text: str = Field(description="Text displayed on the button")
+    command: Optional[str] = Field(None, description="Command to execute when clicked")
+    url: Optional[str] = Field(None, description="URL to navigate to when clicked")
 
 class DropdownOption(BaseModel):
-    label: str
-    value: str
-    command: Optional[str] = None
-    url: Optional[str] = None
+    """Option for dropdown menu"""
+    label: str = Field(description="Display text for the option")
+    value: str = Field(description="Value of the option")
+    command: Optional[str] = Field(None, description="Command to execute when selected")
+    url: Optional[str] = Field(None, description="URL to navigate to when selected")
     
 class ChecklistOption(BaseModel):
-    label: str
-    value: str
-    checked: bool = False
-    command: Optional[str] = None
-    url: Optional[str] = None
+    """Checkbox option in a task list"""
+    label: str = Field(description="Task text")
+    value: str = Field(description="Task value")
+    checked: bool = Field(False, description="Checkbox state (checked/unchecked)")
+    command: Optional[str] = Field(None, description="Command to execute when state changes")
+    url: Optional[str] = Field(None, description="URL to navigate to when clicked")
 
 class UIElements(BaseModel):
-    dropdown: Optional[List[DropdownOption]] = None
-    buttons: Optional[List[ButtonOption]] = None
-    checklist: Optional[List[ChecklistOption]] = None
+    """Collection of user interface elements"""
+    dropdown: Optional[List[DropdownOption]] = Field(None, description="List of dropdown menu options")
+    buttons: Optional[List[ButtonOption]] = Field(None, description="List of buttons")
+    checklist: Optional[List[ChecklistOption]] = Field(None, description="List of checkbox tasks")
 
 class Card(BaseModel):
-    title: Optional[str] = None
-    subtitle: Optional[str] = None
-    image_url: Optional[str] = None
-    options: Optional[UIElements] = None
+    """Card with information and interactive elements"""
+    title: Optional[str] = Field(None, description="Card title")
+    subtitle: Optional[str] = Field(None, description="Card subtitle")
+    image_url: Optional[str] = Field(None, description="URL of the card image")
+    options: Optional[UIElements] = Field(None, description="Interactive elements of the card")
 
 class NavigationCard(BaseModel):
-    title: str
-    description: Optional[str] = None
-    url: Optional[str] = None
-    image_url: Optional[str] = None
+    """Navigation card for section transitions"""
+    title: str = Field(description="Section name")
+    description: Optional[str] = Field(None, description="Section description")
+    url: Optional[str] = Field(None, description="URL to navigate to")
+    image_url: Optional[str] = Field(None, description="URL of the section image")
 
 class ContactCard(BaseModel):
-    name: str
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    image_url: Optional[str] = None
+    """Contact information card"""
+    name: str = Field(description="Contact name")
+    email: Optional[str] = Field(None, description="Email address")
+    phone: Optional[str] = Field(None, description="Phone number")
+    image_url: Optional[str] = Field(None, description="URL of the contact photo")
     
 class ToolCard(BaseModel):
-    name: str
-    description: Optional[str] = None
-    icon_url: Optional[str] = None
+    """Tool or function card"""
+    name: str = Field(description="Tool name")
+    description: Optional[str] = Field(None, description="Tool functionality description")
+    icon_url: Optional[str] = Field(None, description="URL of the tool icon")
 
 class Metadata(BaseModel):
-    url: Optional[str] = None
-    image_url: Optional[str] = None
-    cards: Optional[List[Card]] = None
-    options: Optional[UIElements] = None
-    tool_cards: Optional[List[ToolCard]] = None
-    navigation_card: Optional[NavigationCard] = None
+    """Metadata for enriching response with additional information"""
+    url: Optional[str] = Field(None, description="Main topic link")
+    image_url: Optional[str] = Field(None, description="URL of the main image")
+    cards: Optional[List[Card]] = Field(None, description="List of information cards")
+    options: Optional[UIElements] = Field(None, description="Interactive interface elements")
+    tool_cards: Optional[List[ToolCard]] = Field(None, description="List of available tools")
+    navigation_card: Optional[NavigationCard] = Field(None, description="Navigation card")
 
 class LllmTrace(BaseModel):
-    model: str
-    input_tokens: int
-    output_tokens: int
-    total_tokens: int
-    total_cost: float
+    """LLM usage tracking information"""
+    model: str = Field(description="Name of the LLM model used")
+    input_tokens: int = Field(description="Number of input tokens consumed")
+    output_tokens: int = Field(description="Number of output tokens generated")
+    total_tokens: int = Field(description="Total number of tokens used")
+    total_cost: float = Field(description="Total cost of the request")
     
 class ChatMessage(BaseModel):
-    message_id: str
-    role: Literal["user", "assistant", "system"]
-    text_format: Literal["plain", "markdown", "html", "voice"] = "plain"
-    text: str
-    metadata: Optional[Metadata] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    conversation_id: Optional[str] = None
-    llm_trace: Optional[LllmTrace] = None
+    """Chat message model for all communications"""
+    message_id: str = Field(description="Unique identifier for the message")
+    role: Literal["user", "assistant", "system"] = Field(description="Role of the message sender")
+    text_format: Literal["plain", "markdown", "html", "voice"] = Field("plain", description="Format of the message text")
+    text: str = Field(description="Content of the message")
+    metadata: Optional[Metadata] = Field(None, description="Additional metadata for the message")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp when the message was created")
+    conversation_id: Optional[str] = Field(None, description="ID of the conversation this message belongs to")
+    llm_trace: Optional[LllmTrace] = Field(None, description="LLM usage tracking information")
 
 class Conversation(BaseModel):
-    conversation_id: str
-    messages: List[ChatMessage]
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    llm_trace: Optional[LllmTrace] = None
+    """Conversation model containing multiple messages"""
+    conversation_id: str = Field(description="Unique identifier for the conversation")
+    messages: List[ChatMessage] = Field(description="List of messages in the conversation")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Timestamp when the conversation was created")
+    llm_trace: Optional[LllmTrace] = Field(None, description="Aggregated LLM usage tracking for the conversation")
