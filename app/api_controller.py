@@ -1,11 +1,8 @@
 import logging
 import os
-
 import httpx
-from agents import Runner
 from dotenv import load_dotenv
-
-from .agent_builder import build_main_agent
+from .agent_builder import create_main_agent_response
 from .models import ChatMessage
 from .utils import generate_conversation_id, generate_message_id
 
@@ -82,13 +79,12 @@ async def handle_chat(user_message: ChatMessage) -> ChatMessage:
 
     # Process with agent
     logger.info("Processing message with AI agent...")
-    format_aware_agent = build_main_agent()
-    result = await Runner.run(format_aware_agent, conversation_history)
+    agent_response = await create_main_agent_response(conversation_history)
     logger.debug(f"Agent processing completed")
 
     # Extract response text and metadata from the structured output
-    response_text = result.final_output.response
-    metadata = result.final_output.metadata
+    response_text = agent_response.response
+    metadata = agent_response.metadata
 
     # Create assistant message
     assistant_message = ChatMessage(

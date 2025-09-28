@@ -1,17 +1,9 @@
 import logging
 import os
-from agents import (
-    Agent,
-    WebSearchTool,
-    set_default_openai_key,
-)
-from agents.extensions.handoff_prompt import RECOMMENDED_PROMPT_PREFIX
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from pydantic import BaseModel, Field
-from .models import (
-    Metadata,
-)
+
+from .openai_client import create_agent_response, AgentResponse
 from .state import get_state
 
 logger = logging.getLogger(__name__)
@@ -26,52 +18,81 @@ _env = Environment(
     autoescape=select_autoescape(enabled_extensions=("jinja2",)),
 )
 
-set_default_openai_key(OPENAI_API_KEY)
+# Simplified prompt prefix instead of using agents.extensions
+RECOMMENDED_PROMPT_PREFIX = """You are a helpful, harmless, and honest AI assistant."""
 
-# ==== Models ====
 
-
-class AgentResponse(BaseModel):
-    """Response model for AI agent output"""
-
-    response: str = Field(
-        description="""
-        Main text response from the AI agent in the specified response format
-        Don't duplicate metadata information in the main response text.
-        """
+async def create_main_agent_response(messages: list[dict[str, str]]) -> AgentResponse:
+    """
+    Create a response using the main agent configuration.
+    
+    Args:
+        messages: List of conversation messages in OpenAI format
+        
+    Returns:
+        AgentResponse with response text and metadata
+    """
+    state = get_state(
+        user_name=DEFAULT_USER_NAME or "User", 
+        persona=DEFAULT_PERSONA or "business"
     )
-    metadata: Metadata = Field(
-        description="Additional metadata for enriching the response"
-    )
-
-
-# ==== Agent Builder ====
-
-
-def build_main_agent() -> Agent:
-    state = get_state(user_name=DEFAULT_USER_NAME or "User", persona=DEFAULT_PERSONA or "business")
     persona_key = state.get("persona", "business").lower().strip() if state else "business"
+    
+    # Check if persona template exists
     persona_template_path = os.path.join(PROMPTS_DIR, f"persona_{persona_key}.jinja2")
     if not os.path.exists(persona_template_path):
         logger.warning(
-            f"Persona template not found: {persona_key} (path={persona_template_path}). Proceeding without injected persona block."
+            f"Persona template not found: {persona_key} (path={persona_template_path}). "
+            f"Proceeding without injected persona block."
         )
 
+    # Render system prompt
     system_prompt = _env.get_template("main_agent_prompt.jinja2").render(
         recommended_prompt_prefix=RECOMMENDED_PROMPT_PREFIX,
         persona=persona_key,
     )
+    
+    # Render assistant context
     assistant_prompt = _env.get_template("assistant_prompt.jinja2").render(
         state=state or {},
     )
-    instructions = f"{system_prompt}\n\n# Assistant Context\n{assistant_prompt}"
-
-    agent = Agent(
-        name=f"MainAgent[{persona_key}]",
-        instructions=instructions,
-        output_type=AgentResponse,
-        tools=[WebSearchTool()],
-        model="gpt-4.1",
+    
+    # Combine prompts
+    full_system_prompt = f"{system_prompt}\n\n# Assistant Context\n{assistant_prompt}"
+    
+    # Combine system prompt with messages
+    formatted_messages = []
+    formatted_messages.append({"role": "system", "content": full_system_prompt})
+    formatted_messages.extend(messages)
+    
+    logger.info(f"Creating agent response with persona '{persona_key}'")
+    
+    # Create response using OpenAI client
+    return await create_agent_response(
+        messages=formatted_messages,
+        model="gpt-4.1",  # Updated to gpt-4.1 model
     )
-    logger.info(f"Initialized MainAgent with persona '{persona_key}'")
-    return agent
+
+
+# Legacy function for compatibility (deprecated)
+def build_main_agent():
+    """
+    Legacy function for compatibility. Use create_main_agent_response instead.
+    Returns a simple object that mimics the old Agent interface.
+    """
+    logger.warning(
+        "build_main_agent() is deprecated. Use create_main_agent_response() instead."
+    )
+    
+    class LegacyAgent:
+        def __init__(self, persona: str):
+            self.persona = persona
+            self.name = f"MainAgent[{persona}]"
+    
+    state = get_state(
+        user_name=DEFAULT_USER_NAME or "User", 
+        persona=DEFAULT_PERSONA or "business"
+    )
+    persona_key = state.get("persona", "business").lower().strip() if state else "business"
+    
+    return LegacyAgent(persona_key)

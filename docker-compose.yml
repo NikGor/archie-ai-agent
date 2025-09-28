@@ -8,12 +8,15 @@ services:
   archie-ai-agent:
     build: .
     container_name: archie-ai-agent
-    network_mode: "host"
+    networks:
+      - shared_network
+    ports:
+      - "8005:8005"
     environment:
       - PYTHONPATH=/app
       - REDIS_HOST=localhost
       - REDIS_PORT=6379
-      - BACKEND_API_URL=http://localhost:8002
+      - BACKEND_API_URL=http://archie-backend:8002
     env_file:
       - .env
     volumes:
