@@ -9,10 +9,10 @@ from datetime import datetime, timezone
 def generate_id_with_timestamp(prefix: str) -> str:
     """
     Generate an ID with the pattern: prefix-YYYYMMDDHHMMSS-uuid
-    
+
     Args:
         prefix: The prefix for the ID (e.g., 'message', 'conversation')
-    
+
     Returns:
         Generated ID string
     """

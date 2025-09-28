@@ -1,7 +1,9 @@
 import logging
+
 from agents import function_tool
 
 logger = logging.getLogger(__name__)
+
 
 @function_tool
 def greet_user(name: str) -> str:

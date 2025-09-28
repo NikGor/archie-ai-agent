@@ -1,6 +1,6 @@
 # Makefile for Archie AI Agent
 
-.PHONY: help install run dev chat voice test clean init-db docker-build docker-run docker-stop
+.PHONY: help install run dev chat voice test clean init-db docker-build docker-run docker-stop lint format check black mypy ruff
 
 # Default target
 help:
@@ -17,6 +17,14 @@ help:
 	@echo "  docker-build - Build Docker image"
 	@echo "  docker-run   - Run with Docker Compose"
 	@echo "  docker-stop  - Stop Docker containers"
+	@echo ""
+	@echo "Code Quality Commands:"
+	@echo "  format       - Format code with black"
+	@echo "  lint         - Run all linters (ruff, mypy)"
+	@echo "  check        - Run all checks (format check + lint)"
+	@echo "  black        - Run black formatter"
+	@echo "  mypy         - Run mypy type checker"
+	@echo "  ruff         - Run ruff linter"
 	@echo ""
 
 # Install dependencies
@@ -96,3 +104,39 @@ api-test:
 		-H "Content-Type: application/json" \
 		-d '{"message": "Hello from Makefile!", "conversation_id": "makefile_test"}' \
 		2>/dev/null | python -m json.tool || echo "❌ API test failed - make sure server is running"
+
+# Code formatting and linting commands
+format:
+	@echo "🎨 Formatting code with black..."
+	poetry run black .
+	@echo "✅ Code formatting completed!"
+
+black:
+	@echo "🎨 Running black formatter..."
+	poetry run black .
+
+black-check:
+	@echo "🔍 Checking code formatting with black..."
+	poetry run black --check --diff .
+
+mypy:
+	@echo "🔍 Running mypy type checker..."
+	poetry run mypy .
+
+ruff:
+	@echo "🔍 Running ruff linter..."
+	poetry run ruff check .
+
+ruff-fix:
+	@echo "🔧 Running ruff with auto-fix..."
+	poetry run ruff check --fix .
+
+lint: ruff mypy
+	@echo "✅ All linting checks completed!"
+
+check: black-check lint
+	@echo "✅ All code quality checks completed!"
+
+# Fix all auto-fixable issues
+fix: ruff-fix format
+	@echo "🔧 Auto-fixed all issues and formatted code!"

@@ -1,19 +1,20 @@
-import os
 import logging
-from typing import Dict, Any, Optional
-from dotenv import load_dotenv
-from jinja2 import Environment, FileSystemLoader, select_autoescape
-from .state import get_state
+import os
+
 from agents import (
     Agent,
     WebSearchTool,
     set_default_openai_key,
 )
-from pydantic import BaseModel, Field
 from agents.extensions.handoff_prompt import RECOMMENDED_PROMPT_PREFIX
+from dotenv import load_dotenv
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+from pydantic import BaseModel, Field
+
 from .models import (
-    Metadata, 
+    Metadata,
 )
+from .state import get_state
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -30,19 +31,25 @@ _env = Environment(
     autoescape=select_autoescape(enabled_extensions=("jinja2",)),
 )
 
-# ==== Models ====  
+# ==== Models ====
+
 
 class AgentResponse(BaseModel):
     """Response model for AI agent output"""
+
     response: str = Field(
         description="""
         Main text response from the AI agent in the specified response format
         Don't duplicate metadata information in the main response text.
         """
     )
-    metadata: Metadata = Field(description="Additional metadata for enriching the response")
-    
+    metadata: Metadata = Field(
+        description="Additional metadata for enriching the response"
+    )
+
+
 # ==== Agent Builder ====
+
 
 def build_main_agent() -> Agent:
     state = get_state(user_name=DEFAULT_USER_NAME, persona=DEFAULT_PERSONA)
@@ -54,7 +61,7 @@ def build_main_agent() -> Agent:
             persona_key,
             persona_template_path,
         )
-    
+
     system_prompt = _env.get_template("main_agent_prompt.jinja2").render(
         recommended_prompt_prefix=RECOMMENDED_PROMPT_PREFIX,
         persona=persona_key,
@@ -63,13 +70,13 @@ def build_main_agent() -> Agent:
         state=state,
     )
     instructions = f"{system_prompt}\n\n# Assistant Context\n{assistant_prompt}"
-    
+
     agent = Agent(
         name=f"MainAgent[{persona_key}]",
         instructions=instructions,
         output_type=AgentResponse,
         tools=[WebSearchTool()],
-        model='gpt-4.1',
+        model="gpt-4.1",
     )
     logger.info("Initialized MainAgent with persona '%s'", persona_key)
     return agent
