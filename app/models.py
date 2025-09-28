@@ -135,22 +135,6 @@ class ChatMessage(BaseModel):
     )
 
 
-class Conversation(BaseModel):
-    """Conversation model containing multiple messages"""
-
-    conversation_id: str = Field(description="Unique identifier for the conversation")
-    messages: list[ChatMessage] = Field(
-        description="List of messages in the conversation"
-    )
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
-        description="Timestamp when the conversation was created",
-    )
-    llm_trace: LllmTrace | None = Field(
-        None, description="Aggregated LLM usage tracking for the conversation"
-    )
-
-
 class ChatRequest(BaseModel):
     """Chat request model for incoming messages"""
 
@@ -163,25 +147,4 @@ class ChatRequest(BaseModel):
     )
     conversation_id: str | None = Field(
         None, description="ID of the conversation this message belongs to"
-    )
-
-
-class CreateConversationRequest(BaseModel):
-    """Request model for creating a new conversation"""
-
-    conversation_id: str | None = Field(
-        None,
-        description="Optional custom conversation ID. If not provided, will be auto-generated",
-    )
-
-
-class CreateConversationResponse(BaseModel):
-    """Response model for conversation creation"""
-
-    conversation_id: str = Field(description="ID of the created conversation")
-    created_at: datetime = Field(
-        description="Timestamp when the conversation was created"
-    )
-    message: str = Field(
-        "Conversation created successfully", description="Success message"
     )

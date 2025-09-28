@@ -1,6 +1,6 @@
 # Makefile for Archie AI Agent
 
-.PHONY: help install run dev chat voice test clean init-db docker-build docker-run docker-stop lint format check black mypy ruff
+.PHONY: help install run dev chat voice test clean docker-build docker-run docker-stop lint format check black mypy ruff
 
 # Default target
 help:
@@ -11,7 +11,6 @@ help:
 	@echo "  dev          - Run in development mode with auto-reload"
 	@echo "  chat         - Run console chat interface"
 	@echo "  voice        - Run voice assistant"
-	@echo "  init-db      - Initialize SQLite database"
 	@echo "  test         - Run tests"
 	@echo "  clean        - Clean cache and temporary files"
 	@echo "  docker-build - Build Docker image"
@@ -36,12 +35,12 @@ install:
 # Run FastAPI server
 run:
 	@echo "Starting Archie AI Agent server..."
-	poetry run uvicorn main:app --host 0.0.0.0 --port 8002
+	poetry run uvicorn main:app --host 0.0.0.0 --port 8000
 
 # Run in development mode with auto-reload
 dev:
 	@echo "Starting development server with auto-reload..."
-	poetry run uvicorn main:app --host 0.0.0.0 --port 8002 --reload
+	poetry run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 # Run console chat
 chat:
@@ -52,12 +51,6 @@ chat:
 voice:
 	@echo "Starting voice assistant..."
 	poetry run python -m app.voice
-
-# Initialize database
-init-db:
-	@echo "Initializing database..."
-	poetry run python init_db.py
-	@echo "Database initialized!"
 
 # Run tests (placeholder for future tests)
 test:
@@ -88,21 +81,21 @@ docker-stop:
 	docker-compose down
 
 # Setup development environment
-setup: install init-db
+setup: install
 	@echo "Development environment setup completed!"
 	@echo "Run 'make run' to start the server"
 
 # Show server status
 status:
 	@echo "Checking server status..."
-	@curl -s http://localhost:8002/docs > /dev/null && echo "✅ Server is running at http://localhost:8002" || echo "❌ Server is not running"
+	@curl -s http://localhost:8000/docs > /dev/null && echo "✅ Server is running at http://localhost:8000" || echo "❌ Server is not running"
 
 # Test API with curl
 api-test:
 	@echo "Testing API..."
-	@curl -X POST "http://localhost:8002/chat" \
+	@curl -X POST "http://localhost:8000/chat" \
 		-H "Content-Type: application/json" \
-		-d '{"message": "Hello from Makefile!", "conversation_id": "makefile_test"}' \
+		-d '{"role": "user", "text": "Hello from Makefile!", "conversation_id": "makefile_test"}' \
 		2>/dev/null | python -m json.tool || echo "❌ API test failed - make sure server is running"
 
 # Code formatting and linting commands

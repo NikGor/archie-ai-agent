@@ -1,12 +1,12 @@
 import logging
 import os
 
+import httpx
 from agents import Runner
 from dotenv import load_dotenv
 
 from .agent_builder import build_main_agent
 from .models import ChatMessage
-from .services.backend import get_database
 from .utils import generate_conversation_id, generate_message_id
 
 logger = logging.getLogger(__name__)
@@ -16,53 +16,81 @@ load_dotenv()
 PERSONA = os.getenv("DEFAULT_PERSONA", "business")
 USER_NAME = os.getenv("DEFAULT_USER_NAME", "Николай")
 DEFAULT_CONVERSATION_ID = os.getenv("DEFAULT_CONVERSATION_ID", "default")
+BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://localhost:8002")
 
-logger.info(f"Initializing agent with persona: {PERSONA}, user: {USER_NAME}")
-main_agent = build_main_agent()
-logger.info("Main agent initialized successfully")
-
-# Database instance
-db = get_database()
-logger.info("Database connection established")
+logger.info(f"Initializing with persona: {PERSONA}, user: {USER_NAME}")
+logger.info(f"Backend API URL: {BACKEND_API_URL}")
 
 
 async def handle_chat(user_message: ChatMessage) -> ChatMessage:
-    """Handle chat message with database persistence."""
+    """Handle chat message with external backend API."""
 
-    # Generate conversation_id if not provided
-    conversation_id = user_message.conversation_id or generate_conversation_id()
-    logger.info(f"Handling chat message for conversation: {conversation_id}")
+    logger.info(f"Handling chat message for conversation: {user_message.conversation_id or 'new'}")
     logger.debug(f"User message: {user_message.text}")
+
+    conversation_id = user_message.conversation_id
+    conversation_history = []
+
+    # Case 1: No conversation_id - create new conversation
+    if not conversation_id:
+        logger.info("Creating new conversation")
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{BACKEND_API_URL}/conversations",
+                    json={}
+                )
+                if response.status_code == 200:
+                    conversation_data = response.json()
+                    conversation_id = conversation_data["conversation_id"]
+                    logger.info(f"Created new conversation: {conversation_id}")
+                else:
+                    logger.error(f"Failed to create conversation: {response.status_code}")
+                    conversation_id = generate_conversation_id()
+        except Exception as e:
+            logger.error(f"Error creating conversation: {e}")
+            conversation_id = generate_conversation_id()
+
+    # Case 2: conversation_id exists - load chat history
+    else:
+        logger.info(f"Loading history for conversation: {conversation_id}")
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{BACKEND_API_URL}/chat_history",
+                    params={"conversation_id": conversation_id}
+                )
+                if response.status_code == 200:
+                    history_data = response.json()
+                    # Convert to OpenAI format
+                    conversation_history = [
+                        {"role": msg["role"], "content": msg["text"]}
+                        for msg in history_data["messages"]
+                    ]
+                    logger.debug(f"Loaded {len(conversation_history)} messages from history")
+                else:
+                    logger.warning(f"Failed to load conversation history: {response.status_code}")
+        except Exception as e:
+            logger.warning(f"Error loading conversation history: {e}")
 
     # Update user message with conversation_id and generate message_id
     user_message.conversation_id = conversation_id
     user_message.message_id = generate_message_id()
 
-    # Load conversation history from database (in chronological order for agent)
-    conversation_history = db.get_conversation_history_for_agent(conversation_id)
-    logger.debug(f"Loaded {len(conversation_history)} messages from history")
-
-    # Add user message to history
+    # Add user message to history for agent processing
     conversation_history.append({"role": "user", "content": user_message.text})
-
-    # Save user message to database
-    db.save_message(user_message)
-    logger.debug("User message saved to database")
 
     # Process with agent
     logger.info("Processing message with AI agent...")
-
-    # Create agent
     format_aware_agent = build_main_agent()
-
     result = await Runner.run(format_aware_agent, conversation_history)
-    logger.debug(f"Full agent result: {result}")
+    logger.debug(f"Agent processing completed")
 
     # Extract response text and metadata from the structured output
     response_text = result.final_output.response
     metadata = result.final_output.metadata
 
-    # Save assistant response to database
+    # Create assistant message
     assistant_message = ChatMessage(
         message_id=generate_message_id(),
         role="assistant",
@@ -71,8 +99,36 @@ async def handle_chat(user_message: ChatMessage) -> ChatMessage:
         conversation_id=conversation_id,
         metadata=metadata,
     )
-    db.save_message(assistant_message)
-    logger.debug("Assistant message saved to database")
+
+    # Save both user and assistant messages to backend
+    try:
+        async with httpx.AsyncClient() as client:
+            # Save user message
+            await client.post(
+                f"{BACKEND_API_URL}/messages",
+                json={
+                    "role": user_message.role,
+                    "text": user_message.text,
+                    "text_format": user_message.text_format,
+                    "conversation_id": conversation_id,
+                }
+            )
+            logger.debug("User message saved to backend")
+
+            # Save assistant message
+            await client.post(
+                f"{BACKEND_API_URL}/messages",
+                json={
+                    "role": assistant_message.role,
+                    "text": assistant_message.text,
+                    "text_format": assistant_message.text_format,
+                    "conversation_id": conversation_id,
+                    "metadata": assistant_message.metadata.dict() if assistant_message.metadata else None,
+                }
+            )
+            logger.debug("Assistant message saved to backend")
+    except Exception as e:
+        logger.warning(f"Error saving messages to backend: {e}")
 
     logger.info("Chat message handling completed successfully")
     return assistant_message

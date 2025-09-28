@@ -1,13 +1,19 @@
 version: '3.9'
 
+networks:
+  shared_network:
+    external: true
+
 services:
   archie-ai-agent:
     build: .
     container_name: archie-ai-agent
-    ports:
-      - "8001:8000"
+    network_mode: "host"
     environment:
       - PYTHONPATH=/app
+      - REDIS_HOST=localhost
+      - REDIS_PORT=6379
+      - BACKEND_API_URL=http://localhost:8002
     env_file:
       - .env
     volumes:

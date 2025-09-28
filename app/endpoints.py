@@ -1,20 +1,12 @@
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 
 from .api_controller import handle_chat
-from .models import (
-    ChatMessage,
-    ChatRequest,
-    Conversation,
-    CreateConversationRequest,
-    CreateConversationResponse,
-)
-from .services.backend import get_database
+from .models import ChatMessage, ChatRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-db = get_database()
 
 
 @router.post("/chat")
@@ -38,66 +30,4 @@ async def chat_endpoint(request: ChatRequest) -> ChatMessage:
         return result
     except Exception as e:
         logger.error(f"Error in chat endpoint: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal server error: {e!s}")
-
-
-@router.get("/conversations")
-async def get_conversations(
-    limit: int = Query(50, description="Maximum number of conversations to return")
-) -> list[Conversation]:
-    """Get all conversations."""
-    try:
-        logger.info(f"Fetching conversations with limit: {limit}")
-        conversations = db.get_all_conversations(limit=limit)
-        logger.info(f"Successfully retrieved {len(conversations)} conversations")
-        return conversations
-    except Exception as e:
-        logger.error(f"Error fetching conversations: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal server error: {e!s}")
-
-
-@router.post("/conversations/create")
-async def create_conversation(
-    request: CreateConversationRequest,
-) -> CreateConversationResponse:
-    """Create a new conversation."""
-    try:
-        logger.info(
-            f"Creating new conversation with ID: {request.conversation_id or 'auto-generated'}"
-        )
-        conversation = db.create_conversation(request.conversation_id)
-        logger.info(f"Successfully created conversation {conversation.conversation_id}")
-
-        return CreateConversationResponse(
-            conversation_id=conversation.conversation_id,
-            created_at=conversation.created_at,
-        )
-    except ValueError as e:
-        logger.warning(f"Validation error creating conversation: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error creating conversation: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal server error: {e!s}")
-
-
-@router.get("/conversations/{conversation_id}")
-async def get_conversation(conversation_id: str) -> Conversation:
-    """Get a complete conversation with all its messages."""
-    try:
-        logger.info(f"Fetching complete conversation: {conversation_id}")
-        conversation = db.get_conversation_with_messages(conversation_id)
-        if not conversation:
-            raise HTTPException(
-                status_code=404, detail=f"Conversation {conversation_id} not found"
-            )
-        logger.info(
-            f"Successfully retrieved conversation {conversation_id} with {len(conversation.messages)} messages"
-        )
-        return conversation
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(
-            f"Error fetching conversation {conversation_id}: {e}", exc_info=True
-        )
         raise HTTPException(status_code=500, detail=f"Internal server error: {e!s}")
