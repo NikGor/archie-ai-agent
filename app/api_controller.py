@@ -1,6 +1,7 @@
 import logging
 import os
 import httpx
+import yaml
 from dotenv import load_dotenv
 from .agent_builder import create_main_agent_response
 from .models import ChatMessage
@@ -58,7 +59,7 @@ async def handle_chat(user_message: ChatMessage) -> ChatMessage:
                     params={"conversation_id": conversation_id}
                 )
                 if response.status_code == 200:
-                    history_data = response.json()
+                    history_data = yaml.safe_load(response.text)
                     # Convert to OpenAI format
                     conversation_history = [
                         {"role": msg["role"], "content": msg["text"]}

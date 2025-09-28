@@ -5,15 +5,14 @@ OpenAI client module for direct API integration using structured outputs.
 import logging
 import os
 from typing import Any
-
-from openai import OpenAI
+from openai import OpenAI, pydantic_function_tool
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-
 from .models import Metadata
 
 logger = logging.getLogger(__name__)
 load_dotenv()
+
 
 
 class AgentResponse(BaseModel):
@@ -49,14 +48,39 @@ async def create_agent_response(
         Structured AgentResponse with response text and metadata
     """
     logger.debug(f"Sending {len(messages)} messages to OpenAI")
-    
+
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get current temperature for a given location.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "City and country e.g. Bogotá, Colombia"
+                        }
+                    },
+                    "required": ["location"],
+                    "additionalProperties": False
+                },
+                "strict": True
+            }
+        },
+        {
+            "type": "web_search"
+        }
+    ]
+
     try:
         response = client.responses.parse(
             model=model,
             input=messages,
             text_format=AgentResponse,
         )
-        logger.debug("Received structured response from OpenAI")
+        logger.info(f"Received structured response from OpenAI: {response}")
         return response.output_parsed
 
     except Exception as e:
