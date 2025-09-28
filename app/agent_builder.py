@@ -1,6 +1,5 @@
 import logging
 import os
-
 from agents import (
     Agent,
     WebSearchTool,
@@ -10,7 +9,6 @@ from agents.extensions.handoff_prompt import RECOMMENDED_PROMPT_PREFIX
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import BaseModel, Field
-
 from .models import (
     Metadata,
 )
@@ -57,9 +55,7 @@ def build_main_agent() -> Agent:
     persona_template_path = os.path.join(PROMPTS_DIR, f"persona_{persona_key}.jinja2")
     if not os.path.exists(persona_template_path):
         logger.warning(
-            "Persona template not found: %s (path=%s). Proceeding without injected persona block.",
-            persona_key,
-            persona_template_path,
+            f"Persona template not found: {persona_key} (path={persona_template_path}). Proceeding without injected persona block."
         )
 
     system_prompt = _env.get_template("main_agent_prompt.jinja2").render(
@@ -78,5 +74,5 @@ def build_main_agent() -> Agent:
         tools=[WebSearchTool()],
         model="gpt-4.1",
     )
-    logger.info("Initialized MainAgent with persona '%s'", persona_key)
+    logger.info(f"Initialized MainAgent with persona '{persona_key}'")
     return agent
