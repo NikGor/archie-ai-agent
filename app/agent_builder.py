@@ -14,13 +14,15 @@ from agents.extensions.handoff_prompt import RECOMMENDED_PROMPT_PREFIX
 from .models import (
     Metadata, 
 )
-from .config import DEFAULT_USER_NAME, DEFAULT_PERSONA
 
 logger = logging.getLogger(__name__)
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 set_default_openai_key(OPENAI_API_KEY)
+
+DEFAULT_USER_NAME = os.getenv("DEFAULT_USER_NAME", "Николай")
+DEFAULT_PERSONA = os.getenv("DEFAULT_PERSONA", "business")
 
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "prompts")
 _env = Environment(
@@ -43,7 +45,7 @@ class AgentResponse(BaseModel):
 # ==== Agent Builder ====
 
 def build_main_agent() -> Agent:
-    state = get_state(user_name=DEFAULT_USER_NAME, persona="flirty")
+    state = get_state(user_name=DEFAULT_USER_NAME, persona=DEFAULT_PERSONA)
     persona_key = state["persona"].lower().strip()
     persona_template_path = os.path.join(PROMPTS_DIR, f"persona_{persona_key}.jinja2")
     if not os.path.exists(persona_template_path):

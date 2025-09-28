@@ -1,18 +1,21 @@
+import os
 import uuid
 import logging
+from dotenv import load_dotenv
 from agents import Runner
 from .agent_builder import build_main_agent
 from .state import get_state
 from .services.backend import get_database
 from .models import ChatMessage
-from .config import DEFAULT_PERSONA, DEFAULT_USER_NAME, DEFAULT_CONVERSATION_ID
 from .utils import generate_message_id, generate_conversation_id
 
 logger = logging.getLogger(__name__)
+load_dotenv()
 
-# Initialize agent
-PERSONA = DEFAULT_PERSONA
-USER_NAME = DEFAULT_USER_NAME
+# Get configuration from environment variables
+PERSONA = os.getenv("DEFAULT_PERSONA", "business")
+USER_NAME = os.getenv("DEFAULT_USER_NAME", "Николай")
+DEFAULT_CONVERSATION_ID = os.getenv("DEFAULT_CONVERSATION_ID", "default")
 
 logger.info(f"Initializing agent with persona: {PERSONA}, user: {USER_NAME}")
 main_agent = build_main_agent()

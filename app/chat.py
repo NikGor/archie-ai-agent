@@ -5,16 +5,13 @@ from dotenv import load_dotenv
 from agents import Runner
 from .agent_builder import build_main_agent
 from .state import get_state
-from .config import setup_logging, DEFAULT_PERSONA, DEFAULT_USER_NAME
-
-# Setup logging for console interface
-setup_logging(level="INFO")
 
 logger = logging.getLogger(__name__)
 load_dotenv()
 
-PERSONA = DEFAULT_PERSONA
-USER_NAME = DEFAULT_USER_NAME
+# Get configuration from environment variables
+PERSONA = os.getenv("DEFAULT_PERSONA", "business")
+USER_NAME = os.getenv("DEFAULT_USER_NAME", "Николай")
 
 # Get application state
 logger.info(f"Initializing chat interface with persona: {PERSONA}, user: {USER_NAME}")
