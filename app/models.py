@@ -1,12 +1,11 @@
 from datetime import datetime, timezone
-from typing import Literal, Optional
+from typing import Literal, Optional, List
 from pydantic import BaseModel, Field
 
 
 class ButtonOption(BaseModel):
-    """Button option for user interface"""
-    text: str = Field(description="Text displayed on the button")
-    command: str = Field(description="Command to execute when clicked")
+    text: str
+    command: str
     # url: Optional[str] = Field(description="URL to navigate to when clicked")
 
 
@@ -30,8 +29,7 @@ class ChecklistOption(BaseModel):
 
 
 class UIElements(BaseModel):
-    """Collection of user interface elements"""
-    buttons: Optional[list[ButtonOption]] = Field(default=None, description="List of buttons")
+    buttons: Optional[List[ButtonOption]] = None
     # dropdown: Optional[list[DropdownOption]] = Field(
     #     default=None, description="List of dropdown menu options"
     # )
@@ -41,65 +39,59 @@ class UIElements(BaseModel):
 
 
 class Card(BaseModel):
-    """Card with information and interactive elements
-    Every card must have at least one button and an icon in the content.
-    """
-    title: Optional[str] = Field(default=None, description="Card title")
-    text: str = Field(description="Card main text content")
-    # image_url: Optional[str] = Field(description="URL of the card image")
-    options: Optional[UIElements] = Field(default=None, description="Interactive elements of the card")
-
+    title: Optional[str] = None
+    text: str
+    options: Optional[UIElements] = None
 
 class NavigationCard(BaseModel):
-    """Navigation card for section transitions"""
-    title: str = Field(description="Section name")
-    description: str = Field(description="Section description")
-    url: str = Field(description="google maps URL to start navigation")
-    buttons: Optional[list[ButtonOption]] = Field(default=None, description="Navigation action buttons")
-
+    title: str
+    description: str
+    url: str
+    buttons: List[ButtonOption] = Field(
+        default=[
+            ButtonOption(text="🗺️ Show on map", command="show_on_map"),
+            ButtonOption(text="🚗 Route", command="route")
+        ]
+    )
 
 class ContactCard(BaseModel):
-    """Contact information card"""
-    name: str = Field(description="Contact name")
-    email: Optional[str] = Field(default=None, description="Email address")
-    phone: Optional[str] = Field(default=None, description="Phone number")
-    buttons: Optional[list[ButtonOption]] = Field(default=None, description="Contact action buttons")
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    buttons: List[ButtonOption] = Field(
+        default=[
+            ButtonOption(text="📞 Call", command="call"),
+            ButtonOption(text="✉️ Email", command="email"),
+            ButtonOption(text="💬 Message", command="message")
+        ]
+    )
 
 class ToolCard(BaseModel):
-    """Tool or function card"""
-    name: str = Field(description="Tool name")
-    description: Optional[str] = Field(default=None, description="Tool functionality description")
-    # icon_url: Optional[str] = Field(description="URL of the tool icon")
+    name: str
+    description: Optional[str] = None
 
 class TableCell(BaseModel):
-    """Single cell in a table"""
-    content: str = Field(description="Content of the table cell")
+    content: str
 
 class Table(BaseModel):
-    """Table with structured data"""
-    headers: list[str] = Field(description="List of column headers")
-    rows: list[list[TableCell]] = Field(description="List of table rows, each row is a list of cell values")
+    headers: List[str]
+    rows: List[List[TableCell]]
 
 class ElementsItem(BaseModel):
-    """Single item in Elements list"""
-    title: str = Field(description="Title of the element")
-    value: str = Field(description="Value of the element")
+    title: str
+    value: str
 
 class Elements(BaseModel):
-    """A list of different items which are not classified but can be useful in the conversation"""
-    items: list[ElementsItem] = Field(description="List of miscellaneous elements")
+    items: List[ElementsItem]
 
 class Metadata(BaseModel):
-    """Metadata for enriching response with additional information"""
-    # url: Optional[str] = Field(description="Main topic link")
-    # image_url: Optional[str] = Field(description="URL of the main image")
-    cards: Optional[list[Card]] = Field(default=None, description="List of information cards")
-    options: Optional[UIElements] = Field(default=None, description="Interactive interface elements")
-    tool_cards: Optional[list[ToolCard]] = Field(default=None, description="List of available tools")
-    navigation_card: Optional[NavigationCard] = Field(default=None, description="Navigation card")
-    contact_card: Optional[ContactCard] = Field(default=None, description="Contact information card")
-    table: Optional[Table] = Field(default=None, description="Structured data table")
-    elements: Optional[Elements] = Field(default=None, description="Miscellaneous elements")
+    cards: Optional[List[Card]] = None
+    options: Optional[UIElements] = None
+    tool_cards: Optional[List[ToolCard]] = None
+    navigation_card: Optional[NavigationCard] = None
+    contact_card: Optional[ContactCard] = None
+    table: Optional[Table] = None
+    elements: Optional[Elements] = None
 
 
 class LllmTrace(BaseModel):
