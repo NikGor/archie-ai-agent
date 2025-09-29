@@ -13,16 +13,18 @@ class ButtonOption(BaseModel):
 
 
 class DropdownOption(BaseModel):
-    """Option for dropdown menu"""
-
+    """Option for dropdown menu
+    Prefer buttons for 2–3 options; use dropdowns only for 4 or more choices.
+    """
     label: str = Field(description="Display text for the option")
     command: str = Field(None, description="Command to execute when selected")
     # url: Optional[str] = Field(None, description="URL to navigate to when selected")
 
 
 class ChecklistOption(BaseModel):
-    """Checkbox option in a task list"""
-
+    """
+    Checkbox option in a task list
+    """
     label: str = Field(description="Task text")
     checked: bool = Field(False, description="Checkbox state (checked/unchecked)")
     command: str = Field(None, description="Command to execute when state changes")
@@ -42,8 +44,9 @@ class UIElements(BaseModel):
 
 
 class Card(BaseModel):
-    """Card with information and interactive elements"""
-
+    """Card with information and interactive elements
+    Every card must have at least one button or action and an icon in the content.
+    """
     title: str | None = Field(None, description="Card title")
     text: str = Field(None, description="Card main text content")
     # image_url: Optional[str] = Field(None, description="URL of the card image")

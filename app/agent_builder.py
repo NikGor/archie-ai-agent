@@ -72,27 +72,3 @@ async def create_main_agent_response(messages: list[dict[str, str]]) -> AgentRes
         messages=formatted_messages,
         model="gpt-4.1",  # Updated to gpt-4.1 model
     )
-
-
-# Legacy function for compatibility (deprecated)
-def build_main_agent():
-    """
-    Legacy function for compatibility. Use create_main_agent_response instead.
-    Returns a simple object that mimics the old Agent interface.
-    """
-    logger.warning(
-        "build_main_agent() is deprecated. Use create_main_agent_response() instead."
-    )
-    
-    class LegacyAgent:
-        def __init__(self, persona: str):
-            self.persona = persona
-            self.name = f"MainAgent[{persona}]"
-    
-    state = get_state(
-        user_name=DEFAULT_USER_NAME or "User", 
-        persona=DEFAULT_PERSONA or "business"
-    )
-    persona_key = state.get("persona", "business").lower().strip() if state else "business"
-    
-    return LegacyAgent(persona_key)

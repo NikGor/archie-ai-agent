@@ -60,7 +60,6 @@ async def handle_chat(user_message: ChatMessage) -> ChatMessage:
                 )
                 if response.status_code == 200:
                     history_data = yaml.safe_load(response.text)
-                    # Convert to OpenAI format
                     conversation_history = [
                         {"role": msg["role"], "content": msg["text"]}
                         for msg in history_data["messages"]

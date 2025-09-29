@@ -4,7 +4,7 @@ OpenAI client module for direct API integration using structured outputs.
 import json
 import logging
 import os
-from typing import Any
+from typing import Any, Optional, List, Literal
 from openai import OpenAI, pydantic_function_tool
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -15,14 +15,33 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 
-class WeatherParams(BaseModel):
-    """Parameters for weather tool"""
-    location: str = Field(description="City and country e.g. Bogotá, Colombia")
-    
-class WebSearch(BaseModel):
-    """Parameters for web search tool"""
-    query: str = Field(description="Search query string")
+class GetWeather(BaseModel):
+    location: str
 
+class CalculateTip(BaseModel):
+    bill_amount: float
+    tip_percentage: float
+    split_between: Optional[int] = 1
+
+class SendEmail(BaseModel):
+    to: List[str]
+    subject: str
+    body: str
+    cc: Optional[List[str]] = None
+    priority: Optional[Literal["low", "normal", "high"]] = "normal"
+
+class ConvertCurrency(BaseModel):
+    amount: float
+    from_currency: str
+    to_currency: str
+    date: Optional[str] = None
+
+tools = [
+    pydantic_function_tool(GetWeather, name="get_weather"),
+    pydantic_function_tool(CalculateTip, name="calculate_tip"),
+    pydantic_function_tool(SendEmail, name="send_email"),
+    pydantic_function_tool(ConvertCurrency, name="convert_currency"),
+]
 
 
 class AgentResponse(BaseModel):
@@ -33,6 +52,9 @@ class AgentResponse(BaseModel):
         Main text response from the AI agent in the specified response format.
         Don't duplicate metadata information in the main response text.
         """
+    )
+    thinking: str = Field(
+        description="Internal reasoning or thought process and output designing"
     )
     metadata: Metadata = Field(
         description="Additional metadata for enriching the response"
@@ -87,52 +109,33 @@ async def create_agent_response(
     """
     logger.debug(f"Sending {len(messages)} messages to OpenAI")
 
-    tools = [
-        pydantic_function_tool(
-            WeatherParams,
-            name="get_weather",  
-            description="Get current temperature for a given location."
-        ),
-        pydantic_function_tool(
-            WebSearch,
-            name="web_search",
-            description="Search the web for a given query."
-        )
-    ]
-
     try:
         response = client.responses.parse(
             model=model,
             input=messages,
             text_format=AgentResponse,
-            # tools=tools,
+            tools=tools,
         )
-        logger.info(f"Received response: {response}")
-        if getattr(response.output, "type", None) == "function_call":
-            logger.info(
-                f"RML 908: Agent called tool: {response.tool_name} with arguments: {response.tool_arguments}"
-            )
-
+        if response.output[0].type == "function_call":
+            # Parse arguments from JSON string to dict
+            tool_arguments = json.loads(response.output[0].arguments)
             tool_result = await call_tool(
-                tool_name=response.tool_name,
-                tool_arguments=response.tool_arguments or {},
+                tool_name=response.output[0].name,
+                tool_arguments=tool_arguments,
             )
             logger.info(f"RML 911: Tool result: {tool_result}")
-
-            # Add tool call to chat history
+            
+            # Add function result to messages and call model again
             messages.append({
                 "role": "assistant",
-                "content": None,
-                "tool_call": {
-                    "name": response.tool_name,
-                    "arguments": response.tool_arguments or {},
-                }
+                "content": f"Called Function: {response.output[0].name}"
             })
             messages.append({
-                "role": "function",
-                "name": response.tool_name,
-                "content": json.dumps(tool_result),
+                "role": "user", 
+                "content": f"Function Result: {response.output[0].name}: {json.dumps(tool_result, ensure_ascii=False)}"
             })
+            
+            # Call model again with function result
             response = client.responses.parse(
                 model=model,
                 input=messages,
@@ -140,7 +143,7 @@ async def create_agent_response(
             )
         
         logger.info(f"Received structured response from OpenAI: {response}")
-        return response.output_parsed
+        return response.output[0].content[0].parsed
 
     except Exception as e:
         logger.error(f"Error in OpenAI API call: {e}")
