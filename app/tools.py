@@ -1,6 +1,7 @@
 import logging
 import os
 import httpx
+import json
 from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,7 @@ def get_weather(city_name: str) -> Dict[str, Any]:
             }
             
             logger.info(f"Successfully retrieved weather data for {city_name}")
-            return weather_info
+            return json.dumps(weather_info, ensure_ascii=False)
         
     except httpx.RequestError as e:
         logger.error(f"Error making request to OpenWeather API: {e}")

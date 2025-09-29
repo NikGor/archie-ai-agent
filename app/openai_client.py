@@ -18,29 +18,9 @@ load_dotenv()
 class GetWeather(BaseModel):
     location: str
 
-class CalculateTip(BaseModel):
-    bill_amount: float
-    tip_percentage: float
-    split_between: Optional[int] = 1
-
-class SendEmail(BaseModel):
-    to: List[str]
-    subject: str
-    body: str
-    cc: Optional[List[str]] = None
-    priority: Optional[Literal["low", "normal", "high"]] = "normal"
-
-class ConvertCurrency(BaseModel):
-    amount: float
-    from_currency: str
-    to_currency: str
-    date: Optional[str] = None
 
 tools = [
     pydantic_function_tool(GetWeather, name="get_weather"),
-    pydantic_function_tool(CalculateTip, name="calculate_tip"),
-    pydantic_function_tool(SendEmail, name="send_email"),
-    pydantic_function_tool(ConvertCurrency, name="convert_currency"),
 ]
 
 
@@ -81,14 +61,12 @@ async def call_tool(
     logger.info(f"Calling tool: {tool_name} with arguments: {tool_arguments}")
     try:
         if tool_name == "get_weather":
-            # Extract location from arguments
             location = tool_arguments.get("location")
             result = get_weather(city_name=location)
-            logger.info(f"Tool {tool_name} executed successfully")
             return result
         else:
-            logger.error(f"Unknown tool: {tool_name}")
             return {"error": f"Unknown tool: {tool_name}"}
+        
     except Exception as e:
         logger.error(f"Error executing tool {tool_name}: {e}")
         return {"error": f"Tool execution failed: {str(e)}"}
@@ -119,8 +97,9 @@ async def create_agent_response(
         if response.output[0].type == "function_call":
             # Parse arguments from JSON string to dict
             tool_arguments = json.loads(response.output[0].arguments)
+            tool_name = response.output[0].name
             tool_result = await call_tool(
-                tool_name=response.output[0].name,
+                tool_name=tool_name,
                 tool_arguments=tool_arguments,
             )
             logger.info(f"RML 911: Tool result: {tool_result}")
@@ -128,11 +107,11 @@ async def create_agent_response(
             # Add function result to messages and call model again
             messages.append({
                 "role": "assistant",
-                "content": f"Called Function: {response.output[0].name}"
+                "content": f"Called Function: {tool_name}"
             })
             messages.append({
                 "role": "user", 
-                "content": f"Function Result: {response.output[0].name}: {json.dumps(tool_result, ensure_ascii=False)}"
+                "content": f"Function Result: {tool_name}: {tool_result}"
             })
             
             # Call model again with function result
@@ -141,8 +120,6 @@ async def create_agent_response(
                 input=messages,
                 text_format=AgentResponse,
             )
-        
-        logger.info(f"Received structured response from OpenAI: {response}")
         return response.output[0].content[0].parsed
 
     except Exception as e:
