@@ -13,9 +13,8 @@ router = APIRouter()
 async def chat_endpoint(request: ChatRequest) -> ChatMessage:
     """Chat endpoint for handling user messages."""
     try:
-        logger.info(
-            f"Received chat request for conversation: {request.conversation_id or 'new conversation'}"
-        )
+        logger.info("=== STEP 2: Chat Request ===")
+        logger.info(f"endpoints_001: Conv: \033[36m{request.conversation_id or 'NEW'}\033[0m, Len: \033[33m{len(request.text)}\033[0m")
 
         # Convert ChatRequest to ChatMessage
         chat_message = ChatMessage(
@@ -26,8 +25,10 @@ async def chat_endpoint(request: ChatRequest) -> ChatMessage:
         )
 
         result = await handle_chat(chat_message)
-        logger.info("Chat request processed successfully")
+        
+        logger.info("=== STEP 6: Response Ready ===")
+        logger.info(f"endpoints_002: Response len: \033[33m{len(result.text)}\033[0m")
         return result
     except Exception as e:
-        logger.error(f"Error in chat endpoint: {e}", exc_info=True)
+        logger.error(f"endpoints_error_001: \033[31m{str(e)}\033[0m", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error: {e!s}")

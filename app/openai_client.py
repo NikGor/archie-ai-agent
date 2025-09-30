@@ -46,9 +46,9 @@ class RoutingDecision(BaseModel):
     rationale: str = Field(description="One-sentence reason for choosing this intent")
 
 class SlotsStatus(BaseModel):
-    required: List[str] = Field(description="Required fields for this intent")
-    collected: Dict[str, str] = Field(description="Slot name -> value already available")
-    missing: List[str] = Field(description="Still missing; ask one-by-one")
+    needed: List[str] = Field(default=[], description="Required fields for this intent")
+    filled: List[str] = Field(default=[], description="Fields that have been filled") 
+    pending: List[str] = Field(default=[], description="Still missing; ask one-by-one")
 
 class PreActionChecklist(BaseModel):
     summary: str = Field(description="Short summary of the planned action/assumption")
@@ -65,7 +65,7 @@ class VerificationStatus(BaseModel):
 class SGRTrace(BaseModel):
     """Schema-Guided Reasoning trace (not user-facing UI)"""
     routing: RoutingDecision
-    slots: SlotsStatus
+    slots: SlotsStatus = Field(default_factory=SlotsStatus)
     evidence: List[EvidenceItem] = Field(
         default_factory=list, description="Claims and how they are supported"
     )
@@ -138,14 +138,14 @@ async def create_agent_response(
     Returns:
         Structured AgentResponse with response text and metadata
     """
-    logger.debug(f"Sending {len(messages)} messages to OpenAI")
+    logger.info(f"openai_001: Calling \033[36m{model}\033[0m with \033[33m{len(messages)}\033[0m msgs")
 
     try:
         response = client.responses.parse(
             model=model,
             input=messages,
             text_format=AgentResponse,
-            tools=tools,
+            # tools=tools,
         )
         if response.output[0].type == "function_call":
             # Parse arguments from JSON string to dict
@@ -184,8 +184,18 @@ async def create_agent_response(
                 text_format=AgentResponse,
             )
 
-        return response.output[0].content[0].parsed
+        result = response.output[0].content[0].parsed
+        logger.info(f"openai_002: Response len: \033[33m{len(result.response)}\033[0m")
+        
+        # Log the full response in pretty format
+        response_dict = {
+            "response": result.response,
+            "metadata": result.metadata.dict() if result.metadata else None
+        }
+        logger.info(f"openai_003: Full response:\n\033[32m{json.dumps(response_dict, indent=2, ensure_ascii=False)}\033[0m")
+        
+        return result
 
     except Exception as e:
-        logger.error(f"Error in OpenAI API call: {e}")
+        logger.error(f"openai_error_001: \033[31m{str(e)}\033[0m")
         raise

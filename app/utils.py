@@ -2,8 +2,11 @@
 Utility functions for the application
 """
 
+import logging
 import uuid
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 
 def generate_id_with_timestamp(prefix: str) -> str:
@@ -19,7 +22,9 @@ def generate_id_with_timestamp(prefix: str) -> str:
     now = datetime.now(timezone.utc)
     timestamp = now.strftime("%Y%m%d%H%M%S")
     unique_id = str(uuid.uuid4())[:8]  # Use first 8 characters of UUID for brevity
-    return f"{prefix}-{timestamp}-{unique_id}"
+    generated_id = f"{prefix}-{timestamp}-{unique_id}"
+    logger.info(f"utils_001: {prefix} ID: \033[36m{generated_id}\033[0m")
+    return generated_id
 
 
 def generate_message_id() -> str:
