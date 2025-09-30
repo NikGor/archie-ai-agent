@@ -25,10 +25,10 @@ async def chat_endpoint(request: ChatRequest) -> ChatMessage:
         )
 
         result = await handle_chat(chat_message)
-        
+
         logger.info("=== STEP 6: Response Ready ===")
         logger.info(f"endpoints_002: Response len: \033[33m{len(result.text)}\033[0m")
         return result
     except Exception as e:
-        logger.error(f"endpoints_error_001: \033[31m{str(e)}\033[0m", exc_info=True)
+        logger.error(f"endpoints_error_001: \033[31m{e!s}\033[0m", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error: {e!s}")

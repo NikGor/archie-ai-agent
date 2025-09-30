@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
-from typing import Literal, Optional, List
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -29,7 +30,7 @@ class ChecklistOption(BaseModel):
 
 
 class UIElements(BaseModel):
-    buttons: Optional[List[ButtonOption]] = None
+    buttons: list[ButtonOption] | None = None
     # dropdown: Optional[list[DropdownOption]] = Field(
     #     default=None, description="List of dropdown menu options"
     # )
@@ -39,15 +40,15 @@ class UIElements(BaseModel):
 
 
 class Card(BaseModel):
-    title: Optional[str] = None
+    title: str | None = None
     text: str
-    options: Optional[UIElements] = None
+    options: UIElements | None = None
 
 class NavigationCard(BaseModel):
     title: str
     description: str
     url: str
-    buttons: List[ButtonOption] = Field(
+    buttons: list[ButtonOption] = Field(
         default=[
             ButtonOption(text="🗺️ Show on map", command="show_on_map"),
             ButtonOption(text="🚗 Route", command="route")
@@ -56,9 +57,9 @@ class NavigationCard(BaseModel):
 
 class ContactCard(BaseModel):
     name: str
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    buttons: List[ButtonOption] = Field(
+    email: str | None = None
+    phone: str | None = None
+    buttons: list[ButtonOption] = Field(
         default=[
             ButtonOption(text="📞 Call", command="call"),
             ButtonOption(text="✉️ Email", command="email"),
@@ -68,30 +69,30 @@ class ContactCard(BaseModel):
 
 class ToolCard(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str | None = None
 
 class TableCell(BaseModel):
     content: str
 
 class Table(BaseModel):
-    headers: List[str]
-    rows: List[List[TableCell]]
+    headers: list[str]
+    rows: list[list[TableCell]]
 
 class ElementsItem(BaseModel):
     title: str
     value: str
 
 class Elements(BaseModel):
-    items: List[ElementsItem]
+    items: list[ElementsItem]
 
 class Metadata(BaseModel):
-    cards: Optional[List[Card]] = None
-    options: Optional[UIElements] = None
-    tool_cards: Optional[List[ToolCard]] = None
-    navigation_card: Optional[NavigationCard] = None
-    contact_card: Optional[ContactCard] = None
-    table: Optional[Table] = None
-    elements: Optional[Elements] = None
+    cards: list[Card] | None = None
+    options: UIElements | None = None
+    tool_cards: list[ToolCard] | None = None
+    navigation_card: NavigationCard | None = None
+    contact_card: ContactCard | None = None
+    table: Table | None = None
+    elements: Elements | None = None
 
 
 class LllmTrace(BaseModel):
@@ -105,17 +106,17 @@ class LllmTrace(BaseModel):
 
 class ChatMessage(BaseModel):
     """Chat message model for all communications"""
-    message_id: Optional[str] = Field(default=None, description="Unique identifier for the message")
+    message_id: str | None = Field(default=None, description="Unique identifier for the message")
     role: Literal["user", "assistant", "system"] = Field(description="Role of the message sender")
     text_format: Literal["plain", "markdown", "html", "voice"] = Field("plain", description="Format of the message text")
     text: str = Field(description="Content of the message")
-    metadata: Optional[Metadata] = Field(default=None, description="Additional metadata for the message")
+    metadata: Metadata | None = Field(default=None, description="Additional metadata for the message")
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         description="Timestamp when the message was created",
     )
-    conversation_id: Optional[str] = Field(default=None, description="ID of the conversation this message belongs to")
-    llm_trace: Optional[LllmTrace] = Field(default=None, description="LLM usage tracking information")
+    conversation_id: str | None = Field(default=None, description="ID of the conversation this message belongs to")
+    llm_trace: LllmTrace | None = Field(default=None, description="LLM usage tracking information")
 
 
 class ChatRequest(BaseModel):
@@ -123,4 +124,4 @@ class ChatRequest(BaseModel):
     role: Literal["user", "assistant", "system"] = Field(description="Role of the message sender")
     text: str = Field(description="Content of the message")
     text_format: Literal["plain", "markdown", "html", "voice"] = Field("plain", description="Format of the message text")
-    conversation_id: Optional[str] = Field(default=None, description="ID of the conversation this message belongs to")
+    conversation_id: str | None = Field(default=None, description="ID of the conversation this message belongs to")

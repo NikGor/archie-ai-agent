@@ -4,10 +4,12 @@ OpenAI client module for direct API integration using structured outputs.
 import json
 import logging
 import os
-from typing import Any, Optional, List, Literal, Dict
-from openai import OpenAI, pydantic_function_tool
+from typing import Any, Literal
+
 from dotenv import load_dotenv
+from openai import OpenAI, pydantic_function_tool
 from pydantic import BaseModel, Field
+
 from .models import Metadata
 from .tools import get_weather
 
@@ -27,15 +29,15 @@ tools = [
 class SourceRef(BaseModel):
     id: int = Field(description="Local incremental id for this session (1..N)")
     url: str = Field(description="Source URL")
-    title: Optional[str] = Field(default=None, description="Page/article title")
-    snippet: Optional[str] = Field(default=None, description="Short relevant excerpt")
+    title: str | None = Field(default=None, description="Page/article title")
+    snippet: str | None = Field(default=None, description="Short relevant excerpt")
 
 class EvidenceItem(BaseModel):
     claim: str = Field(description="Concrete factual claim used in the response/metadata")
     support: Literal["supported", "contradicted", "uncertain"] = Field(
         description="Does the cited evidence support the claim?"
     )
-    source_ids: List[int] = Field(
+    source_ids: list[int] = Field(
         description="IDs from sources[] backing this claim (empty if uncertain)"
     )
 
@@ -46,9 +48,9 @@ class RoutingDecision(BaseModel):
     rationale: str = Field(description="One-sentence reason for choosing this intent")
 
 class SlotsStatus(BaseModel):
-    needed: List[str] = Field(default=[], description="Required fields for this intent")
-    filled: List[str] = Field(default=[], description="Fields that have been filled") 
-    pending: List[str] = Field(default=[], description="Still missing; ask one-by-one")
+    needed: list[str] = Field(default=[], description="Required fields for this intent")
+    filled: list[str] = Field(default=[], description="Fields that have been filled")
+    pending: list[str] = Field(default=[], description="Still missing; ask one-by-one")
 
 class PreActionChecklist(BaseModel):
     summary: str = Field(description="Short summary of the planned action/assumption")
@@ -66,10 +68,10 @@ class SGRTrace(BaseModel):
     """Schema-Guided Reasoning trace (not user-facing UI)"""
     routing: RoutingDecision
     slots: SlotsStatus = Field(default_factory=SlotsStatus)
-    evidence: List[EvidenceItem] = Field(
+    evidence: list[EvidenceItem] = Field(
         default_factory=list, description="Claims and how they are supported"
     )
-    sources: List[SourceRef] = Field(
+    sources: list[SourceRef] = Field(
         default_factory=list, description="Deduplicated list of sources used"
     )
     verification: VerificationStatus
@@ -119,10 +121,10 @@ async def call_tool(
             return result
         else:
             return {"error": f"Unknown tool: {tool_name}"}
-        
+
     except Exception as e:
         logger.error(f"Error executing tool {tool_name}: {e}")
-        return {"error": f"Tool execution failed: {str(e)}"}
+        return {"error": f"Tool execution failed: {e!s}"}
 
 async def create_agent_response(
     messages: list[dict[str, Any]],
@@ -156,13 +158,13 @@ async def create_agent_response(
                 tool_arguments=tool_arguments,
             )
             logger.info(f"RML 911: Tool result: {tool_result}")
-            
+
             # Add function result to messages and call model again
             messages.append({
-                "role": "assistant", 
+                "role": "assistant",
                 "content": f"Function Result: {tool_name}: {tool_result}"
             })
-            
+
             # Call model again with function result
             response = client.responses.parse(
                 model=model,
@@ -186,16 +188,16 @@ async def create_agent_response(
 
         result = response.output[0].content[0].parsed
         logger.info(f"openai_002: Response len: \033[33m{len(result.response)}\033[0m")
-        
+
         # Log the full response in pretty format
         response_dict = {
             "response": result.response,
             "metadata": result.metadata.dict() if result.metadata else None
         }
         logger.info(f"openai_003: Full response:\n\033[32m{json.dumps(response_dict, indent=2, ensure_ascii=False)}\033[0m")
-        
+
         return result
 
     except Exception as e:
-        logger.error(f"openai_error_001: \033[31m{str(e)}\033[0m")
+        logger.error(f"openai_error_001: \033[31m{e!s}\033[0m")
         raise

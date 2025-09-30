@@ -1,11 +1,11 @@
 
-import json
 import logging
 import os
-from openai import OpenAI, pydantic_function_tool
-from typing import Optional, List, Literal, Any, Dict
-from pydantic import BaseModel, Field
+from typing import Literal
+
 from dotenv import load_dotenv
+from openai import OpenAI
+from pydantic import BaseModel, Field
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -17,18 +17,18 @@ class ButtonOption(BaseModel):
     command: str
 
 class UIElements(BaseModel):
-    buttons: Optional[List[ButtonOption]] = None
+    buttons: list[ButtonOption] | None = None
 
 class Card(BaseModel):
-    title: Optional[str] = None
+    title: str | None = None
     text: str
-    options: Optional[UIElements] = None
+    options: UIElements | None = None
 
 class NavigationCard(BaseModel):
     title: str
     description: str
     url: str
-    buttons: List[ButtonOption] = Field(
+    buttons: list[ButtonOption] = Field(
         default=[
             ButtonOption(text="🗺️ Show on map", command="show_on_map"),
             ButtonOption(text="🚗 Route", command="route")
@@ -37,9 +37,9 @@ class NavigationCard(BaseModel):
 
 class ContactCard(BaseModel):
     name: str
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    buttons: List[ButtonOption] = Field(
+    email: str | None = None
+    phone: str | None = None
+    buttons: list[ButtonOption] = Field(
         default=[
             ButtonOption(text="📞 Call", command="call"),
             ButtonOption(text="✉️ Email", command="email"),
@@ -49,30 +49,30 @@ class ContactCard(BaseModel):
 
 class ToolCard(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str | None = None
 
 class TableCell(BaseModel):
     content: str
 
 class Table(BaseModel):
-    headers: List[str]
-    rows: List[List[TableCell]]
+    headers: list[str]
+    rows: list[list[TableCell]]
 
 class ElementsItem(BaseModel):
     title: str
     value: str
 
 class Elements(BaseModel):
-    items: List[ElementsItem]
+    items: list[ElementsItem]
 
 class Metadata(BaseModel):
-    cards: Optional[List[Card]] = None
-    options: Optional[UIElements] = None
-    tool_cards: Optional[List[ToolCard]] = None
-    navigation_card: Optional[NavigationCard] = None
-    contact_card: Optional[ContactCard] = None
-    table: Optional[Table] = None
-    elements: Optional[Elements] = None
+    cards: list[Card] | None = None
+    options: UIElements | None = None
+    tool_cards: list[ToolCard] | None = None
+    navigation_card: NavigationCard | None = None
+    contact_card: ContactCard | None = None
+    table: Table | None = None
+    elements: Elements | None = None
 
 class GetWeather(BaseModel):
     location: str
@@ -80,15 +80,15 @@ class GetWeather(BaseModel):
 class SourceRef(BaseModel):
     id: int = Field(description="Local incremental id for this session (1..N)")
     url: str = Field(description="Source URL")
-    title: Optional[str] = Field(default=None, description="Page/article title")
-    snippet: Optional[str] = Field(default=None, description="Short relevant excerpt")
+    title: str | None = Field(default=None, description="Page/article title")
+    snippet: str | None = Field(default=None, description="Short relevant excerpt")
 
 class EvidenceItem(BaseModel):
     claim: str = Field(description="Concrete factual claim used in the response/metadata")
     support: Literal["supported", "contradicted", "uncertain"] = Field(
         description="Does the cited evidence support the claim?"
     )
-    source_ids: List[int] = Field(
+    source_ids: list[int] = Field(
         description="IDs from sources[] backing this claim (empty if uncertain)"
     )
 
@@ -99,9 +99,9 @@ class RoutingDecision(BaseModel):
     rationale: str = Field(description="One-sentence reason for choosing this intent")
 
 class SlotsStatus(BaseModel):
-    needed: List[str] = Field(default=[], description="Required fields for this intent")
-    filled: List[str] = Field(default=[], description="Fields that have been filled") 
-    pending: List[str] = Field(default=[], description="Still missing; ask one-by-one")
+    needed: list[str] = Field(default=[], description="Required fields for this intent")
+    filled: list[str] = Field(default=[], description="Fields that have been filled")
+    pending: list[str] = Field(default=[], description="Still missing; ask one-by-one")
 
 class PreActionChecklist(BaseModel):
     summary: str = Field(description="Short summary of the planned action/assumption")
@@ -119,10 +119,10 @@ class SGRTrace(BaseModel):
     """Schema-Guided Reasoning trace (not user-facing UI)"""
     routing: RoutingDecision
     slots: SlotsStatus = Field(default_factory=SlotsStatus)
-    evidence: List[EvidenceItem] = Field(
+    evidence: list[EvidenceItem] = Field(
         default_factory=list, description="Claims and how they are supported"
     )
-    sources: List[SourceRef] = Field(
+    sources: list[SourceRef] = Field(
         default_factory=list, description="Deduplicated list of sources used"
     )
     verification: VerificationStatus

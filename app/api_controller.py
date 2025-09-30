@@ -1,9 +1,11 @@
+import json
 import logging
 import os
+
 import httpx
 import yaml
-import json
 from dotenv import load_dotenv
+
 from .agent_builder import create_main_agent_response
 from .models import ChatMessage
 from .utils import generate_conversation_id, generate_message_id
@@ -35,7 +37,7 @@ async def handle_chat(user_message: ChatMessage) -> ChatMessage:
             logger.info("api_003: Creating new conversation")
             create_payload = {}
             logger.info(f"api_004: POST /conversations\n\033[36m{json.dumps(create_payload, indent=2)}\033[0m")
-            
+
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{BACKEND_API_URL}/conversations",
@@ -55,7 +57,7 @@ async def handle_chat(user_message: ChatMessage) -> ChatMessage:
         try:
             logger.info(f"api_006: Loading history for: \033[36m{conversation_id}\033[0m")
             logger.info(f"api_007: GET /chat_history?conversation_id={conversation_id}")
-            
+
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     f"{BACKEND_API_URL}/chat_history",
@@ -79,9 +81,9 @@ async def handle_chat(user_message: ChatMessage) -> ChatMessage:
     conversation_history.append({"role": "user", "content": user_message.text})
 
     logger.info("=== STEP 4: AI Processing ===")
-    
+
     agent_response = await create_main_agent_response(conversation_history)
-    
+
     # Extract response text and metadata from the structured output
     response_text = agent_response.response
     metadata = agent_response.metadata
@@ -111,7 +113,7 @@ async def handle_chat(user_message: ChatMessage) -> ChatMessage:
             }
             logger.info("api_010: Saving user message")
             logger.info(f"api_011: POST /messages\n\033[36m{json.dumps(user_payload, indent=2, ensure_ascii=False)}\033[0m")
-            
+
             await client.post(
                 f"{BACKEND_API_URL}/messages",
                 json=user_payload
@@ -127,13 +129,13 @@ async def handle_chat(user_message: ChatMessage) -> ChatMessage:
             }
             logger.info("api_012: Saving assistant message")
             logger.info(f"api_013: POST /messages\n\033[36m{json.dumps(assistant_payload, indent=2, ensure_ascii=False)}\033[0m")
-            
+
             await client.post(
                 f"{BACKEND_API_URL}/messages",
                 json=assistant_payload
             )
             logger.info("api_014: Messages saved successfully")
     except Exception as e:
-        logger.warning(f"api_015: Save error: \033[31m{str(e)}\033[0m")
+        logger.warning(f"api_015: Save error: \033[31m{e!s}\033[0m")
 
     return assistant_message
