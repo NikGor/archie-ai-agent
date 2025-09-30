@@ -7,7 +7,7 @@ from typing import Dict, Any
 logger = logging.getLogger(__name__)
 
 
-def get_weather(city_name: str) -> Dict[str, Any]:
+async def get_weather(city_name: str) -> Dict[str, Any]:
     """
     Get current weather information for a given city.
     
@@ -35,8 +35,8 @@ def get_weather(city_name: str) -> Dict[str, Any]:
         
         logger.info(f"Requesting weather data for city: {city_name}")
         
-        with httpx.Client(timeout=10.0) as client:
-            response = client.get(url, params=params)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, params=params)
             response.raise_for_status()
             
             data = response.json()

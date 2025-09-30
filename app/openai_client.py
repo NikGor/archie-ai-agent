@@ -115,7 +115,7 @@ async def call_tool(
     try:
         if tool_name == "get_weather":
             location = tool_arguments.get("location")
-            result = get_weather(city_name=location)
+            result = await get_weather(city_name=location)
             return result
         else:
             return {"error": f"Unknown tool: {tool_name}"}
@@ -145,7 +145,7 @@ async def create_agent_response(
             model=model,
             input=messages,
             text_format=AgentResponse,
-            # tools=tools,
+            tools=tools,
         )
         if response.output[0].type == "function_call":
             # Parse arguments from JSON string to dict
