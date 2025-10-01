@@ -6,7 +6,7 @@ import logging
 import httpx
 import yaml
 
-from ..utils import generate_conversation_id
+from ..utils.general_utils import generate_conversation_id
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 from ..agent_builder import create_main_agent_response
 from ..models import ChatMessage
-from ..utils import generate_message_id
+from ..utils.general_utils import generate_message_id
 from .conversation_service import ConversationService
 from .message_service import MessageService
 
@@ -61,6 +61,7 @@ class ChatService:
             text_format=user_message.text_format,
             conversation_id=conversation_id,
             metadata=metadata,
+            llm_trace=agent_response.llm_trace,
         )
 
         # Save messages

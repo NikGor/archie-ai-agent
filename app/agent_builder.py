@@ -4,7 +4,8 @@ import os
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from .openai_client import AgentResponse, create_agent_response
+from .models.response_models import AgentResponse
+from .openai_client import create_agent_response
 from .state import get_state
 
 logger = logging.getLogger(__name__)

@@ -49,6 +49,11 @@ class MessageService:
                         if assistant_message.metadata
                         else None
                     ),
+                    "llm_trace": (
+                        assistant_message.llm_trace.dict()
+                        if assistant_message.llm_trace
+                        else None
+                    ),
                 }
                 logger.info("message_003: Saving assistant message")
                 logger.info(

@@ -3,7 +3,8 @@
 import logging
 from typing import Any
 
-from ..models.openai_models import OpenAIFullResponse, ParsedResponse
+from ..models.chat_models import InputTokensDetails, LllmTrace, OutputTokensDetails
+from ..models.openai_models import OpenAIFullResponse, ParsedResponse, ResponseUsage
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +63,69 @@ def validate_response_structure(raw_response: Any) -> bool:
         return False
 
 
-def create_openai_full_response_model(raw_response: Any) -> OpenAIFullResponse:
-    """Create an OpenAIFullResponse model from raw response."""
-    if not validate_response_structure(raw_response):
-        raise ValueError("Invalid OpenAI response structure")
+def get_usage_from_openai_response(raw_response: Any):
+    """Extract usage information directly from OpenAI response."""
+    return raw_response.usage
 
-    parsed_response = ParsedResponse(**raw_response.__dict__)
-    return OpenAIFullResponse(response=parsed_response)
+
+def get_agent_response_from_openai(raw_response: Any):
+    """Extract AgentResponse directly from OpenAI response."""
+    return raw_response.output[0].content[0].parsed
+
+
+def create_llm_trace_from_response_usage(
+    usage: ResponseUsage, model: str, total_cost: float = 0.0
+) -> LllmTrace:
+    """
+    Convert ResponseUsage to LllmTrace for tracking purposes.
+
+    Args:
+        usage: ResponseUsage object from OpenAI response
+        model: Model name used for generation
+        total_cost: Calculated cost of the request (defaults to 0.0)
+
+    Returns:
+        LllmTrace: Converted tracking information
+    """
+    return LllmTrace(
+        model=model,
+        input_tokens=usage.input_tokens,
+        input_tokens_details=InputTokensDetails(
+            cached_tokens=usage.input_tokens_details.cached_tokens
+        ),
+        output_tokens=usage.output_tokens,
+        output_tokens_details=OutputTokensDetails(
+            reasoning_tokens=usage.output_tokens_details.reasoning_tokens
+        ),
+        total_tokens=usage.total_tokens,
+        total_cost=total_cost,
+    )
+
+
+def create_llm_trace_from_openai_response(
+    raw_response: Any, total_cost: float = 0.0
+) -> LllmTrace:
+    """
+    Create LllmTrace directly from OpenAI response.
+
+    Args:
+        raw_response: Raw OpenAI response object
+        total_cost: Calculated cost of the request (defaults to 0.0)
+
+    Returns:
+        LllmTrace: Tracking information extracted from response
+    """
+    usage = raw_response.usage
+    return LllmTrace(
+        model=raw_response.model,
+        input_tokens=usage.input_tokens,
+        input_tokens_details=InputTokensDetails(
+            cached_tokens=usage.input_tokens_details.cached_tokens
+        ),
+        output_tokens=usage.output_tokens,
+        output_tokens_details=OutputTokensDetails(
+            reasoning_tokens=usage.output_tokens_details.reasoning_tokens
+        ),
+        total_tokens=usage.total_tokens,
+        total_cost=total_cost,
+    )

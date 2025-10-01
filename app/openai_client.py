@@ -10,8 +10,9 @@ from openai import OpenAI, pydantic_function_tool
 from pydantic import BaseModel, Field
 
 from .models import Metadata
+from .models.response_models import AgentResponse
 from .tools import get_weather
-from .utils import create_openai_full_response_model
+from .utils.openai_utils import create_llm_trace_from_openai_response
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -114,21 +115,7 @@ class SGRTrace(BaseModel):
     pre_action: PreActionChecklist
 
 
-class AgentResponse(BaseModel):
-    """Response model for AI agent output"""
 
-    response: str = Field(
-        description=(
-            "Main text response from the AI agent in the specified response format. "
-            "Don't duplicate metadata information in the main response text."
-        )
-    )
-    metadata: Metadata = Field(
-        description="Additional metadata for enriching the response"
-    )
-    sgr: SGRTrace = Field(
-        description="Mandatory SGR reasoning trace for this turn (internal; not to be shown to user as-is)"
-    )
 
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -236,23 +223,31 @@ async def create_agent_response(
         elif response.output[0].type == "web_search_call":
             response = await handle_web_search_call(response, messages, model)
 
-        # Create structured model from final response
-        full_response = create_openai_full_response_model(response)
-
-        # Log metrics using the structured model
-        usage = full_response.get_usage_info()
+        # Log metrics directly from response
+        usage = response.usage
         logger.info(
             f"openai_004: Usage - Input: \033[33m{usage.input_tokens}\033[0m | "
             f"Output: \033[33m{usage.output_tokens}\033[0m | "
             f"Total: \033[33m{usage.total_tokens}\033[0m | "
-            f"Cached: \033[33m{full_response.get_cached_tokens()}\033[0m"
+            f"Cached: \033[33m{usage.input_tokens_details.cached_tokens}\033[0m"
         )
         logger.info(
-            f"openai_005: Status: {full_response.response.status} | Model: \033[36m{full_response.get_model_used()}\033[0m"
+            f"openai_005: Status: {response.status} | Model: \033[36m{response.model}\033[0m"
         )
 
-        # Extract the AgentResponse from the structured model
-        result = full_response.get_agent_response()
+        # Extract the AgentResponse and create new one with LLM trace
+        parsed_result = response.output[0].content[0].parsed
+        llm_trace = create_llm_trace_from_openai_response(response)
+        
+        result = AgentResponse(
+            response=parsed_result.response,
+            metadata=parsed_result.metadata,
+            sgr=parsed_result.sgr,
+            llm_trace=llm_trace,
+        )
+        
+        logger.info(f"openai_debug: Created AgentResponse with llm_trace: {hasattr(result, 'llm_trace')}")
+        logger.info(f"openai_debug: AgentResponse type: {type(result)}")
         log_response(result)
         return result
 
