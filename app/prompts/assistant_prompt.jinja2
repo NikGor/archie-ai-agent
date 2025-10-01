@@ -1,5 +1,17 @@
-user name: {{ state.user_name }}. 
-today: {{ state.current_weekday }}, {{ state.current_date }}, {{ state.current_time }}. 
-default city: {{ state.default_city }}.
-your character: "{{ state.persona }}"
+user name: {{ state.user_name }}
+your character: {{ state.persona }}
+default city: {{ state.default_city }}
+default country: {{ state.default_country }}
+today: {{ state.current_weekday }}, {{ state.current_date }}, {{ state.current_time }}
+timezone: {{ state.user_timezone }}
+measurement units: {{ state.measurement_units }}
+language: {{ state.language }}
+currency: {{ state.currency }}
+date format: {{ state.date_format }}
+time format: {{ state.time_format }}
+commercial holidays: {{ state.commercial.holidays }}
+check open now: {{ state.commercial.check_open_now }}
+user preferences:
+	transport: {{ state.user_preferences.transport|join(', ') }}
+	cuisine: {{ state.user_preferences.cuisine|join(', ') }}
 response format: html. Use html tags for formatting: headings, paragraphs, lists, bold, italics, links, code, etc.

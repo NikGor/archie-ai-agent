@@ -1,6 +1,4 @@
-"""
-Utility functions for the application
-"""
+"""Utility functions for the application"""
 
 import logging
 import uuid
@@ -10,20 +8,12 @@ logger = logging.getLogger(__name__)
 
 
 def generate_id_with_timestamp(prefix: str) -> str:
-    """
-    Generate an ID with the pattern: prefix-YYYYMMDDHHMMSS-uuid
-
-    Args:
-        prefix: The prefix for the ID (e.g., 'message', 'conversation')
-
-    Returns:
-        Generated ID string
-    """
+    """Generate an ID with the pattern: prefix-YYYYMMDDHHMMSS-uuid"""
     now = datetime.now(timezone.utc)
     timestamp = now.strftime("%Y%m%d%H%M%S")
-    unique_id = str(uuid.uuid4())[:8]  # Use first 8 characters of UUID for brevity
+    unique_id = str(uuid.uuid4())[:8]
     generated_id = f"{prefix}-{timestamp}-{unique_id}"
-    logger.info(f"utils_001: {prefix} ID: \033[36m{generated_id}\033[0m")
+    logger.info(f"utils_001: generated {prefix} ID: \033[36m{generated_id}\033[0m")
     return generated_id
 
 
