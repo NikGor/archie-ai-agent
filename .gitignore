@@ -237,3 +237,6 @@ recordings/
 
 # Poetry specific
 poetry.lock
+
+# Application state
+app/response_understand.py
