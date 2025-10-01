@@ -1,4 +1,4 @@
-"""Utility functions for the application"""
+"""General utility functions for the application."""
 
 import logging
 import uuid

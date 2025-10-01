@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from .models import Metadata
 from .tools import get_weather
+from .utils import create_openai_full_response_model
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -163,7 +164,7 @@ async def handle_function_call(
         tool_name=tool_name,
         tool_arguments=tool_arguments,
     )
-    logger.info(f"RML 911: Tool result: {tool_result}")
+    logger.info(f"openai_tool_result: Tool {tool_name} result: {tool_result}")
     messages.append(
         {
             "role": "assistant",
@@ -183,6 +184,7 @@ async def handle_web_search_call(
     model: str,
 ) -> Any:
     """Handle web search call response from OpenAI."""
+    logger.info("openai_websearch: Processing web search call")
     for output_item in response.output:
         if output_item.type == "message":
             messages.append(
@@ -191,6 +193,7 @@ async def handle_web_search_call(
                     "content": output_item.content[0].text,
                 }
             )
+            logger.debug("openai_websearch: Added message content to conversation")
             break
     return client.responses.parse(
         model=model,
@@ -226,13 +229,33 @@ async def create_agent_response(
             text_format=AgentResponse,
             tools=tools,
         )
+
+        # Handle different response types using raw response first
         if response.output[0].type == "function_call":
             response = await handle_function_call(response, messages, model)
         elif response.output[0].type == "web_search_call":
             response = await handle_web_search_call(response, messages, model)
-        result = response.output[0].content[0].parsed
+
+        # Create structured model from final response
+        full_response = create_openai_full_response_model(response)
+
+        # Log metrics using the structured model
+        usage = full_response.get_usage_info()
+        logger.info(
+            f"openai_004: Usage - Input: \033[33m{usage.input_tokens}\033[0m | "
+            f"Output: \033[33m{usage.output_tokens}\033[0m | "
+            f"Total: \033[33m{usage.total_tokens}\033[0m | "
+            f"Cached: \033[33m{full_response.get_cached_tokens()}\033[0m"
+        )
+        logger.info(
+            f"openai_005: Status: {full_response.response.status} | Model: \033[36m{full_response.get_model_used()}\033[0m"
+        )
+
+        # Extract the AgentResponse from the structured model
+        result = full_response.get_agent_response()
         log_response(result)
         return result
+
     except Exception as e:
         logger.error(f"openai_error_001: \033[31m{e!s}\033[0m")
         raise
