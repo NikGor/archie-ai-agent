@@ -70,7 +70,10 @@ clean:
 docker-build:
 	@echo "Building Docker image..."
 	docker-compose build
-
+---
+applyTo: '**'
+---
+Provide project context and coding guidelines that AI should follow when generating code, answering questions, or reviewing changes.
 docker-run:
 	@echo "Starting with Docker Compose..."
 	docker-compose up -d

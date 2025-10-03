@@ -3,12 +3,15 @@
 import json
 import logging
 import os
-from typing import Any, Literal
+from typing import Any
+
 from dotenv import load_dotenv
 from openai import OpenAI, pydantic_function_tool
-from pydantic import BaseModel, Field
-from archie_shared.chat.models import Metadata
-from .models.response_models import AgentResponse
+from pydantic import BaseModel
+
+from .models.response_models import (
+    AgentResponse,
+)
 from .tools import get_weather
 from .utils.openai_utils import create_llm_trace_from_openai_response
 
@@ -24,96 +27,6 @@ tools = [
     {"type": "web_search"},
     pydantic_function_tool(GetWeather, name="get_weather"),
 ]
-
-
-class SourceRef(BaseModel):
-    id: int = Field(description="Local incremental id for this session (1..N)")
-    url: str = Field(description="Source URL")
-    title: str | None = Field(
-        default=None,
-        description="Page/article title",
-    )
-    snippet: str | None = Field(
-        default=None,
-        description="Short relevant excerpt",
-    )
-
-
-class EvidenceItem(BaseModel):
-    claim: str = Field(
-        description="Concrete factual claim used in the response/metadata"
-    )
-    support: Literal["supported", "contradicted", "uncertain"] = Field(
-        description="Does the cited evidence support the claim?"
-    )
-    source_ids: list[int] = Field(
-        description="IDs from sources[] backing this claim (empty if uncertain)"
-    )
-
-
-class RoutingDecision(BaseModel):
-    intent: Literal[
-        "answer_general",
-        "weather",
-        "sports_score",
-        "web_search",
-        "clarify",
-        "out_of_scope",
-    ] = Field(description="Chosen path for this turn")
-    rationale: str = Field(description="One-sentence reason for choosing this intent")
-
-
-class SlotsStatus(BaseModel):
-    needed: list[str] = Field(
-        default=[],
-        description="Required fields for this intent",
-    )
-    filled: list[str] = Field(
-        default=[],
-        description="Fields that have been filled",
-    )
-    pending: list[str] = Field(
-        default=[],
-        description="Still missing; ask one-by-one",
-    )
-
-
-class PreActionChecklist(BaseModel):
-    summary: str = Field(description="Short summary of the planned action/assumption")
-    decision: Literal["confirm", "clarify", "reject", "none"] = Field(
-        description="If an action is pending, ask for confirmation; 'none' if N/A"
-    )
-
-
-class VerificationStatus(BaseModel):
-    level: Literal["verified", "partially_verified", "unverified"] = Field(
-        description="Overall verification level for factual content"
-    )
-    confidence_pct: int = Field(
-        ge=0,
-        le=100,
-        description="Calibrated confidence 0..100",
-    )
-
-
-class SGRTrace(BaseModel):
-    """Schema-Guided Reasoning trace (not user-facing UI)"""
-
-    routing: RoutingDecision
-    slots: SlotsStatus = Field(default_factory=SlotsStatus)
-    evidence: list[EvidenceItem] = Field(
-        default_factory=list,
-        description="Claims and how they are supported",
-    )
-    sources: list[SourceRef] = Field(
-        default_factory=list,
-        description="Deduplicated list of sources used",
-    )
-    verification: VerificationStatus
-    pre_action: PreActionChecklist
-
-
-
 
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -224,27 +137,29 @@ async def create_agent_response(
         # Log metrics directly from response
         usage = response.usage
         logger.info(
-            f"openai_004: Usage - Input: \033[33m{usage.input_tokens}\033[0m | "
-            f"Output: \033[33m{usage.output_tokens}\033[0m | "
-            f"Total: \033[33m{usage.total_tokens}\033[0m | "
-            f"Cached: \033[33m{usage.input_tokens_details.cached_tokens}\033[0m"
+            f"openai_004: Usage - Input: \033[33m{usage.input_tokens}\033[0m | "  # type: ignore
+            f"Output: \033[33m{usage.output_tokens}\033[0m | "  # type: ignore
+            f"Total: \033[33m{usage.total_tokens}\033[0m | "  # type: ignore
+            f"Cached: \033[33m{usage.input_tokens_details.cached_tokens}\033[0m"  # type: ignore
         )
         logger.info(
             f"openai_005: Status: {response.status} | Model: \033[36m{response.model}\033[0m"
         )
 
         # Extract the AgentResponse and create new one with LLM trace
-        parsed_result = response.output[0].content[0].parsed
+        parsed_result = response.output[0].content[0].parsed  # type: ignore
         llm_trace = create_llm_trace_from_openai_response(response)
-        
+
         result = AgentResponse(
-            response=parsed_result.response,
-            metadata=parsed_result.metadata,
-            sgr=parsed_result.sgr,
+            response=parsed_result.response,  # type: ignore
+            metadata=parsed_result.metadata,  # type: ignore
+            sgr=parsed_result.sgr,  # type: ignore
             llm_trace=llm_trace,
         )
-        
-        logger.info(f"openai_debug: Created AgentResponse with llm_trace: {hasattr(result, 'llm_trace')}")
+
+        logger.info(
+            f"openai_debug: Created AgentResponse with llm_trace: {hasattr(result, 'llm_trace')}"
+        )
         logger.info(f"openai_debug: AgentResponse type: {type(result)}")
         log_response(result)
         return result

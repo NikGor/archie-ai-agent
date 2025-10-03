@@ -1,7 +1,9 @@
 """API Controller - Facade connecting endpoints to services."""
 
 import logging
+
 from archie_shared.chat.models import ChatMessage
+
 from .services.chat_service import ChatService
 
 logger = logging.getLogger(__name__)
