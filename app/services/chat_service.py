@@ -2,11 +2,9 @@
 
 import logging
 import os
-
 from dotenv import load_dotenv
-
+from archie_shared.chat.models import ChatMessage
 from ..agent_builder import create_main_agent_response
-from ..models import ChatMessage
 from ..utils.general_utils import generate_message_id
 from .conversation_service import ConversationService
 from .message_service import MessageService

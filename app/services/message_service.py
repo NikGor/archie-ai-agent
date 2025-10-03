@@ -1,11 +1,8 @@
 """Message service for handling message persistence."""
-
 import json
 import logging
-
 import httpx
-
-from ..models import ChatMessage
+from archie_shared.chat.models import ChatMessage
 
 logger = logging.getLogger(__name__)
 

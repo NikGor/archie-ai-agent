@@ -4,12 +4,10 @@ import json
 import logging
 import os
 from typing import Any, Literal
-
 from dotenv import load_dotenv
 from openai import OpenAI, pydantic_function_tool
 from pydantic import BaseModel, Field
-
-from .models import Metadata
+from archie_shared.chat.models import Metadata
 from .models.response_models import AgentResponse
 from .tools import get_weather
 from .utils.openai_utils import create_llm_trace_from_openai_response

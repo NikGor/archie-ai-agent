@@ -1,10 +1,7 @@
 import logging
-
 from fastapi import APIRouter, HTTPException
-
+from archie_shared.chat.models import ChatMessage, ChatRequest
 from .api_controller import handle_chat
-from .models import ChatMessage, ChatRequest
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 

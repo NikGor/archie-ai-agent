@@ -1,9 +1,7 @@
 """Utility functions for processing OpenAI responses."""
-
 import logging
 from typing import Any
-
-from ..models.chat_models import InputTokensDetails, LllmTrace, OutputTokensDetails
+from archie_shared.chat.models import InputTokensDetails, LllmTrace, OutputTokensDetails
 from ..models.openai_models import OpenAIFullResponse, ParsedResponse, ResponseUsage
 
 logger = logging.getLogger(__name__)
