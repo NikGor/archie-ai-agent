@@ -115,18 +115,27 @@ def log_response(result: AgentResponse) -> None:
 async def create_agent_response(
     messages: list[dict[str, Any]],
     model: str = "gpt-4.1",
+    previous_response_id: str | None = None,
 ) -> AgentResponse:
     """Create an agent response using OpenAI structured outputs."""
     logger.info(
         f"openai_001: Calling \033[36m{model}\033[0m with \033[33m{len(messages)}\033[0m msgs"
     )
     try:
-        response = client.responses.parse(
-            model=model,
-            input=messages,
-            text_format=AgentResponse,
-            tools=tools,
-        )
+        # Prepare arguments for OpenAI call
+        openai_args = {
+            "model": model,
+            "input": messages,
+            "text_format": AgentResponse,
+            "tools": tools,
+        }
+        
+        # Add previous_response_id only if provided and non-empty
+        if previous_response_id and previous_response_id.strip():
+            openai_args["previous_response_id"] = previous_response_id
+            logger.info(f"openai_previous: Using previous response ID: \033[36m{previous_response_id}\033[0m")
+        
+        response = client.responses.parse(**openai_args)
 
         # Handle different response types using raw response first
         if response.output[0].type == "function_call":
@@ -156,6 +165,10 @@ async def create_agent_response(
             sgr=parsed_result.sgr,  # type: ignore
             llm_trace=llm_trace,
         )
+        
+        # Add response ID if available
+        if hasattr(response, 'id'):
+            result.response_id = response.id
 
         logger.info(
             f"openai_debug: Created AgentResponse with llm_trace: {hasattr(result, 'llm_trace')}"

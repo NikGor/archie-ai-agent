@@ -19,7 +19,11 @@ _env = Environment(
 )
 
 
-async def create_main_agent_response(messages: list[dict[str, str]]) -> AgentResponse:
+async def create_main_agent_response(
+    messages: list[dict[str, str]], 
+    previous_response_id: str | None = None,
+    model: str = "gpt-4.1"
+) -> AgentResponse:
     """Create a response using the main agent configuration."""
     state = get_state(
         user_name=DEFAULT_USER_NAME or "User",
@@ -48,5 +52,6 @@ async def create_main_agent_response(messages: list[dict[str, str]]) -> AgentRes
     )
     return await create_agent_response(
         messages=formatted_messages,
-        model="gpt-4.1",
+        model=model,
+        previous_response_id=previous_response_id,
     )

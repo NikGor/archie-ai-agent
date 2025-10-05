@@ -1,27 +1,21 @@
 """Chat service for coordinating chat workflow."""
 
 import logging
-import os
-
 from archie_shared.chat.models import ChatMessage
-from dotenv import load_dotenv
-
 from ..agent_builder import create_main_agent_response
 from ..utils.general_utils import generate_message_id
 from .conversation_service import ConversationService
 from .message_service import MessageService
 
 logger = logging.getLogger(__name__)
-load_dotenv()
-BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://localhost:8002")
 
 
 class ChatService:
     """Service for coordinating chat workflow."""
 
     def __init__(self):
-        self.conversation_service = ConversationService(BACKEND_API_URL)
-        self.message_service = MessageService(BACKEND_API_URL)
+        self.conversation_service = ConversationService()
+        self.message_service = MessageService()
 
     async def process_chat_message(self, user_message: ChatMessage) -> ChatMessage:
         """Process a chat message through the complete workflow."""
@@ -35,27 +29,36 @@ class ChatService:
         if not conversation_id:
             conversation_id = await self.conversation_service.create_new_conversation()
 
-        # Load conversation history
-        conversation_history = (
-            await self.conversation_service.load_conversation_history(conversation_id)
-        )
-
-        # Prepare user message
+        # Prepare user message  
         user_message.conversation_id = conversation_id
-        user_message.message_id = generate_message_id()
-        conversation_history.append({"role": "user", "content": user_message.text})
+        # Don't generate message_id here - will be set from OpenAI response
+        
+        # Create simple message for OpenAI (history handled by previous_response_id)
+        current_messages = [{"role": "user", "content": user_message.text}]
 
         # Generate AI response
         logger.info("=== STEP 4: AI Processing ===")
-        agent_response = await create_main_agent_response(conversation_history)
+        # Get previous_message_id from user message if available
+        previous_message_id = user_message.previous_message_id
+        if previous_message_id:
+            logger.info(f"chat_003: Found previous_message_id: \033[36m{previous_message_id}\033[0m")
+        # Use model from user request if provided, otherwise default
+        model = user_message.model if user_message.model else "gpt-4.1"
+        agent_response = await create_main_agent_response(current_messages, previous_message_id, model)
         response_text = agent_response.response
         metadata = agent_response.metadata
 
         # Create assistant message
-        logger.info("=== STEP 5: Saving to Backend ===")
+        logger.info("=== STEP 5: Saving to Database ===")
         logger.info(f"chat_002: Response len: \033[33m{len(response_text)}\033[0m")
+        
+        # Set user message_id - for first message, generate one, for subsequent use previous assistant response_id
+        if not user_message.message_id:
+            # For new conversations, we need to generate first user message ID
+            user_message.message_id = generate_message_id()
+            
         assistant_message = ChatMessage(
-            message_id=generate_message_id(),
+            message_id=agent_response.response_id or generate_message_id(),
             role="assistant",
             text=response_text,
             text_format=user_message.text_format,
@@ -65,7 +68,7 @@ class ChatService:
         )
 
         # Save messages
-        await self.message_service.save_messages_to_backend(
+        await self.message_service.save_messages_to_database(
             user_message, assistant_message, conversation_id
         )
 

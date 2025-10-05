@@ -1,67 +1,41 @@
-"""Message service for handling message persistence."""
+"""Message service for handling message persistence via backend API."""
 
-import json
 import logging
-
-import httpx
 from archie_shared.chat.models import ChatMessage
+from ..utils.backend_client import BackendClient
 
 logger = logging.getLogger(__name__)
 
 
 class MessageService:
-    """Service for managing messages with external backend."""
+    """Service for managing messages via backend API."""
 
-    def __init__(self, backend_url: str):
-        self.backend_url = backend_url
+    def __init__(self):
+        self.backend_client = BackendClient()
 
-    async def save_messages_to_backend(
+    async def save_messages_to_database(
         self,
         user_message: ChatMessage,
         assistant_message: ChatMessage,
         conversation_id: str,
     ) -> None:
-        """Save both user and assistant messages to backend."""
+        """Save both user and assistant messages via backend API."""
         try:
-            async with httpx.AsyncClient() as client:
-                user_payload = {
-                    "role": user_message.role,
-                    "text": user_message.text,
-                    "text_format": user_message.text_format,
-                    "conversation_id": conversation_id,
-                }
-                logger.info("message_001: Saving user message")
-                logger.info(
-                    f"message_002: POST /messages\n\033[36m{json.dumps(user_payload, indent=2, ensure_ascii=False)}\033[0m"
-                )
-                await client.post(
-                    f"{self.backend_url}/messages",
-                    json=user_payload,
-                )
-                assistant_payload = {
-                    "role": assistant_message.role,
-                    "text": assistant_message.text,
-                    "text_format": assistant_message.text_format,
-                    "conversation_id": conversation_id,
-                    "metadata": (
-                        assistant_message.metadata.dict()
-                        if assistant_message.metadata
-                        else None
-                    ),
-                    "llm_trace": (
-                        assistant_message.llm_trace.dict()
-                        if assistant_message.llm_trace
-                        else None
-                    ),
-                }
-                logger.info("message_003: Saving assistant message")
-                logger.info(
-                    f"message_004: POST /messages\n\033[36m{json.dumps(assistant_payload, indent=2, ensure_ascii=False)}\033[0m"
-                )
-                await client.post(
-                    f"{self.backend_url}/messages",
-                    json=assistant_payload,
-                )
-                logger.info("message_005: Messages saved successfully")
+            logger.info("message_001: Saving user message via API")
+            logger.info(f"message_002: User message ID: \033[36m{user_message.message_id}\033[0m")
+            
+            # Set conversation_id for both messages
+            user_message.conversation_id = conversation_id
+            assistant_message.conversation_id = conversation_id
+            
+            # Save user message
+            await self.backend_client.create_message(user_message)
+            
+            # Save assistant message  
+            logger.info("message_003: Saving assistant message via API")
+            logger.info(f"message_004: Assistant message ID: \033[36m{assistant_message.message_id}\033[0m")
+            await self.backend_client.create_message(assistant_message)
+            
+            logger.info("message_005: Messages saved successfully via API")
         except Exception as e:
             logger.warning(f"message_error_001: Save error: \033[31m{e!s}\033[0m")
