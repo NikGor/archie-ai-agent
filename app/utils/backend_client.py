@@ -57,17 +57,7 @@ class BackendClient:
         try:
             logger.info("backend_004: Creating message via API")
             logger.info(f"backend_005: Message ID: \033[36m{message.message_id or 'AUTO'}\033[0m")
-            
-            # Prepare payload according to MessageRequest schema
-            payload = {
-                "role": message.role,
-                "text": message.text,
-                "text_format": message.text_format,
-                "conversation_id": message.conversation_id,
-                "previous_message_id": message.previous_message_id,
-                "model": message.model,
-                "metadata_json": message.metadata.dict() if message.metadata else None
-            }
+            payload = message.model_dump(mode='json')
             
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(

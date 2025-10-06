@@ -22,5 +22,3 @@ class ConversationService:
         except Exception as e:
             logger.error(f"conversation_error_001: Creation error: \033[31m{e!s}\033[0m")
             raise
-
-

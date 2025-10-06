@@ -25,7 +25,7 @@ class GetWeather(BaseModel):
 
 tools = [
     {"type": "web_search"},
-    pydantic_function_tool(GetWeather, name="get_weather"),
+    # pydantic_function_tool(GetWeather, name="get_weather"),
 ]
 
 
@@ -103,13 +103,17 @@ async def handle_web_search_call(
 def log_response(result: AgentResponse) -> None:
     """Log the agent response in a structured format."""
     logger.info(f"openai_002: Response len: \033[33m{len(result.response)}\033[0m")
-    response_dict = {
-        "response": result.response,
-        "metadata": result.metadata.dict() if result.metadata else None,
-    }
-    logger.info(
-        f"openai_003: Full response:\n\033[32m{json.dumps(response_dict, indent=2, ensure_ascii=False)}\033[0m"
-    )
+    try:
+        response_dict = {
+            "response": result.response,
+            "metadata": result.metadata.model_dump(mode='json') if result.metadata else None,
+        }
+        logger.info(
+            f"openai_003: Full response:\n\033[32m{json.dumps(response_dict, indent=2, ensure_ascii=False)}\033[0m"
+        )
+    except Exception as e:
+        logger.warning(f"openai_log_error: Could not serialize response for logging: {e}")
+        logger.info(f"openai_003: Response text only: {result.response}")
 
 
 async def create_agent_response(
@@ -123,18 +127,23 @@ async def create_agent_response(
     )
     try:
         # Prepare arguments for OpenAI call
-        openai_args = {
-            "model": model,
-            "input": messages,
-            "text_format": AgentResponse,
-            "tools": tools,
-        }
-        
-        # Add previous_response_id only if provided and non-empty
-        if previous_response_id and previous_response_id.strip():
-            openai_args["previous_response_id"] = previous_response_id
+        if previous_response_id:
+            openai_args = {
+                "model": model,
+                "input": messages,
+                "text_format": AgentResponse,
+                "tools": tools,
+                "previous_response_id": previous_response_id
+            }
             logger.info(f"openai_previous: Using previous response ID: \033[36m{previous_response_id}\033[0m")
-        
+        else:
+            openai_args = {
+                "model": model,
+                "input": messages,
+                "text_format": AgentResponse,
+                "tools": tools,
+            }
+            logger.info("openai_previous: No previous response ID provided")
         response = client.responses.parse(**openai_args)
 
         # Handle different response types using raw response first
