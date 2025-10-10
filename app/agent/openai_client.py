@@ -9,11 +9,11 @@ from dotenv import load_dotenv
 from openai import OpenAI, pydantic_function_tool
 from pydantic import BaseModel
 
-from .models.response_models import (
+from ..models.response_models import (
     AgentResponse,
 )
 from .tools import get_weather
-from .utils.openai_utils import create_llm_trace_from_openai_response
+from ..utils.openai_utils import create_llm_trace_from_openai_response
 
 logger = logging.getLogger(__name__)
 load_dotenv()
