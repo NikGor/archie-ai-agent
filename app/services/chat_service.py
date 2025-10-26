@@ -2,7 +2,7 @@
 
 import logging
 from archie_shared.chat.models import ChatMessage
-from ..agent_builder import create_main_agent_response
+from ..agent.builder import create_main_agent_response
 from ..utils.general_utils import generate_message_id
 from ..utils.backend_client import BackendClient
 from .conversation_service import ConversationService
