@@ -551,27 +551,18 @@ class UIAnswer(BaseModel):
     intro_text: TextAnswer = Field(default=None, description="Introductory paragraph")
     items: List[AdvancedAnswerItem] = Field(description="List of items in the generative UI answer")
     quick_action_buttons: Optional[QuickActionButtons] = Field(default=None, description="Quick action buttons for the UI")
-    
-class Content(BaseModel):
+
+class AgentResponse(BaseModel):
     """Content of a chat message, can be text or structured data"""
     type: Literal["plain_text_answer", "formatted_text_answer", "ui_answer"] = Field(
         description="Type of content"
     )
-    formatted_text_type: Literal["plain", "markdown", "html", "voice"] = Field(
+    formatted_text_type: Literal["plain", "markdown", "html", "python"] = Field(
         description="Type of formatted text content"
     )
-    plain_text_answer: Optional[TextAnswer] = Field(default=None, description="Plain text answer content")
-    formatted_text_answer: Optional[TextAnswer] = Field(default=None, description="Formatted text answer content")
-    ui_answer: Optional[UIAnswer] = Field(default=None, description="Generative UI answer content")
-
-class AgentResponse(BaseModel):
-    """Response model for AI agent output"""
-    response: Content = Field(
-        description=(
-            "Main text response from the AI agent in the specified response format. "
-            "Don't duplicate metadata information in the main response text."
-        )
-    )
+    plain_text_answer: Optional[TextAnswer] = Field(default=None, description="Plain text answer content. If type is 'plain_text_answer', use this field to provide the content.")
+    formatted_text_answer: Optional[TextAnswer] = Field(default=None, description="Formatted text answer content. If type is 'formatted_text_answer', use this field to provide the content exactly as specified in 'formatted_text_type'.")
+    ui_answer: Optional[UIAnswer] = Field(default=None, description="Generative UI answer content. If type is 'ui_answer', use this field to provide the content.")
 
 MAIN_AGENT_PROMPT = """# User Context & Settings
 - **User**: {user_name}
