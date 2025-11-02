@@ -89,17 +89,12 @@ class LocationCard(BaseModel):
         default=None, 
         description="Direct link to map view - use platform-specific URLs (Google Maps)"
     )
-    navigate_to_url: Optional[str] = Field(
-        default=None, 
-        description="Direct navigation/directions link with appropriate transport mode"
-    )
     buttons: List[Union[FrontendButton, AssistantButton]] = Field(
         default=None,
         description="""
         Action buttons specific to the location
-        If the location is within roughly 100 km of my current location, use the frontend buttons "navigate_to" and "open_map"
-        If the location is clearly far away, use only the frontend button "open_map"
-        Add 1 assistant button for another relevant quick action
+        Use the frontend button "open_map"
+        Add 1-2 assistant buttons for another relevant quick action
         Maximum 3 buttons per location
         """
     )
