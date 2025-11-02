@@ -345,24 +345,7 @@ class ShoppingListCard(BaseModel):
     items_by_department: Optional[Dict[str, List[str]]] = Field(
         default=None,
         description="""
-        Dictionary organized by German store departments:
-        {
-          "Obst & Gemüse": ["2 kg Kartoffeln", "1 Bund Petersilie"],
-          "Backerei": ["1 Baguette", "1 Croissant"],
-          "Süßwaren": ["1 Tafel Schokolade (200 g)", "1 Packung Kekse"],
-          "Trockenprodukte": ["1 Packung Nudeln (500 g)", "1 Flasche Olivenöl (1 L)"],
-          "Haushalt": ["1 Flasche Spülmittel", "1 Packung Küchenrollen"],
-          "Backwaren": ["1 Packung Semmeln"],
-          "Molkerei (verpackt)": ["1 Flasche Milch (1 L)", "1 Stück Butter (250 g)", "1 Packung Eier (6 Stück)"],
-          "Tiefkühl": ["1 Packung TK-Pelmeni (500 g)", "1 Packung TK-Gemüse (500 g)"],
-          "Fertiggerichte": ["2 Packungen Salat", "1 Sandwich"],
-          "Fleisch & Wurst (verpackt)": ["1 Packung Hackfleisch (500 g)", "1 Packung Speck (200 g)"],
-          "Fleisch & Wurst (Frischetheke)": ["200 g Salami geschnitten", "300 g Putenbrust"],
-          "Käse (verpackt & aufgeschnitten)": ["1 Packung Parmesankäse (150 g)", "1 Packung Gouda geschnitten"],
-          "Käse (Frischetheke)": ["200 g Gouda"],
-          "Getränke": ["1 Flasche Orangensaft (1 L)", "6 Flaschen Wasser (1.5 L)"],
-          "Tierfutter": ["1 Dose Katzenfutter"]
-        }
+        Dictionary organized by German store departments.
         Don't use recipe units like: '90g pancetta', '3 large eggs', '50g pecorino cheese'
         Round up quantities to nearest store unit: kg, g, L, ml, pieces, packs, bottles, cans
         """
@@ -562,8 +545,8 @@ class QuickActionButtons(BaseModel):
     buttons: List[AssistantButton] = Field(
         description="2-3 action buttons representing most likely next steps. Order by user priority, include 1 primary action."
     )
-    
-class AdvancedAnswer(BaseModel):
+
+class UIAnswer(BaseModel):
     """Generative UI answer content"""
     intro_text: TextAnswer = Field(default=None, description="Introductory paragraph")
     items: List[AdvancedAnswerItem] = Field(description="List of items in the generative UI answer")
@@ -571,8 +554,15 @@ class AdvancedAnswer(BaseModel):
     
 class Content(BaseModel):
     """Content of a chat message, can be text or structured data"""
-    type: Literal["advanced_answer"] = Field(description="Type of content")
-    advanced_answer: Optional[AdvancedAnswer] = Field(default=None, description="Generative UI answer content")
+    type: Literal["plain_text_answer", "formatted_text_answer", "ui_answer"] = Field(
+        description="Type of content"
+    )
+    formatted_text_type: Literal["plain", "markdown", "html", "voice"] = Field(
+        description="Type of formatted text content"
+    )
+    plain_text_answer: Optional[TextAnswer] = Field(default=None, description="Plain text answer content")
+    formatted_text_answer: Optional[TextAnswer] = Field(default=None, description="Formatted text answer content")
+    ui_answer: Optional[UIAnswer] = Field(default=None, description="Generative UI answer content")
 
 class AgentResponse(BaseModel):
     """Response model for AI agent output"""
@@ -582,7 +572,6 @@ class AgentResponse(BaseModel):
             "Don't duplicate metadata information in the main response text."
         )
     )
-
 
 MAIN_AGENT_PROMPT = """# User Context & Settings
 - **User**: {user_name}
@@ -695,7 +684,7 @@ def chat():
     }
     user_input = {
         "role": "user",
-        "content": "Посоветуй мне кронштейн для двух мониторов с креплением к столешнице",
+        "content": "Составь мне базовый список покупок для новогоднего стола",
     }
     messages = [system_prompt, user_input]
     response = client.responses.parse(
@@ -705,7 +694,7 @@ def chat():
         text_format=AgentResponse,
     )
     # print("Response:", response)
-    result = response.output[0].content[0].parsed.response.advanced_answer
+    result = response.output[0].content[0].parsed.response.ui_answer
     print(json.dumps(result.model_dump(), indent=2, ensure_ascii=False))
 
 def main():
