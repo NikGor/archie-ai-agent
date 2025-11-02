@@ -557,13 +557,13 @@ class AgentResponse(BaseModel):
     type: Literal["plain_text_answer", "formatted_text_answer", "ui_answer"] = Field(
         description="Type of content"
     )
-    formatted_text_type: Literal["plain", "markdown", "html", "python"] = Field(
-        description="Type of formatted text content"
+    formatted_text_type: Optional[Literal["plain", "markdown", "html", "python", "ssml"]] = Field(
+        description="Type of formatted text content. Used only if type is 'formatted_text_answer'"
     )
-    plain_text_answer: Optional[TextAnswer] = Field(default=None, description="Plain text answer content. If type is 'plain_text_answer', use this field to provide the content.")
-    formatted_text_answer: Optional[TextAnswer] = Field(default=None, description="Formatted text answer content. If type is 'formatted_text_answer', use this field to provide the content exactly as specified in 'formatted_text_type'.")
+    plain_text_answer: Optional[str] = Field(default=None, description="Plain text answer content. If type is 'plain_text_answer', use this field to provide the content.")
+    formatted_text_answer: Optional[str] = Field(default=None, description="Formatted text answer content. If type is 'formatted_text_answer', use this field to provide the content exactly as specified in 'formatted_text_type'.")
     ui_answer: Optional[UIAnswer] = Field(default=None, description="Generative UI answer content. If type is 'ui_answer', use this field to provide the content.")
-
+    
 MAIN_AGENT_PROMPT = """# User Context & Settings
 - **User**: {user_name}
 - **Location**: {default_city}, {default_country}
@@ -675,7 +675,7 @@ def chat():
     }
     user_input = {
         "role": "user",
-        "content": "Составь мне базовый список покупок для новогоднего стола",
+        "content": "Расскажи мне о ближайших итальянских ресторанах в ssml формате",
     }
     messages = [system_prompt, user_input]
     response = client.responses.parse(
@@ -685,7 +685,7 @@ def chat():
         text_format=AgentResponse,
     )
     # print("Response:", response)
-    result = response.output[0].content[0].parsed.response.ui_answer
+    result = response.output[0].content[0].parsed
     print(json.dumps(result.model_dump(), indent=2, ensure_ascii=False))
 
 def main():
