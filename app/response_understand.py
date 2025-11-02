@@ -552,7 +552,7 @@ class UIAnswer(BaseModel):
     items: List[AdvancedAnswerItem] = Field(description="List of items in the generative UI answer")
     quick_action_buttons: Optional[QuickActionButtons] = Field(default=None, description="Quick action buttons for the UI")
 
-class AgentResponse(BaseModel):
+class Content(BaseModel):
     """Content of a chat message, can be text or structured data"""
     type: Literal["plain_text_answer", "formatted_text_answer", "ui_answer"] = Field(
         description="Type of content"
