@@ -6,6 +6,9 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
+# Import AgentResponse from models
+from .models.response_models import AgentResponse
+
 load_dotenv()
 logger = logging.getLogger(__name__)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))

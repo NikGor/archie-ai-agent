@@ -102,18 +102,18 @@ async def handle_web_search_call(
 
 def log_response(result: AgentResponse) -> None:
     """Log the agent response in a structured format."""
-    logger.info(f"openai_002: Response len: \033[33m{len(result.response)}\033[0m")
+    content_text = str(result.content) if result.content else ""
+    logger.info(f"openai_002: Response len: \033[33m{len(content_text)}\033[0m")
     try:
         response_dict = {
-            "response": result.response,
-            "metadata": result.metadata.model_dump(mode='json') if result.metadata else None,
+            "content": result.content.model_dump(mode='json') if result.content else None,
         }
         logger.info(
             f"openai_003: Full response:\n\033[32m{json.dumps(response_dict, indent=2, ensure_ascii=False)}\033[0m"
         )
     except Exception as e:
         logger.warning(f"openai_log_error: Could not serialize response for logging: {e}")
-        logger.info(f"openai_003: Response text only: {result.response}")
+        logger.info(f"openai_003: Response content only: {result.content}")
 
 
 async def create_agent_response(
@@ -169,8 +169,7 @@ async def create_agent_response(
         llm_trace = create_llm_trace_from_openai_response(response)
 
         result = AgentResponse(
-            response=parsed_result.response,  # type: ignore
-            metadata=parsed_result.metadata,  # type: ignore
+            content=parsed_result.content,  # type: ignore
             sgr=parsed_result.sgr,  # type: ignore
             llm_trace=llm_trace,
         )

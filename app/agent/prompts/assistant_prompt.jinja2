@@ -14,4 +14,4 @@ check open now: {{ state.commercial.check_open_now }}
 user preferences:
 	transport: {{ state.user_preferences.transport|join(', ') }}
 	cuisine: {{ state.user_preferences.cuisine|join(', ') }}
-response format: html. Use html tags for formatting: headings, paragraphs, lists, bold, italics, links, code, etc.
+response format: {{ response_format }}. Respond according to the specified format.

@@ -14,21 +14,14 @@ async def chat_endpoint(request: ChatRequest) -> ChatMessage:
         logger.info("=== STEP 2: Chat Request ===")
         logger.info(
             f"endpoints_001: processing conversation: \033[36m{request.conversation_id or 'NEW'}\033[0m, "
-            f"Len: \033[33m{len(request.text)}\033[0m"
-        )
-        chat_message = ChatMessage(
-            role=request.role,
-            text=request.text,
-            text_format=request.text_format,
-            conversation_id=request.conversation_id,
-            previous_message_id=request.previous_message_id,
-            model=request.model,
+            f"Len: \033[33m{len(request.input)}\033[0m"
         )
         if request.previous_message_id:
             logger.info(f"endpoints_003: Using previous_message_id: \033[36m{request.previous_message_id}\033[0m")
-        result = await handle_chat(chat_message)
+        result = await handle_chat(request)
         logger.info("=== STEP 6: Response Ready ===")
-        logger.info(f"endpoints_002: Response len: \033[33m{len(result.text)}\033[0m")
+        content_text = str(result.content) if result.content else ""
+        logger.info(f"endpoints_002: Response len: \033[33m{len(content_text)}\033[0m")
         return result
     except Exception as e:
         logger.error(f"endpoints_error_001: \033[31m{e!s}\033[0m", exc_info=True)

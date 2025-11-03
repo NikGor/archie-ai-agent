@@ -22,7 +22,8 @@ _env = Environment(
 async def create_main_agent_response(
     messages: list[dict[str, str]], 
     previous_response_id: str | None = None,
-    model: str = "gpt-4.1"
+    model: str = "gpt-4.1",
+    response_format: str = "plain",
 ) -> AgentResponse:
     """Create a response using the main agent configuration."""
     state = get_state(
@@ -33,21 +34,42 @@ async def create_main_agent_response(
         state.get("persona", "business").lower().strip() if state else "business"
     )
     logger.info(f"agent_001: Loaded persona: \033[35m{persona_key}\033[0m")
+    logger.info(f"agent_002: Response format: \033[36m{response_format}\033[0m")
+    
+    # Check persona template exists
     persona_template_path = os.path.join(PROMPTS_DIR, f"persona_{persona_key}.jinja2")
-    if not os.path.exists(persona_template_path):
-        logger.warning(f"agent_002: Template missing: \033[31m{persona_key}\033[0m")
+    
+    # Load format-specific prompt
+    if response_format in ["plain", "ui_answer"]:
+        format_template_name = f"format_{response_format}.jinja2"
+    else:
+        format_template_name = "format_formatted_text.jinja2"
+    
+    format_template_path = os.path.join(PROMPTS_DIR, format_template_name)
+    if not os.path.exists(format_template_path):
+        logger.warning(f"agent_004: Format template missing: \033[31m{format_template_name}\033[0m")
+        format_prompt = ""
+    else:
+        format_prompt = _env.get_template(format_template_name).render(
+            response_format=response_format
+        )
+        logger.info(f"agent_005: Loaded format template: \033[36m{format_template_name}\033[0m")
+    
     system_prompt = _env.get_template("main_agent_prompt.jinja2").render(
         persona=persona_key,
+        response_format=response_format,
+        format_instructions=format_prompt,
     )
     assistant_prompt = _env.get_template("assistant_prompt.jinja2").render(
         state=state or {},
+        response_format=response_format,
     )
     full_system_prompt = f"{system_prompt}\n\n# Assistant Context\n{assistant_prompt}"
     formatted_messages = []
     formatted_messages.append({"role": "system", "content": full_system_prompt})
     formatted_messages.extend(messages)
     logger.info(
-        f"agent_003: loaded msgs: \033[33m{len(formatted_messages)}\033[0m, "
+        f"agent_006: loaded msgs: \033[33m{len(formatted_messages)}\033[0m, "
         f"Prompt: \033[33m{len(full_system_prompt)}\033[0m chars"
     )
     return await create_agent_response(

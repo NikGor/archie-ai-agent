@@ -1,0 +1,36 @@
+# Response Format: Formatted Text
+{% if response_format %}
+**Required Format**: {{ response_format }}
+
+{% if response_format == "markdown" %}
+Use markdown syntax: **bold**, *italic*, `code`, # headings, [links](url), lists, tables, code blocks.
+{% elif response_format == "html" %}
+Use HTML tags: <b>, <i>, <code>, <h1>, <p>, <ul>, <li>, <a href="url">text</a>.
+{% elif response_format == "ssml" %}
+Use SSML markup: <prosody>, <emphasis>, <break>, <speak>, optimized for voice delivery.
+{% elif response_format == "json" %}
+Format as valid JSON with proper structure and escaping.
+{% elif response_format == "csv" %}
+Format as comma-separated values with proper headers and escaping.
+{% elif response_format == "xml" %}
+Use proper XML syntax with tags, attributes, and structure.
+{% elif response_format == "yaml" %}
+Use YAML syntax with proper indentation and structure.
+{% elif response_format == "python" %}
+Format as executable Python code with proper syntax and conventions.
+{% elif response_format == "bash" %}
+Format as bash/shell script with proper syntax and conventions.
+{% elif response_format == "sql" %}
+Format as SQL queries with proper syntax and formatting.
+{% elif response_format == "regex" %}
+Format as regular expression patterns with explanations.
+{% elif response_format == "dockerfile" %}
+Format as Dockerfile with proper syntax and best practices.
+{% elif response_format == "makefile" %}
+Format as Makefile with proper syntax and conventions.
+{% elif response_format == "prompt" %}
+Format as AI prompt with clear instructions and structure.
+{% endif %}
+{% endif %}
+
+Respond ONLY in the specified format. Do not include any other formatting or explanations.
