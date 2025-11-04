@@ -16,7 +16,7 @@ fastapi = "^0.115.0"
 uvicorn = "^0.31.1"
 httpx = "^0.27.0"
 pyyaml = "^6.0.2"
-archie-shared = {git = "https://github.com/NikGor/homeassistant.git", subdirectory = "archie-shared", tag = "v0.1.13"}
+archie-shared = {git = "https://github.com/NikGor/homeassistant.git", subdirectory = "archie-shared", tag = "v0.1.19"}
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.0.0"
