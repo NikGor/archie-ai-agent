@@ -2,10 +2,9 @@
 
 import logging
 from typing import Any
-
 from archie_shared.chat.models import InputTokensDetails, LllmTrace, OutputTokensDetails
-
 from ..models.openai_models import ResponseUsage
+
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 import logging
-
 import uvicorn
 from fastapi import FastAPI
-
 from app.endpoints import router
+
 
 logging.basicConfig(
     level=logging.INFO,

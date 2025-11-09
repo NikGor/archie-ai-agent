@@ -1,8 +1,9 @@
 import logging
-
 from archie_shared.chat.models import ChatMessage, ChatRequest
 from fastapi import APIRouter, HTTPException
 from .api_controller import handle_chat
+
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -17,7 +18,9 @@ async def chat_endpoint(request: ChatRequest) -> ChatMessage:
             f"Len: \033[33m{len(request.input)}\033[0m"
         )
         if request.previous_message_id:
-            logger.info(f"endpoints_003: Using previous_message_id: \033[36m{request.previous_message_id}\033[0m")
+            logger.info(
+                f"endpoints_003: Using previous_message_id: \033[36m{request.previous_message_id}\033[0m"
+            )
         result = await handle_chat(request)
         logger.info("=== STEP 6: Response Ready ===")
         content_text = str(result.content) if result.content else ""

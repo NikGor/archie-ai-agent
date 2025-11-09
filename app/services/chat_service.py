@@ -3,10 +3,11 @@
 import logging
 from archie_shared.chat.models import ChatMessage, ChatRequest, Content
 from ..agent.builder import create_main_agent_response
-from ..utils.general_utils import generate_message_id
 from ..utils.backend_client import BackendClient
+from ..utils.general_utils import generate_message_id
 from .conversation_service import ConversationService
 from .message_service import MessageService
+
 
 logger = logging.getLogger(__name__)
 
@@ -45,25 +46,25 @@ class ChatService:
             previous_message_id=user_request.previous_message_id,
             model=user_request.model,
         )
-        
-        # Create simple message for OpenAI  
+
+        # Create simple message for OpenAI
         current_messages = [{"role": "user", "content": user_request.input}]
 
-        # Generate AI response  
+        # Generate AI response
         logger.info("=== STEP 4: AI Processing ===")
         # Use model from user request if provided, otherwise default
         model = user_request.model if user_request.model else "gpt-4.1"
         # Pass previous_message_id from user request to OpenAI for context
         agent_response = await create_main_agent_response(
-            current_messages, 
-            user_request.previous_message_id, 
+            current_messages,
+            user_request.previous_message_id,
             model,
             user_request.response_format,
         )
-        
+
         # Create assistant message - AgentResponse.content уже Content object
         logger.info("=== STEP 5: Saving to Database ===")
-        
+
         assistant_message = ChatMessage(
             message_id=agent_response.response_id or generate_message_id(),
             role="assistant",
@@ -75,7 +76,9 @@ class ChatService:
         )
 
         # Log response length
-        content_text = str(assistant_message.content) if assistant_message.content else ""
+        content_text = (
+            str(assistant_message.content) if assistant_message.content else ""
+        )
         logger.info(f"chat_002: Response len: \033[33m{len(content_text)}\033[0m")
 
         # Save messages

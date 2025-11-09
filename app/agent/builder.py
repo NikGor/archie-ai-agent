@@ -1,12 +1,11 @@
 import logging
 import os
-
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-
 from ..models.response_models import AgentResponse
 from .openai_client import create_agent_response
 from .state import get_state
+
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -20,7 +19,7 @@ _env = Environment(
 
 
 async def create_main_agent_response(
-    messages: list[dict[str, str]], 
+    messages: list[dict[str, str]],
     previous_response_id: str | None = None,
     model: str = "gpt-4.1",
     response_format: str = "plain",
@@ -35,26 +34,27 @@ async def create_main_agent_response(
     )
     logger.info(f"agent_001: Loaded persona: \033[35m{persona_key}\033[0m")
     logger.info(f"agent_002: Response format: \033[36m{response_format}\033[0m")
-    
-    # Check persona template exists
-    persona_template_path = os.path.join(PROMPTS_DIR, f"persona_{persona_key}.jinja2")
-    
+
     # Load format-specific prompt
     if response_format in ["plain", "ui_answer"]:
         format_template_name = f"format_{response_format}.jinja2"
     else:
         format_template_name = "format_formatted_text.jinja2"
-    
+
     format_template_path = os.path.join(PROMPTS_DIR, format_template_name)
     if not os.path.exists(format_template_path):
-        logger.warning(f"agent_004: Format template missing: \033[31m{format_template_name}\033[0m")
+        logger.warning(
+            f"agent_004: Format template missing: \033[31m{format_template_name}\033[0m"
+        )
         format_prompt = ""
     else:
         format_prompt = _env.get_template(format_template_name).render(
             response_format=response_format
         )
-        logger.info(f"agent_005: Loaded format template: \033[36m{format_template_name}\033[0m")
-    
+        logger.info(
+            f"agent_005: Loaded format template: \033[36m{format_template_name}\033[0m"
+        )
+
     system_prompt = _env.get_template("main_agent_prompt.jinja2").render(
         persona=persona_key,
         response_format=response_format,

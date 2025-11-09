@@ -21,6 +21,8 @@ help:
 	@echo "  format       - Format code with black"
 	@echo "  lint         - Run all linters (ruff, mypy)"
 	@echo "  check        - Run all checks (format check + lint)"
+	@echo "  clean-lines  - Remove extra blank lines in code"
+	@echo "  fix          - Auto-fix all issues and clean up code"
 	@echo "  black        - Run black formatter"
 	@echo "  mypy         - Run mypy type checker"
 	@echo "  ruff         - Run ruff linter"
@@ -95,7 +97,7 @@ api-test:
 	@echo "Testing API..."
 	@curl -X POST "http://localhost:8000/chat" \
 		-H "Content-Type: application/json" \
-		-d '{"role": "user", "text": "Hello from Makefile!", "conversation_id": "makefile_test"}' \
+		-d '{"response_format": "ui_answer", "input": "Hello from Makefile!", "conversation_id": "makefile_test", "model": "gpt-4"}' \
 		2>/dev/null | python -m json.tool || echo "❌ API test failed - make sure server is running"
 
 # Code formatting and linting commands
@@ -124,6 +126,12 @@ ruff-fix:
 	@echo "🔧 Running ruff with auto-fix..."
 	poetry run ruff check --fix .
 
+# Remove extra blank lines and fix spacing issues
+clean-lines:
+	@echo "🧹 Cleaning up extra blank lines and organizing imports..."
+	poetry run ruff check --select E303,E304,E305,E301,E302,I --fix .
+	@echo "✅ Blank lines and imports cleaned up!"
+
 lint: ruff mypy
 	@echo "✅ All linting checks completed!"
 
@@ -131,5 +139,5 @@ check: black-check lint
 	@echo "✅ All code quality checks completed!"
 
 # Fix all auto-fixable issues
-fix: ruff-fix format
-	@echo "🔧 Auto-fixed all issues and formatted code!"
+fix: ruff-fix format clean-lines
+	@echo "🔧 Auto-fixed all issues, formatted code, and cleaned up blank lines!"

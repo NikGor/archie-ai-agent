@@ -4,6 +4,7 @@ import logging
 from archie_shared.chat.models import ChatMessage, ChatRequest
 from .services.chat_service import ChatService
 
+
 logger = logging.getLogger(__name__)
 chat_service = ChatService()
 

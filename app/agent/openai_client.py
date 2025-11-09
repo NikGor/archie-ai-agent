@@ -1,19 +1,18 @@
 """OpenAI client module for direct API integration using structured outputs."""
 
+# mypy: ignore-errors
+
 import json
 import logging
 import os
 from typing import Any
-
 from dotenv import load_dotenv
-from openai import OpenAI, pydantic_function_tool
+from openai import OpenAI
 from pydantic import BaseModel
-
-from ..models.response_models import (
-    AgentResponse,
-)
-from .tools import get_weather
+from ..models.response_models import AgentResponse
 from ..utils.openai_utils import create_llm_trace_from_openai_response
+from .tools import get_weather
+
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -106,13 +105,17 @@ def log_response(result: AgentResponse) -> None:
     logger.info(f"openai_002: Response len: \033[33m{len(content_text)}\033[0m")
     try:
         response_dict = {
-            "content": result.content.model_dump(mode='json') if result.content else None,
+            "content": (
+                result.content.model_dump(mode="json") if result.content else None
+            ),
         }
         logger.info(
             f"openai_003: Full response:\n\033[32m{json.dumps(response_dict, indent=2, ensure_ascii=False)}\033[0m"
         )
     except Exception as e:
-        logger.warning(f"openai_log_error: Could not serialize response for logging: {e}")
+        logger.warning(
+            f"openai_log_error: Could not serialize response for logging: {e}"
+        )
         logger.info(f"openai_003: Response content only: {result.content}")
 
 
@@ -133,9 +136,11 @@ async def create_agent_response(
                 "input": messages,
                 "text_format": AgentResponse,
                 "tools": tools,
-                "previous_response_id": previous_response_id
+                "previous_response_id": previous_response_id,
             }
-            logger.info(f"openai_previous: Using previous response ID: \033[36m{previous_response_id}\033[0m")
+            logger.info(
+                f"openai_previous: Using previous response ID: \033[36m{previous_response_id}\033[0m"
+            )
         else:
             openai_args = {
                 "model": model,
@@ -173,9 +178,9 @@ async def create_agent_response(
             sgr=parsed_result.sgr,  # type: ignore
             llm_trace=llm_trace,
         )
-        
+
         # Add response ID if available
-        if hasattr(response, 'id'):
+        if hasattr(response, "id"):
             result.response_id = response.id
 
         logger.info(

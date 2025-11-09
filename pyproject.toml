@@ -104,6 +104,8 @@ max-complexity = 10
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
+no-lines-before = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+lines-after-imports = 2
 
 [build-system]
 requires = ["poetry-core"]
