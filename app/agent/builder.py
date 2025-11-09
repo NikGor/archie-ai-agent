@@ -7,15 +7,11 @@ from .openai_client import create_agent_response
 from .state import get_state
 
 
-logger = logging.getLogger(__name__)
 load_dotenv()
 DEFAULT_USER_NAME = os.getenv("DEFAULT_USER_NAME")
 DEFAULT_PERSONA = os.getenv("DEFAULT_PERSONA")
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "prompts")
-_env = Environment(
-    loader=FileSystemLoader(PROMPTS_DIR),
-    autoescape=select_autoescape(enabled_extensions=("jinja2",)),
-)
+logger = logging.getLogger(__name__)
 
 
 async def create_main_agent_response(
@@ -34,6 +30,11 @@ async def create_main_agent_response(
     )
     logger.info(f"agent_001: Loaded persona: \033[35m{persona_key}\033[0m")
     logger.info(f"agent_002: Response format: \033[36m{response_format}\033[0m")
+    
+    env = Environment(
+        loader=FileSystemLoader(PROMPTS_DIR),
+        autoescape=select_autoescape(enabled_extensions=("jinja2",)),
+    )
 
     # Load format-specific prompt
     if response_format in ["plain", "ui_answer"]:
@@ -48,19 +49,19 @@ async def create_main_agent_response(
         )
         format_prompt = ""
     else:
-        format_prompt = _env.get_template(format_template_name).render(
+        format_prompt = env.get_template(format_template_name).render(
             response_format=response_format
         )
         logger.info(
             f"agent_005: Loaded format template: \033[36m{format_template_name}\033[0m"
         )
 
-    system_prompt = _env.get_template("main_agent_prompt.jinja2").render(
+    system_prompt = env.get_template("main_agent_prompt.jinja2").render(
         persona=persona_key,
         response_format=response_format,
         format_instructions=format_prompt,
     )
-    assistant_prompt = _env.get_template("assistant_prompt.jinja2").render(
+    assistant_prompt = env.get_template("assistant_prompt.jinja2").render(
         state=state or {},
         response_format=response_format,
     )

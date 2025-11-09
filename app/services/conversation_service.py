@@ -1,5 +1,3 @@
-"""Conversation service for managing conversations via backend API."""
-
 import logging
 from ..utils.backend_client import BackendClient
 

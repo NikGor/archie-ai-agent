@@ -1,5 +1,3 @@
-"""Message service for handling message persistence via backend API."""
-
 import logging
 from archie_shared.chat.models import ChatMessage
 from ..utils.backend_client import BackendClient

@@ -1,7 +1,3 @@
-"""OpenAI client module for direct API integration using structured outputs."""
-
-# mypy: ignore-errors
-
 import json
 import logging
 import os

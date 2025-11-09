@@ -1,5 +1,3 @@
-"""Chat service for coordinating chat workflow."""
-
 import logging
 from archie_shared.chat.models import ChatMessage, ChatRequest, Content
 from ..agent.builder import create_main_agent_response
