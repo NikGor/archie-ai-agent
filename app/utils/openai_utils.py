@@ -1,9 +1,6 @@
-"""Utility functions for processing OpenAI responses."""
-
 import logging
 from typing import Any
 from archie_shared.chat.models import InputTokensDetails, LllmTrace, OutputTokensDetails
-from ..models.openai_models import ResponseUsage
 
 
 logger = logging.getLogger(__name__)
@@ -74,7 +71,7 @@ def get_agent_response_from_openai(raw_response: Any):
 
 
 def create_llm_trace_from_response_usage(
-    usage: ResponseUsage, model: str, total_cost: float = 0.0
+    usage: Any, model: str, total_cost: float = 0.0
 ) -> LllmTrace:
     """
     Convert ResponseUsage to LllmTrace for tracking purposes.

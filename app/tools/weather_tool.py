@@ -1,3 +1,5 @@
+"""Weather tool for getting weather information."""
+
 import json
 import logging
 import os
@@ -13,7 +15,7 @@ async def get_weather(city_name: str) -> dict[str, Any]:
     try:
         api_key = os.getenv("OPENWEATHER_API_KEY")
         if not api_key:
-            logger.error("OpenWeather API key not found in environment variables")
+            logger.error("weather_error_001: OpenWeather API key not found")
             return {"error": "API key not configured"}
         url = "http://api.openweathermap.org/data/2.5/weather"
         params = {
@@ -22,7 +24,7 @@ async def get_weather(city_name: str) -> dict[str, Any]:
             "units": "metric",
             "lang": "ru",
         }
-        logger.info(f"Requesting weather data for city: {city_name}")
+        logger.info(f"weather_001: Requesting weather for: \033[36m{city_name}\033[0m")
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()
@@ -38,14 +40,14 @@ async def get_weather(city_name: str) -> dict[str, Any]:
                 "wind_speed": data["wind"]["speed"],
                 "cloudiness": data["clouds"]["all"],
             }
-            logger.info(f"Successfully retrieved weather data for {city_name}")
+            logger.info(f"weather_002: Successfully retrieved weather for {city_name}")
             return json.dumps(weather_info, ensure_ascii=False)
     except httpx.RequestError as e:
-        logger.error(f"Error making request to OpenWeather API: {e}")
+        logger.error(f"weather_error_002: Request error: \033[31m{e}\033[0m")
         return {"error": f"Failed to fetch weather data: {e!s}"}
     except KeyError as e:
-        logger.error(f"Unexpected response format from OpenWeather API: {e}")
+        logger.error(f"weather_error_003: Invalid response format: \033[31m{e}\033[0m")
         return {"error": "Invalid response format from weather service"}
     except Exception as e:
-        logger.error(f"Unexpected error getting weather for {city_name}: {e}")
+        logger.error(f"weather_error_004: Unexpected error: \033[31m{e}\033[0m")
         return {"error": f"Unexpected error: {e!s}"}
