@@ -22,7 +22,7 @@ async def chat_endpoint(request: ChatRequest) -> ChatMessage:
                 f"endpoints_003: Using previous_message_id: \033[36m{request.previous_message_id}\033[0m"
             )
         result = await handle_chat(request)
-        logger.info("=== STEP 6: Response Ready ===")
+        logger.info("=== STEP 5: Response Ready ===")
         content_text = str(result.content) if result.content else ""
         logger.info(f"endpoints_002: Response len: \033[33m{len(content_text)}\033[0m")
         return result

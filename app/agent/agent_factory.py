@@ -9,6 +9,7 @@ from ..models.response_models import AgentResponse
 from ..tools.tool_factory import ToolFactory
 from ..utils.openai_utils import create_llm_trace_from_openai_response
 from .openai_client import OpenAIClient
+from .gemini_client import GeminiClient
 from .prompt_builder import PromptBuilder
 from .state_service import StateService
 
@@ -20,18 +21,48 @@ logger = logging.getLogger(__name__)
 class AgentFactory:
     """Factory for creating and orchestrating AI agent responses."""
 
+    MODEL_PROVIDERS = {
+        "openai": [
+            "gpt-4.1",
+            "gpt-4.1-mini",
+            "gpt-4.1-nano",
+            "gpt-5",
+            "gpt-5.1",
+            "gpt-5-mini",
+            "gpt-5-nano",
+        ],
+        "gemini": [
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+        ],
+    }
+
     def __init__(
         self,
-        openai_client: OpenAIClient | None = None,
         prompt_builder: PromptBuilder | None = None,
         tool_factory: ToolFactory | None = None,
         state_service: StateService | None = None,
     ):
-        self.openai_client = openai_client or OpenAIClient()
+        self.openai_client = OpenAIClient()
+        self.gemini_client = GeminiClient()
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.tool_factory = tool_factory or ToolFactory()
         self.state_service = state_service or StateService()
+
+        # Create clients dictionary for easy provider switching
+        self.clients = {
+            "openai": self.openai_client,
+            "gemini": self.gemini_client,
+        }
+
         logger.info("agent_factory_001: Initialized AgentFactory")
+
+    def _get_provider_for_model(self, model: str) -> str:
+        """Returns 'openai' or 'gemini' based on model name."""
+        for provider, models in self.MODEL_PROVIDERS.items():
+            if model in models:
+                return provider
+        return "openai"  # default fallback
 
     async def create_agent_response(
         self,
@@ -43,6 +74,14 @@ class AgentFactory:
     ) -> AgentResponse:
         """Create an agent response by orchestrating all components."""
         logger.info("=== AgentFactory: Creating Agent Response ===")
+
+        # Determine provider and select client
+        provider = self._get_provider_for_model(model)
+        client = self.clients[provider]
+        logger.info(
+            f"agent_factory_001b: Using provider: \033[34m{provider}\033[0m for model: \033[36m{model}\033[0m"
+        )
+
         if persona:
             self.state_service.persona = persona
         user_state = self.state_service.get_user_state()
@@ -61,30 +100,57 @@ class AgentFactory:
             f"agent_factory_004: Prepared messages - System: 1, User/Assistant: \033[33m{len(messages)}\033[0m, Total: \033[33m{len(formatted_messages)}\033[0m"
         )
         tools = self.tool_factory.get_tool_definitions()
-        response = await self.openai_client.create_completion(
+        response = await client.create_completion(
             messages=formatted_messages,
             model=model,
             response_format=AgentResponse,
             tools=tools,
             previous_response_id=previous_response_id,
         )
-        if response.output[0].type == "function_call":
-            response = await self._handle_function_call(
-                response, formatted_messages, model
-            )
-        elif response.output[0].type == "web_search_call":
-            response = await self._handle_web_search_call(
-                response, formatted_messages, model
-            )
-        parsed_result = response.output[0].content[0].parsed
-        llm_trace = create_llm_trace_from_openai_response(response)
+
+        # Handle different response structures based on provider
+        if provider == "openai":
+            # OpenAI response handling (existing logic)
+            if response.output[0].type == "function_call":
+                response = await self._handle_function_call(
+                    response, formatted_messages, model
+                )
+            elif response.output[0].type == "web_search_call":
+                response = await self._handle_web_search_call(
+                    response, formatted_messages, model
+                )
+            parsed_result = response.output[0].content[0].parsed
+            llm_trace = create_llm_trace_from_openai_response(response)
+            response_id = response.id if hasattr(response, "id") else None
+        else:
+            # Gemini response handling (wrapped response)
+            logger.info("agent_factory_010: Processing Gemini response")
+            logger.info(f"agent_factory_011: Raw Gemini response type: \033[36m{type(response)}\033[0m")
+            logger.info(f"agent_factory_012: Raw parsed_result type: \033[36m{type(response.parsed_result)}\033[0m")
+            
+            # Log the actual content to debug validation issues
+            try:
+                logger.info(f"agent_factory_013: Parsed result content: \033[32m{response.parsed_result}\033[0m")
+                if hasattr(response.parsed_result, 'content'):
+                    logger.info(f"agent_factory_014: Content type: \033[36m{type(response.parsed_result.content)}\033[0m")
+                    logger.info(f"agent_factory_015: Content value: \033[32m{response.parsed_result.content}\033[0m")
+                if hasattr(response.parsed_result, 'sgr'):
+                    logger.info(f"agent_factory_016: SGR type: \033[36m{type(response.parsed_result.sgr)}\033[0m")
+                    logger.info(f"agent_factory_017: SGR value: \033[32m{response.parsed_result.sgr}\033[0m")
+            except Exception as e:
+                logger.error(f"agent_factory_error_002: Failed to log Gemini response details: \033[31m{e}\033[0m")
+            
+            parsed_result = response.parsed_result
+            llm_trace = response.llm_trace
+            response_id = response.response_id
+
         result = AgentResponse(
             content=parsed_result.content,
             sgr=parsed_result.sgr,
             llm_trace=llm_trace,
         )
-        if hasattr(response, "id"):
-            result.response_id = response.id
+        if response_id:
+            result.response_id = response_id
         self._log_response(result)
         logger.info("=== AgentFactory: Response Created ===")
         return result
