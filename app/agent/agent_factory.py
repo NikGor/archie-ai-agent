@@ -108,41 +108,18 @@ class AgentFactory:
             previous_response_id=previous_response_id,
         )
 
-        # Handle different response structures based on provider
-        if provider == "openai":
-            # OpenAI response handling (existing logic)
-            if response.output[0].type == "function_call":
-                response = await self._handle_function_call(
-                    response, formatted_messages, model
-                )
-            elif response.output[0].type == "web_search_call":
-                response = await self._handle_web_search_call(
-                    response, formatted_messages, model
-                )
-            parsed_result = response.output[0].content[0].parsed
-            llm_trace = create_llm_trace_from_openai_response(response)
-            response_id = response.id if hasattr(response, "id") else None
-        else:
-            # Gemini response handling (wrapped response)
-            logger.info("agent_factory_010: Processing Gemini response")
-            logger.info(f"agent_factory_011: Raw Gemini response type: \033[36m{type(response)}\033[0m")
-            logger.info(f"agent_factory_012: Raw parsed_result type: \033[36m{type(response.parsed_result)}\033[0m")
-            
-            # Log the actual content to debug validation issues
-            try:
-                logger.info(f"agent_factory_013: Parsed result content: \033[32m{response.parsed_result}\033[0m")
-                if hasattr(response.parsed_result, 'content'):
-                    logger.info(f"agent_factory_014: Content type: \033[36m{type(response.parsed_result.content)}\033[0m")
-                    logger.info(f"agent_factory_015: Content value: \033[32m{response.parsed_result.content}\033[0m")
-                if hasattr(response.parsed_result, 'sgr'):
-                    logger.info(f"agent_factory_016: SGR type: \033[36m{type(response.parsed_result.sgr)}\033[0m")
-                    logger.info(f"agent_factory_017: SGR value: \033[32m{response.parsed_result.sgr}\033[0m")
-            except Exception as e:
-                logger.error(f"agent_factory_error_002: Failed to log Gemini response details: \033[31m{e}\033[0m")
-            
-            parsed_result = response.parsed_result
-            llm_trace = response.llm_trace
-            response_id = response.response_id
+        # Handle response (unified for OpenAI and Gemini)
+        if response.output[0].type == "function_call":
+            response = await self._handle_function_call(
+                response, formatted_messages, model
+            )
+        elif response.output[0].type == "web_search_call":
+            response = await self._handle_web_search_call(
+                response, formatted_messages, model
+            )
+        parsed_result = response.output[0].content[0].parsed
+        llm_trace = create_llm_trace_from_openai_response(response)
+        response_id = response.id if hasattr(response, "id") else None
 
         result = AgentResponse(
             content=parsed_result.content,
