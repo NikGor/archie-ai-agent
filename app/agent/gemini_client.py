@@ -146,7 +146,9 @@ class GeminiClient:
 
             # Parse the response
             parsed_data = json.loads(response.text)
-            logger.info(f"gemini_client_004: Raw response data: \033[32m{json.dumps(parsed_data, indent=2, ensure_ascii=False)}\033[0m")
+            logger.info(
+                f"gemini_client_004: Raw response data: \033[32m{json.dumps(parsed_data, indent=2, ensure_ascii=False)}\033[0m"
+            )
 
             # Debug: save to file
             with open("/tmp/gemini_ui_answer.json", "w") as f:
@@ -167,14 +169,20 @@ class GeminiClient:
                 parsed_obj = _safe_json_load(parsed_data["content"])
                 if parsed_obj is not None:
                     parsed_data["content"] = parsed_obj
-                    logger.info("gemini_client_004c: Parsed content JSON string to object")
+                    logger.info(
+                        "gemini_client_004c: Parsed content JSON string to object"
+                    )
                 else:
                     # Wrap string into minimal object with a `text` field
-                    logger.warning("gemini_client_warning_002: content is plain string, wrapping into {'text': ...}")
+                    logger.warning(
+                        "gemini_client_warning_002: content is plain string, wrapping into {'text': ...}"
+                    )
                     parsed_data["content"] = {"text": parsed_data["content"]}
             elif "content" not in parsed_data and "response" in parsed_data:
                 # Fallback: if Gemini returns "response" instead of "content", map it
-                logger.warning("gemini_client_warning_005: 'content' missing, mapping 'response' to 'content'")
+                logger.warning(
+                    "gemini_client_warning_005: 'content' missing, mapping 'response' to 'content'"
+                )
                 parsed_data["content"] = parsed_data.pop("response")
 
             # sgr: if Gemini returned a textual SGR trace, create a safe fallback SGR structure
@@ -184,29 +192,41 @@ class GeminiClient:
                     parsed_data["sgr"] = parsed_obj
                     logger.info("gemini_client_004a: Parsed sgr JSON string to object")
                 else:
-                    logger.warning("gemini_client_warning_003: sgr is plain string, creating fallback SGR structure")
+                    logger.warning(
+                        "gemini_client_warning_003: sgr is plain string, creating fallback SGR structure"
+                    )
                     sgr_text = parsed_data["sgr"]
                     # Create minimal SGRTrace-compatible dict with the raw text placed into routing.rationale
                     parsed_data["sgr"] = {
-                        "routing": {"intent": "answer_general", "rationale": sgr_text[:1000]},
+                        "routing": {
+                            "intent": "answer_general",
+                            "rationale": sgr_text[:1000],
+                        },
                         "slots": {"needed": [], "filled": [], "pending": []},
                         "evidence": [],
                         "sources": [],
                         "verification": {"level": "unverified", "confidence_pct": 0},
-                        "pre_action": {"summary": "Fallback SGR generated from raw string", "decision": "none"},
+                        "pre_action": {
+                            "summary": "Fallback SGR generated from raw string",
+                            "decision": "none",
+                        },
                     }
 
             # llm_trace: we won't try to inject Gemini's freeform trace into the structured llm_trace
             # instead we build a safe LllmTrace below from usage metadata. Remove any textual llm_trace
             # so it doesn't confuse model validation of parsed_data.
             if "llm_trace" in parsed_data and isinstance(parsed_data["llm_trace"], str):
-                logger.warning("gemini_client_warning_004: llm_trace present as string; discarding textual llm_trace and building structured LllmTrace from usage metadata")
+                logger.warning(
+                    "gemini_client_warning_004: llm_trace present as string; discarding textual llm_trace and building structured LllmTrace from usage metadata"
+                )
             parsed_data.pop("llm_trace", None)
 
             # Fix structural issues in parsed_data
             parsed_data = self._fix_gemini_response_structure(parsed_data)
 
-            logger.info(f"gemini_client_005: Processed data: \033[32m{json.dumps(parsed_data, indent=2, ensure_ascii=False)}\033[0m")
+            logger.info(
+                f"gemini_client_005: Processed data: \033[32m{json.dumps(parsed_data, indent=2, ensure_ascii=False)}\033[0m"
+            )
 
             # Fix common structural issues in Gemini response to match Pydantic models
             parsed_data = self._fix_gemini_response_structure(parsed_data)
@@ -272,21 +292,24 @@ class GeminiClient:
                 # Try to find a non-null type in anyOf
                 non_null_option = next(
                     (opt for opt in prop_schema["anyOf"] if opt.get("type") != "null"),
-                    prop_schema["anyOf"][0]
+                    prop_schema["anyOf"][0],
                 )
                 # If it's a reference, we need to resolve it or treat it as object if we can't
                 if "$ref" in non_null_option:
-                    # For now, assume refs are objects. 
+                    # For now, assume refs are objects.
                     # Ideally we should resolve refs but Gemini client might handle refs if we pass definitions.
                     # But here we are building schema manually.
                     # Let's try to find the definition in $defs if available in root schema
                     ref_name = non_null_option["$ref"].split("/")[-1]
-                    if "$defs" in pydantic_schema and ref_name in pydantic_schema["$defs"]:
-                         return convert_property(pydantic_schema["$defs"][ref_name])
-                    
+                    if (
+                        "$defs" in pydantic_schema
+                        and ref_name in pydantic_schema["$defs"]
+                    ):
+                        return convert_property(pydantic_schema["$defs"][ref_name])
+
                     # Fallback if we can't resolve
                     return genai.types.Schema(type=genai.types.Type.OBJECT)
-                
+
                 prop_schema = non_null_option
 
             prop_type = prop_schema.get("type", "string")
@@ -303,7 +326,8 @@ class GeminiClient:
                 properties = {}
                 if "properties" in prop_schema:
                     properties = {
-                        k: convert_property(v) for k, v in prop_schema["properties"].items()
+                        k: convert_property(v)
+                        for k, v in prop_schema["properties"].items()
                     }
                 required = prop_schema.get("required", [])
                 return genai.types.Schema(
@@ -360,15 +384,15 @@ class GeminiClient:
         return LllmTrace(
             model=model,
             input_tokens=prompt_tokens,
-            input_tokens_details=InputTokensDetails(
-                cached_tokens=cached_tokens
-            ),
+            input_tokens_details=InputTokensDetails(cached_tokens=cached_tokens),
             output_tokens=candidates_tokens,
             output_tokens_details=OutputTokensDetails(
                 reasoning_tokens=0  # Gemini doesn't provide reasoning tokens
             ),
             total_tokens=total_tokens,
-            total_cost=_safe_float(getattr(usage, "total_cost", None)) if usage else 0.0,
+            total_cost=(
+                _safe_float(getattr(usage, "total_cost", None)) if usage else 0.0
+            ),
         )
 
     def _create_mock_usage_from_gemini_response(self, response: Any) -> MockUsage:
@@ -418,11 +442,14 @@ class GeminiClient:
         except Exception as e:
             logger.warning(f"gemini_client_warning_002: Could not log usage: {e}")
 
-    def _fix_gemini_response_structure(self, parsed_data: dict[str, Any]) -> dict[str, Any]:
+    def _fix_gemini_response_structure(
+        self, parsed_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Fix common structural issues in Gemini response to match Pydantic models.
         Gemini often returns strings instead of objects for nested fields.
         """
+
         def _safe_json_load(value: str) -> Any | None:
             try:
                 return json.loads(value)
@@ -448,64 +475,87 @@ class GeminiClient:
             if isinstance(sgr_data, dict):
                 required_fields = ["routing", "verification", "pre_action"]
                 missing_fields = [f for f in required_fields if f not in sgr_data]
-                
+
                 if missing_fields:
-                    logger.warning(f"gemini_client_warning_006: SGR missing fields: {missing_fields}. Attempting to fix.")
-                    
+                    logger.warning(
+                        f"gemini_client_warning_006: SGR missing fields: {missing_fields}. Attempting to fix."
+                    )
+
                     # Map flat fields to structured fields if they exist
                     # Ensure routing exists and has required fields
                     if "routing" not in sgr_data:
                         intent = sgr_data.get("intent", "answer_general")
-                        valid_intents = ["answer_general", "weather", "sports_score", "web_search", "clarify", "out_of_scope"]
+                        valid_intents = [
+                            "answer_general",
+                            "weather",
+                            "sports_score",
+                            "web_search",
+                            "clarify",
+                            "out_of_scope",
+                        ]
                         if intent not in valid_intents:
                             intent = "answer_general"
                         sgr_data["routing"] = {"intent": intent}
-                    
+
                     if "rationale" not in sgr_data["routing"]:
-                        sgr_data["routing"]["rationale"] = str(sgr_data.get("rationale", "Auto-generated rationale"))
-                    
+                        sgr_data["routing"]["rationale"] = str(
+                            sgr_data.get("rationale", "Auto-generated rationale")
+                        )
+
                     # Ensure verification exists and has required fields
                     if "verification" not in sgr_data:
                         sgr_data["verification"] = {}
 
                     if "level" not in sgr_data["verification"]:
                         # Try to find it in 'status' field of verification object, or 'verification_status' of root
-                        sgr_data["verification"]["level"] = sgr_data["verification"].get("status") or sgr_data.get("verification_status", "unverified")
-                        
+                        sgr_data["verification"]["level"] = sgr_data[
+                            "verification"
+                        ].get("status") or sgr_data.get(
+                            "verification_status", "unverified"
+                        )
+
                     # Ensure level is valid enum
                     valid_levels = ["verified", "partially_verified", "unverified"]
                     if sgr_data["verification"]["level"] not in valid_levels:
-                         sgr_data["verification"]["level"] = "unverified"
+                        sgr_data["verification"]["level"] = "unverified"
 
                     if "confidence_pct" not in sgr_data["verification"]:
-                        sgr_data["verification"]["confidence_pct"] = sgr_data.get("confidence_score", 0)
+                        sgr_data["verification"]["confidence_pct"] = sgr_data.get(
+                            "confidence_score", 0
+                        )
 
                     if "pre_action" not in sgr_data:
                         sgr_data["pre_action"] = {
                             "summary": "Auto-generated pre-action check",
-                            "decision": "none"
+                            "decision": "none",
                         }
-                    
+
                     # Ensure slots exists
                     if "slots" not in sgr_data:
                         sgr_data["slots"] = {"needed": [], "filled": [], "pending": []}
-                    
+
                     # Ensure evidence exists
                     if "evidence" not in sgr_data:
                         # Try to map from "claims" if present
-                        if "claims" in sgr_data and isinstance(sgr_data["claims"], list):
+                        if "claims" in sgr_data and isinstance(
+                            sgr_data["claims"], list
+                        ):
                             evidence_list = []
                             for claim in sgr_data["claims"]:
                                 if isinstance(claim, dict):
-                                    evidence_list.append({
-                                        "claim": claim.get("claim", "Unknown claim"),
-                                        "support": "supported", # Assume supported if listed
-                                        "source_ids": claim.get("source_ids", [])
-                                    })
+                                    evidence_list.append(
+                                        {
+                                            "claim": claim.get(
+                                                "claim", "Unknown claim"
+                                            ),
+                                            "support": "supported",  # Assume supported if listed
+                                            "source_ids": claim.get("source_ids", []),
+                                        }
+                                    )
                             sgr_data["evidence"] = evidence_list
                         else:
                             sgr_data["evidence"] = []
-                            
+
                     # Ensure sources exists
                     if "sources" not in sgr_data:
                         sgr_data["sources"] = []
@@ -513,18 +563,20 @@ class GeminiClient:
         # Fix Content structure
         if "content" in parsed_data and isinstance(parsed_data["content"], dict):
             content = parsed_data["content"]
-            
+
             # Handle UI Answer
             if "ui_answer" in content and isinstance(content["ui_answer"], dict):
                 ui_answer = content["ui_answer"]
-                
+
                 # Fix intro_text: string -> TextAnswer
-                if "intro_text" in ui_answer and isinstance(ui_answer["intro_text"], str):
+                if "intro_text" in ui_answer and isinstance(
+                    ui_answer["intro_text"], str
+                ):
                     ui_answer["intro_text"] = {
                         "type": "plain",
-                        "text": ui_answer["intro_text"]
+                        "text": ui_answer["intro_text"],
                     }
-                
+
                 # Fix items: list[str] -> list[dict]
                 if "items" in ui_answer and isinstance(ui_answer["items"], list):
                     fixed_items = []
@@ -539,10 +591,7 @@ class GeminiClient:
                                 item = {
                                     "type": "text",
                                     "order": idx + 1,
-                                    "content": {
-                                        "type": "plain",
-                                        "text": item
-                                    }
+                                    "content": {"type": "plain", "text": item},
                                 }
                                 fixed_items.append(item)
                                 continue
@@ -552,39 +601,62 @@ class GeminiClient:
 
                         # Special handling: Gemini sometimes wraps the real UI component inside a text_answer string
                         # e.g. type="text_answer", content={"text": "{'type': 'card_grid', ...}"}
-                        if item.get("type") == "text_answer" and "content" in item and isinstance(item["content"], dict):
+                        if (
+                            item.get("type") == "text_answer"
+                            and "content" in item
+                            and isinstance(item["content"], dict)
+                        ):
                             text_val = item["content"].get("text", "")
-                            if isinstance(text_val, str) and (text_val.strip().startswith("{") or text_val.strip().startswith("[")):
+                            if isinstance(text_val, str) and (
+                                text_val.strip().startswith("{")
+                                or text_val.strip().startswith("[")
+                            ):
                                 parsed_inner = _safe_json_load(text_val)
                                 if isinstance(parsed_inner, dict):
-                                    logger.info("gemini_client_004d: Unwrapped hidden UI component from text_answer")
+                                    logger.info(
+                                        "gemini_client_004d: Unwrapped hidden UI component from text_answer"
+                                    )
                                     # If the parsed object looks like a full item (has type), use it
                                     if "type" in parsed_inner:
                                         # Preserve order if present in original but not in inner
-                                        if "order" in item and "order" not in parsed_inner:
+                                        if (
+                                            "order" in item
+                                            and "order" not in parsed_inner
+                                        ):
                                             parsed_inner["order"] = item["order"]
                                         item = parsed_inner
                                     else:
                                         # It might be a raw card object, let it fall through to the wrapper logic
-                                        if "order" in item and "order" not in parsed_inner:
+                                        if (
+                                            "order" in item
+                                            and "order" not in parsed_inner
+                                        ):
                                             parsed_inner["order"] = item["order"]
                                         item = parsed_inner
 
                         # Check if it's already in the correct format (has 'content' wrapper)
-                        if "content" in item and "type" in item and item["type"] in ["card", "elements", "table", "text"]:
+                        if (
+                            "content" in item
+                            and "type" in item
+                            and item["type"] in ["card", "elements", "table", "text"]
+                        ):
                             # Ensure order is present
                             if "order" not in item:
                                 item["order"] = idx + 1
-                            
+
                             # Fix inner content fields if needed
                             inner_content = item["content"]
                             if isinstance(inner_content, dict):
                                 # Fix card_type -> type
                                 if "card_type" in inner_content:
-                                    inner_content["type"] = inner_content.pop("card_type")
-                                
+                                    inner_content["type"] = inner_content.pop(
+                                        "card_type"
+                                    )
+
                                 # Fix buttons inside content
-                                if "buttons" in inner_content and isinstance(inner_content["buttons"], list):
+                                if "buttons" in inner_content and isinstance(
+                                    inner_content["buttons"], list
+                                ):
                                     fixed_buttons = []
                                     for btn in inner_content["buttons"]:
                                         if isinstance(btn, dict):
@@ -593,7 +665,9 @@ class GeminiClient:
                                                 btn["text"] = btn.pop("button_text")
                                             # Fix name -> assistant_request (for assistant buttons)
                                             if "name" in btn:
-                                                btn["assistant_request"] = btn.pop("name")
+                                                btn["assistant_request"] = btn.pop(
+                                                    "name"
+                                                )
                                             # Infer type if missing
                                             if "type" not in btn:
                                                 if "action" in btn:
@@ -602,7 +676,7 @@ class GeminiClient:
                                                     btn["type"] = "assistant_button"
                                         fixed_buttons.append(btn)
                                     inner_content["buttons"] = fixed_buttons
-                            
+
                             # Normalize top-level item type to Agent schema expected literals
                             type_map = {
                                 "card": "card_grid",
@@ -617,13 +691,21 @@ class GeminiClient:
                             wrapper = {"order": idx + 1}
 
                             # Determine type and wrap content to match Agent schema
-                            if "card_type" in item or "location" in item or "track_title" in item or "movie_title" in item or item.get("type", "").lower() == "movie":
+                            if (
+                                "card_type" in item
+                                or "location" in item
+                                or "track_title" in item
+                                or "movie_title" in item
+                                or item.get("type", "").lower() == "movie"
+                            ):
                                 # Normalize to card_grid with cards list
                                 if "card_type" in item:
                                     item["type"] = item.pop("card_type")
 
                                 # Fix buttons inside the card
-                                if "buttons" in item and isinstance(item["buttons"], list):
+                                if "buttons" in item and isinstance(
+                                    item["buttons"], list
+                                ):
                                     fixed_buttons = []
                                     for btn in item["buttons"]:
                                         if isinstance(btn, dict):
@@ -632,7 +714,9 @@ class GeminiClient:
                                             if "label" in btn and "text" not in btn:
                                                 btn["text"] = btn.pop("label")
                                             if "name" in btn:
-                                                btn["assistant_request"] = btn.pop("name")
+                                                btn["assistant_request"] = btn.pop(
+                                                    "name"
+                                                )
                                             if "type" not in btn:
                                                 if "action" in btn or "value" in btn:
                                                     btn["type"] = "frontend_button"
@@ -650,34 +734,45 @@ class GeminiClient:
                             elif "elements" in item:
                                 wrapper["type"] = "card_grid"
                                 wrapper["content"] = item
-                            elif "text" in item and ("type" in item and item["type"] in ["plain", "markdown", "html"]):
+                            elif "text" in item and (
+                                "type" in item
+                                and item["type"] in ["plain", "markdown", "html"]
+                            ):
                                 wrapper["type"] = "text_answer"
                                 wrapper["content"] = item
                             else:
                                 # Fallback: treat as text if possible, or generic card
-                                logger.warning(f"gemini_client_warning_007: Could not determine item type for {item}. Defaulting to text_answer.")
+                                logger.warning(
+                                    f"gemini_client_warning_007: Could not determine item type for {item}. Defaulting to text_answer."
+                                )
                                 wrapper["type"] = "text_answer"
                                 wrapper["content"] = {
                                     "type": "plain",
-                                    "text": str(item)
+                                    "text": str(item),
                                 }
 
                             fixed_items.append(wrapper)
-                            
+
                     ui_answer["items"] = fixed_items
-                
+
                 # Fix quick_action_buttons: list[str] -> list[dict]
-                if "quick_action_buttons" in ui_answer and isinstance(ui_answer["quick_action_buttons"], dict):
+                if "quick_action_buttons" in ui_answer and isinstance(
+                    ui_answer["quick_action_buttons"], dict
+                ):
                     qa_buttons = ui_answer["quick_action_buttons"]
-                    if "buttons" in qa_buttons and isinstance(qa_buttons["buttons"], list):
+                    if "buttons" in qa_buttons and isinstance(
+                        qa_buttons["buttons"], list
+                    ):
                         fixed_buttons = []
                         for btn in qa_buttons["buttons"]:
                             if isinstance(btn, str):
-                                fixed_buttons.append({
-                                    "type": "assistant_button",
-                                    "text": btn,
-                                    "assistant_request": btn
-                                })
+                                fixed_buttons.append(
+                                    {
+                                        "type": "assistant_button",
+                                        "text": btn,
+                                        "assistant_request": btn,
+                                    }
+                                )
                             elif isinstance(btn, dict):
                                 # Fix button_text -> text
                                 if "button_text" in btn:

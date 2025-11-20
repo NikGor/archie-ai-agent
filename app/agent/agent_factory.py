@@ -71,6 +71,7 @@ class AgentFactory:
         persona: str | None = None,
         response_format: str = "plain",
         previous_response_id: str | None = None,
+        user_name: str | None = None,
     ) -> AgentResponse:
         """Create an agent response by orchestrating all components."""
         logger.info("=== AgentFactory: Creating Agent Response ===")
@@ -82,6 +83,11 @@ class AgentFactory:
             f"agent_factory_001b: Using provider: \033[34m{provider}\033[0m for model: \033[36m{model}\033[0m"
         )
 
+        if user_name:
+            self.state_service.user_name = user_name
+            logger.info(
+                f"agent_factory_001c: Set user_name: \033[35m{user_name}\033[0m"
+            )
         if persona:
             self.state_service.persona = persona
         user_state = self.state_service.get_user_state()
