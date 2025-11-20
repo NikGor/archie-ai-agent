@@ -191,6 +191,16 @@ class AgentFactory:
         logger.info(
             f"agent_factory_008: Response length: \033[33m{len(content_text)}\033[0m"
         )
+
+        if result.sgr and result.sgr.reasoning:
+            logger.info(
+                f"agent_factory_010: Reasoning:\n\033[35m{result.sgr.reasoning}\033[0m"
+            )
+        if result.sgr and result.sgr.ui_reasoning:
+            logger.info(
+                f"agent_factory_011: UI Reasoning:\n\033[35m{result.sgr.ui_reasoning}\033[0m"
+            )
+
         try:
             response_dict = {
                 "content": (
