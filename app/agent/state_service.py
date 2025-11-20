@@ -47,15 +47,34 @@ class StateService:
             "current_weekday": now.strftime("%A"),
         }
 
+    def _get_default_state(self) -> dict[str, Any]:
+        """Get default user state with datetime info."""
+        datetime_info = self._get_datetime_info()
+        return {
+            "user_name": self.user_name or "User",
+            "persona": self.persona,
+            "default_city": self.default_city,
+            "default_country": "Germany",
+            **datetime_info,
+            "user_timezone": "Europe/Berlin",
+            "measurement_units": "metric",
+            "language": "ru",
+            "currency": "EUR",
+            "date_format": "DD Month YYYY",
+            "time_format": "24h",
+            "commercial_holidays": "DE-BW",
+            "commercial_check_open_now": True,
+            "transport_preferences": ["car", "bicycle"],
+            "cuisine_preferences": ["italian", "russian", "ukrainian"],
+        }
+
     def get_user_state(self) -> dict[str, Any]:
         """Get complete user state for prompt context."""
-        datetime_info = self._get_datetime_info()
-
         if not self.user_name:
             logger.info(
-                "state_service_002: No user_name provided, returning only datetime info"
+                "state_service_002: No user_name provided, returning default state"
             )
-            return datetime_info
+            return self._get_default_state()
 
         redis_key = f"user_state:name:{self.user_name}"
         logger.info(
@@ -66,9 +85,9 @@ class StateService:
             user_data_json = self.redis_client.get(redis_key)
             if not user_data_json:
                 logger.warning(
-                    f"state_service_004: No data found in Redis for key: {redis_key}"
+                    f"state_service_004: No data found in Redis for key: {redis_key}, using default"
                 )
-                return datetime_info
+                return self._get_default_state()
 
             user_data = json.loads(user_data_json)
             logger.info(
@@ -78,9 +97,9 @@ class StateService:
 
         except redis.RedisError as e:
             logger.error(f"state_service_error_001: Redis error: \033[31m{e}\033[0m")
-            return datetime_info
+            return self._get_default_state()
         except json.JSONDecodeError as e:
             logger.error(
                 f"state_service_error_002: JSON decode error: \033[31m{e}\033[0m"
             )
-            return datetime_info
+            return self._get_default_state()

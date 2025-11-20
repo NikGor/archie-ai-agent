@@ -1,5 +1,6 @@
 # Response Format: Formatted Text
 IMPORTANT: You must set the `content_format` field in the response to "formatted_text".
+CRITICAL: Do NOT populate the `ui_answer` field. Leave it as `null`. Only use the `text` field for your response.
 
 {% if response_format %}
 **Required Format**: {{ response_format }}
@@ -36,3 +37,4 @@ Format as AI prompt with clear instructions and structure.
 {% endif %}
 
 Respond ONLY in the specified format. Do not include any other formatting or explanations.
+**Remember**: Set `ui_answer` to `null`. Use only the `text` field with the specified format.

@@ -68,7 +68,6 @@ class AgentFactory:
         self,
         messages: list[dict[str, str]],
         model: str = "gpt-4.1",
-        persona: str | None = None,
         response_format: str = "plain",
         previous_response_id: str | None = None,
         user_name: str | None = None,
@@ -88,9 +87,10 @@ class AgentFactory:
             logger.info(
                 f"agent_factory_001c: Set user_name: \033[35m{user_name}\033[0m"
             )
-        if persona:
-            self.state_service.persona = persona
+
         user_state = self.state_service.get_user_state()
+
+        # Persona comes from Redis or defaults to business
         persona_key = user_state.get("persona", "business")
         logger.info(f"agent_factory_002: Persona: \033[35m{persona_key}\033[0m")
         logger.info(f"agent_factory_003: Format: \033[36m{response_format}\033[0m")

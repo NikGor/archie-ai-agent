@@ -9,9 +9,9 @@ language: {{ state.language }}
 currency: {{ state.currency }}
 date format: {{ state.date_format }}
 time format: {{ state.time_format }}
-commercial holidays: {{ state.commercial.holidays }}
-check open now: {{ state.commercial.check_open_now }}
+commercial holidays: {{ state.commercial_holidays }}
+check open now: {{ state.commercial_check_open_now }}
 user preferences:
-	transport: {{ state.user_preferences.transport|join(', ') }}
-	cuisine: {{ state.user_preferences.cuisine|join(', ') }}
+	transport: {{ state.transport_preferences|join(', ') }}
+	cuisine: {{ state.cuisine_preferences|join(', ') }}
 response format: {{ response_format }}. Respond according to the specified format.
