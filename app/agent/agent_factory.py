@@ -105,12 +105,17 @@ class AgentFactory:
         logger.info(
             f"agent_factory_004: Prepared messages - System: 1, User/Assistant: \033[33m{len(messages)}\033[0m, Total: \033[33m{len(formatted_messages)}\033[0m"
         )
-        tools = self.tool_factory.get_tool_definitions()
+        is_dashboard = response_format == "dashboard"
+        tools = self.tool_factory.get_tool_definitions(for_dashboard=is_dashboard)
+        tool_choice = "required" if is_dashboard else "auto"
+        if is_dashboard:
+            logger.info("agent_factory_004b: Dashboard format - tool call required")
         response = await client.create_completion(
             messages=formatted_messages,
             model=model,
             response_format=AgentResponse,
             tools=tools,
+            tool_choice=tool_choice,
             previous_response_id=previous_response_id,
         )
 

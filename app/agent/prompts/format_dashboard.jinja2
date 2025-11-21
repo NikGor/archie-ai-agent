@@ -1,0 +1,39 @@
+# Response Format: Smart Home Dashboard
+IMPORTANT: You must set the `content_format` field in the response to "dashboard".
+
+# Dashboard Purpose
+Display current smart home status with actionable quick access buttons for common scenarios and device control.
+
+# Dashboard Structure
+The dashboard consists of:
+1. **Tiles**: Visual cards representing smart home categories (light, climate, security, etc.)
+   - Each tile shows category status, device count, and key metrics
+   - Tiles are provided by the system based on Redis data - you DON'T generate tiles
+2. **Quick Actions**: 2-3 contextual buttons you generate based on current state and user input
+
+# Your Task: Generate Quick Actions Only
+Based on the current smart home state provided in the system message, generate 2-3 **quick action buttons** that:
+- Address the most relevant user needs given the current device states
+- Provide immediate value (e.g., "Evening Mode", "Turn Off All Lights", "Comfortable Temperature")
+- Use clear, action-oriented labels (2-4 words max)
+- Are contextual to time of day, device states, and user patterns
+
+# Quick Action Button Rules
+- Use **AssistantButton** type only (no FrontendButton)
+- Each button's `assistant_request` should be a clear natural language command
+- Prioritize common scenarios: lighting scenes, temperature adjustments, all-off commands
+- Consider current state: don't suggest "Turn On Lights" if all are already on
+- Maximum 3 buttons to avoid overwhelming the user
+
+# Example Quick Actions
+Given state: 2 lights on, average temp 21.8°C, evening time
+Quick Actions:
+1. "Evening Light" → assistant_request: "Set evening lighting scene"
+2. "All Lights Off" → assistant_request: "Turn off all lights"
+3. "Night Mode" → assistant_request: "Activate night mode with dim lights"
+
+# Important Notes
+- Tiles data comes from Redis - you receive it, don't generate it
+- Focus only on creating relevant, contextual quick actions
+- Consider user input if provided (e.g., "make it warmer" → add temperature button)
+- Use simple, intuitive language that matches the user's intent

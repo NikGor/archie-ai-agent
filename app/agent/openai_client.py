@@ -4,7 +4,7 @@ import logging
 import os
 from typing import Any
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import OpenAI, pydantic_function_tool
 from pydantic import BaseModel
 
 
@@ -25,7 +25,8 @@ class OpenAIClient:
         messages: list[dict[str, Any]],
         model: str,
         response_format: type[BaseModel],
-        tools: list[dict[str, Any]] | None = None,
+        tools: list[type[BaseModel]] | None = None,
+        tool_choice: str | None = None,
         previous_response_id: str | None = None,
     ) -> Any:
         """Create a completion using OpenAI API with structured outputs."""
@@ -44,7 +45,9 @@ class OpenAIClient:
                 "text_format": response_format,
             }
             if tools:
-                openai_args["tools"] = tools
+                openai_args["tools"] = [pydantic_function_tool(t) for t in tools]
+            if tool_choice:
+                openai_args["tool_choice"] = tool_choice
             if previous_response_id:
                 openai_args["previous_response_id"] = previous_response_id
                 logger.info(
