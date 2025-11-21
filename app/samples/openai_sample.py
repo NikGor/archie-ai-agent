@@ -59,4 +59,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# Run with: PYTHONPATH=. poetry run python app/response_understand.py
+# Run with: PYTHONPATH=. poetry run python app/samples/openai_sample.py
