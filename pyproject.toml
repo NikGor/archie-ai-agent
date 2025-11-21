@@ -5,7 +5,7 @@ description = ""
 authors = ["Nikolaj Gordienko <nicolas.gordienko@gmail.com>"]
 
 [tool.poetry.dependencies]
-python = ">=3.11.0rc1,<4.0"
+python = ">=3.11.0rc1,<3.13"
 python-dotenv = "^1.1.1"
 openai = "^1.54.4"
 jinja2 = "^3.1.6"
@@ -20,6 +20,8 @@ archie-shared = {git = "https://github.com/NikGor/homeassistant.git", subdirecto
 grpcio = "^1.76.0"
 google-genai = "^1.50.1"
 redis = "^7.1.0"
+docstring-parser = "^0.17.0"
+instructor = ">=1.7.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.0.0"
