@@ -2,9 +2,9 @@
 
 import json
 import logging
-import os
 from typing import Any
 from dotenv import load_dotenv
+from ..config import MODEL_PROVIDERS
 from ..models.response_models import AgentResponse
 from ..tools.tool_factory import ToolFactory
 from ..utils.openai_utils import create_llm_trace_from_openai_response
@@ -21,22 +21,6 @@ logger = logging.getLogger(__name__)
 class AgentFactory:
     """Factory for creating and orchestrating AI agent responses."""
 
-    MODEL_PROVIDERS = {
-        "openai": [
-            "gpt-4.1",
-            "gpt-4.1-mini",
-            "gpt-4.1-nano",
-            "gpt-5",
-            "gpt-5.1",
-            "gpt-5-mini",
-            "gpt-5-nano",
-        ],
-        "gemini": [
-            "gemini-2.5-flash",
-            "gemini-2.5-pro",
-        ],
-    }
-
     def __init__(
         self,
         prompt_builder: PromptBuilder | None = None,
@@ -48,6 +32,7 @@ class AgentFactory:
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.tool_factory = tool_factory or ToolFactory()
         self.state_service = state_service or StateService()
+        self.model_providers = MODEL_PROVIDERS
 
         # Create clients dictionary for easy provider switching
         self.clients = {
@@ -59,7 +44,7 @@ class AgentFactory:
 
     def _get_provider_for_model(self, model: str) -> str:
         """Returns 'openai' or 'gemini' based on model name."""
-        for provider, models in self.MODEL_PROVIDERS.items():
+        for provider, models in self.model_providers.items():
             if model in models:
                 return provider
         return "openai"  # default fallback
@@ -105,17 +90,12 @@ class AgentFactory:
         logger.info(
             f"agent_factory_004: Prepared messages - System: 1, User/Assistant: \033[33m{len(messages)}\033[0m, Total: \033[33m{len(formatted_messages)}\033[0m"
         )
-        is_dashboard = response_format == "dashboard"
-        tools = self.tool_factory.get_tool_definitions(for_dashboard=is_dashboard)
-        tool_choice = "required" if is_dashboard else "auto"
-        if is_dashboard:
-            logger.info("agent_factory_004b: Dashboard format - tool call required")
+        tools = self.tool_factory.get_tool_schemas(model, response_format)
         response = await client.create_completion(
             messages=formatted_messages,
             model=model,
             response_format=AgentResponse,
             tools=tools,
-            tool_choice=tool_choice,
             previous_response_id=previous_response_id,
         )
 
