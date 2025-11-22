@@ -58,36 +58,36 @@ def chat():
     }
     messages = [system_prompt, user_input]
 
-    response = client.responses.parse(
-        model="gpt-4.1",
-        input=messages,
-        text_format=orchestration_sgr.DecisionResponse,
-    )
-
-    # Test parser
-    parsed = parse_llm_response(
-        raw_response=response,
-        provider="openai",
-        expected_type=orchestration_sgr.DecisionResponse,
-    )
-
-    print("=== Parsed Response ===")
-    print(f"Response ID: {parsed.response_id}")
-    print(f"Has Function Call: {parsed.has_function_call}")
-    if parsed.has_function_call:
-        print(f"Function Name: {parsed.function_name}")
-        print(f"Function Arguments: {parsed.function_arguments}")
-    else:
-        print(f"Parsed Content Type: {type(parsed.parsed_content).__name__}")
-        print(
-            f"Content: {json.dumps(parsed.parsed_content.model_dump(), indent=2, ensure_ascii=False)}"
+    try:
+        response = client.responses.parse(
+            model="gpt-4.1",
+            input=messages,
+            text_format=orchestration_sgr.DecisionResponse,
+            # reasoning={
+            #     "effort": "medium",
+            #     "summary": "auto"
+            # },
         )
 
-    print("\n=== LLM Trace ===")
-    print(json.dumps(parsed.llm_trace.model_dump(), indent=2, ensure_ascii=False))
+        # Test parser
+        parsed_llm_response = parse_llm_response(
+            raw_response=response,
+            provider="openai",
+            expected_type=orchestration_sgr.DecisionResponse,
+        )
 
-    # print("\n=== Full Raw Response ===")
-    # print(json.dumps(response.model_dump(), indent=2, ensure_ascii=False))
+        print("\n=== Parsed LLM Response Object ===")
+        print(f"Parsed Content Type: {type(parsed_llm_response.parsed_content)}")
+        print(f"Content: {parsed_llm_response.parsed_content.model_dump_json(indent=2)}")
+
+        # print("\n=== Full Raw Response ===")
+        # print(json.dumps(response.model_dump(), indent=2, ensure_ascii=False))
+        # print("\n=== Parsed Response ===")
+        # print(json.dumps(response.model_dump(), indent=2, ensure_ascii=False))
+        
+    except Exception as e:
+        logger.error(f"openai_sample_error_001: \033[31m{e!s}\033[0m")
+        raise
 
 
 def main():

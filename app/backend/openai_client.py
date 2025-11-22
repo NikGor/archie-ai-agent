@@ -6,6 +6,7 @@ from typing import Any
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel
+from app.utils.openai_utils import build_openai_args
 
 
 logger = logging.getLogger(__name__)
@@ -19,44 +20,6 @@ class OpenAIClient:
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.client = OpenAI(api_key=self.api_key)
         logger.info("openai_client_001: Initialized OpenAI client")
-
-    async def create_completion(
-        self,
-        messages: list[dict[str, Any]],
-        model: str,
-        response_format: type[BaseModel],
-        tools: list[dict[str, Any]] | None = None,
-        tool_choice: str | None = None,
-        previous_response_id: str | None = None,
-    ) -> Any:
-        """Create a completion using OpenAI API with structured outputs."""
-        msg_breakdown = {}
-        for msg in messages:
-            role = msg.get("role", "unknown")
-            msg_breakdown[role] = msg_breakdown.get(role, 0) + 1
-        logger.info(
-            f"openai_client_002: Calling \033[36m{model}\033[0m with \033[33m{len(messages)}\033[0m msgs "
-            f"(system: {msg_breakdown.get('system', 0)}, user: {msg_breakdown.get('user', 0)}, assistant: {msg_breakdown.get('assistant', 0)})"
-        )
-        try:
-            openai_args = {
-                "model": model,
-                "input": messages,
-                "text_format": response_format,
-            }
-            if tools:
-                openai_args["tools"] = tools
-            if previous_response_id:
-                openai_args["previous_response_id"] = previous_response_id
-                logger.info(
-                    f"openai_client_003: Using previous response ID: \033[36m{previous_response_id}\033[0m"
-                )
-            response = self.client.responses.parse(**openai_args)
-            self._log_usage(response)
-            return response
-        except Exception as e:
-            logger.error(f"openai_client_error_001: \033[31m{e!s}\033[0m")
-            raise
 
     def _log_usage(self, response: Any) -> None:
         """Log token usage from response."""
@@ -73,3 +36,39 @@ class OpenAIClient:
             )
         except Exception as e:
             logger.warning(f"openai_client_warning_001: Could not log usage: {e}")
+
+    async def create_completion(
+        self,
+        messages: list[dict[str, Any]],
+        model: str,
+        response_format: type[BaseModel],
+        previous_response_id: str | None = None,
+    ) -> Any:
+        """Create a completion using OpenAI API with structured outputs."""
+        msg_breakdown = {}
+        for msg in messages:
+            role = msg.get("role", "unknown")
+            msg_breakdown[role] = msg_breakdown.get(role, 0) + 1
+        logger.info(
+            f"openai_client_002: Calling \033[36m{model}\033[0m with \033[33m{len(messages)}\033[0m msgs "
+            f"(system: {msg_breakdown.get('system', 0)}, user: {msg_breakdown.get('user', 0)}, assistant: {msg_breakdown.get('assistant', 0)})"
+        )
+        try:
+            openai_args = build_openai_args(
+                model=model,
+                messages=messages,
+                response_format=response_format,
+                previous_response_id=previous_response_id,
+            )
+
+            if previous_response_id:
+                logger.info(
+                    f"openai_client_003: Using previous response ID: \033[36m{previous_response_id}\033[0m"
+                )
+
+            response = self.client.responses.parse(**openai_args)
+            self._log_usage(response)
+            return response
+        except Exception as e:
+            logger.error(f"openai_client_error_001: \033[31m{e!s}\033[0m")
+            raise

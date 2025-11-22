@@ -23,7 +23,7 @@ async def handle_chat(user_request: ChatRequest) -> ChatMessage:
 
     # Generate AI response
     agent_factory = AgentFactory()
-    agent_response = await agent_factory.create_agent_response(
+    agent_response = await agent_factory.arun(
         messages=current_messages,
         model=model,
         response_format=user_request.response_format,

@@ -65,7 +65,14 @@ def parse_openai_response(
         total_cost=0.0,
     )
 
-    output_item = raw_response.output[0]
+    output_item = next(
+        (
+            item
+            for item in raw_response.output
+            if item.type in ("message", "function_call")
+        ),
+        raw_response.output[0],
+    )
     has_function_call = output_item.type == "function_call"
     function_name = None
     function_arguments = None
@@ -125,11 +132,41 @@ def parse_gemini_response(
     )
 
     candidate = raw_response.candidates[0]
-    part = candidate.content.parts[0]
+    
+    # Iterate through parts to find the valid response (JSON or function call)
+    # Thinking models might return thoughts as the first part(s)
+    part = None
+    has_function_call = False
+    
+    # First check for function calls
+    for p in candidate.content.parts:
+        if hasattr(p, "function_call") and p.function_call is not None:
+            part = p
+            has_function_call = True
+            break
+            
+    # If no function call, look for the text part that matches our schema
+    if not has_function_call:
+        # If the client already parsed it (e.g. via response_schema), use it
+        if hasattr(raw_response, "parsed") and raw_response.parsed:
+            part = candidate.content.parts[0] # Just for reference, content is in raw_response.parsed
+        else:
+            # Try to find the part that parses as the expected JSON
+            for p in candidate.content.parts:
+                if hasattr(p, "text") and p.text:
+                    try:
+                        # Attempt to validate to see if this is the JSON payload
+                        # This effectively skips "thought" parts which are just plain text
+                        expected_type.model_validate_json(p.text)
+                        part = p
+                        break
+                    except Exception:
+                        continue
+            
+            # Fallback: if no part validated, use the last text part (often the response)
+            if part is None and candidate.content.parts:
+                part = candidate.content.parts[-1]
 
-    has_function_call = (
-        hasattr(part, "function_call") and part.function_call is not None
-    )
     function_name = None
     function_arguments = None
     parsed_content = None

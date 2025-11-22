@@ -1,13 +1,11 @@
-"""Tool for creating final formatted output responses."""
-
 import logging
 from typing import Any
-from ..agent.openai_client import OpenAIClient
-from ..agent.gemini_client import GeminiClient
+from ..backend.openai_client import OpenAIClient
+from ..backend.gemini_client import GeminiClient
 from ..agent.prompt_builder import PromptBuilder
 from ..config import MODEL_PROVIDERS
 from ..models.output_models import AgentResponse
-from ..utils.openai_utils import create_llm_trace_from_openai_response
+from ..utils.llm_parser import parse_llm_response
 
 
 logger = logging.getLogger(__name__)
@@ -23,7 +21,7 @@ def _get_provider_for_model(model: str) -> str:
 
 async def create_output(
     user_input: str,
-    orchestration_summary: str,
+    command_summary: str,
     tool_results: list[dict[str, Any]] | None = None,
     response_format: str = "plain",
     model: str = "gpt-4.1",
@@ -33,11 +31,11 @@ async def create_output(
     Create final formatted output response.
 
     This is Stage 3 of the agent flow - formatting the final response
-    based on orchestration decisions and tool results.
+    based on command decisions and tool results.
 
     Args:
         user_input: Original user request
-        orchestration_summary: Summary of orchestration decisions made
+        command_summary: Summary of command decisions made
         tool_results: Results from executed tools (if any)
         response_format: Target format (plain, ui_answer, dashboard, formatted_text)
         model: LLM model to use
@@ -78,8 +76,8 @@ async def create_output(
 
     system_prompt_content = f"""You are creating the final response for the user.
 
-# Orchestration Summary
-{orchestration_summary}
+# Command Summary
+{command_summary}
 
 # Format Instructions
 {format_instructions}
@@ -99,23 +97,24 @@ Create a complete, well-formatted response in the specified format."""
         f"create_output_004: Calling LLM with \033[33m{len(messages)}\033[0m messages"
     )
 
-    response = await client.create_completion(
+    raw_response = await client.create_completion(
         messages=messages,
         model=model,
         response_format=AgentResponse,
     )
 
-    parsed_result = response.output[0].content[0].parsed
-    llm_trace = create_llm_trace_from_openai_response(response)
-    response_id = response.id if hasattr(response, "id") else None
+    parsed = parse_llm_response(
+        raw_response=raw_response,
+        provider=provider,
+        expected_type=AgentResponse,
+    )
 
     result = AgentResponse(
-        content=parsed_result.content,
-        sgr=parsed_result.sgr,
-        llm_trace=llm_trace,
+        content=parsed.parsed_content.content,
+        sgr=parsed.parsed_content.sgr,
+        llm_trace=parsed.llm_trace,
+        response_id=parsed.response_id,
     )
-    if response_id:
-        result.response_id = response_id
 
     content_text = str(result.content) if result.content else ""
     logger.info(
