@@ -11,11 +11,11 @@ async def task_tool(
     description: str | None = None,
     due_date: str | None = None,
     priority: str | None = None,
-    status: str | None = None
+    status: str | None = None,
 ) -> dict[str, Any]:
     """
     Manages tasks and to-do lists with backend integration.
-    
+
     Args:
         action: Action to perform (list, create, update, delete, complete)
         title: Task title (required for create)
@@ -24,17 +24,14 @@ async def task_tool(
         due_date: Due date in ISO format (optional)
         priority: Task priority (low, medium, high)
         status: Task status (todo, in_progress, completed)
-        
+
     Returns:
         Dict with task data or error information
     """
     logger.info(f"task_001: Action requested: \033[36m{action}\033[0m")
-    
-    result = {
-        "success": True,
-        "action": action
-    }
-    
+
+    result = {"success": True, "action": action}
+
     if action == "create":
         result["message"] = f"Task '{title}' created successfully"
         result["task"] = {
@@ -42,7 +39,7 @@ async def task_tool(
             "description": description,
             "due_date": due_date,
             "priority": priority,
-            "status": status or "todo"
+            "status": status or "todo",
         }
     elif action == "update":
         result["message"] = f"Task {task_id} updated successfully"
@@ -57,5 +54,5 @@ async def task_tool(
         result["message"] = "Tasks list retrieved successfully"
     else:
         result["message"] = f"Action '{action}' executed successfully"
-    
+
     return result

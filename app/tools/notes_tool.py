@@ -10,11 +10,11 @@ async def notes_tool(
     note_id: str | None = None,
     content: str | None = None,
     tags: list[str] | None = None,
-    search_query: str | None = None
+    search_query: str | None = None,
 ) -> dict[str, Any]:
     """
     Manages notes and quick memos with backend integration.
-    
+
     Args:
         action: Action to perform (list, create, read, update, delete, search)
         title: Note title (required for create)
@@ -22,17 +22,14 @@ async def notes_tool(
         content: Note content (required for create, optional for update)
         tags: List of tags for categorization (optional)
         search_query: Search query for finding notes (required for search)
-        
+
     Returns:
         Dict with note data or error information
     """
     logger.info(f"notes_001: Action requested: \033[36m{action}\033[0m")
-    
-    result = {
-        "success": True,
-        "action": action
-    }
-    
+
+    result = {"success": True, "action": action}
+
     if action == "create":
         result["message"] = f"Note '{title}' created successfully"
         result["note"] = {"title": title, "content": content, "tags": tags}
@@ -52,5 +49,5 @@ async def notes_tool(
         result["message"] = "Notes list retrieved successfully"
     else:
         result["message"] = f"Action '{action}' executed successfully"
-    
+
     return result

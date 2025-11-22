@@ -1,13 +1,15 @@
 """Agent factory for orchestrating AI agent components."""
 
-import json
 import logging
 from typing import Any
 from dotenv import load_dotenv
 from ..config import MODEL_PROVIDERS
-from ..models.response_models import AgentResponse
+from ..models.orchestration_sgr import DecisionResponse
+from ..models.output_models import AgentResponse
 from ..tools.tool_factory import ToolFactory
-from ..utils.openai_utils import create_llm_trace_from_openai_response
+from ..tools.create_output_tool import create_output
+from ..utils.llm_parser import parse_llm_response
+from ..utils.tool_executor import execute_tool_calls_parallel
 from .openai_client import OpenAIClient
 from .gemini_client import GeminiClient
 from .prompt_builder import PromptBuilder
@@ -57,10 +59,15 @@ class AgentFactory:
         previous_response_id: str | None = None,
         user_name: str | None = None,
     ) -> AgentResponse:
-        """Create an agent response by orchestrating all components."""
+        """
+        Create an agent response through 3-stage orchestration.
+
+        Stage 1: Decision-making (orchestration)
+        Stage 2: Tool execution (if needed)
+        Stage 3: Final response generation
+        """
         logger.info("=== AgentFactory: Creating Agent Response ===")
 
-        # Determine provider and select client
         provider = self._get_provider_for_model(model)
         client = self.clients[provider]
         logger.info(
@@ -74,134 +81,115 @@ class AgentFactory:
             )
 
         user_state = self.state_service.get_user_state()
-
-        # Persona comes from Redis or defaults to business
         persona_key = user_state.get("persona", "business")
         logger.info(f"agent_factory_002: Persona: \033[35m{persona_key}\033[0m")
         logger.info(f"agent_factory_003: Format: \033[36m{response_format}\033[0m")
-        full_system_prompt = self.prompt_builder.build_full_prompt(
-            persona=persona_key,
+
+        # Extract user input from messages
+        user_input = messages[-1]["content"] if messages else ""
+
+        # STAGE 1: Orchestration - Make decision about what to do
+        decision = await self._make_orchestration_decision(
+            user_input=user_input,
+            model=model,
+            provider=provider,
+            user_state=user_state,
             response_format=response_format,
+        )
+
+        logger.info(
+            f"agent_factory_004: Action type: \033[36m{decision.sgr.action.type}\033[0m"
+        )
+        logger.info(
+            f"agent_factory_005: Intent: \033[36m{decision.sgr.routing.intent}\033[0m"
+        )
+
+        tool_results = []
+        orchestration_summary = decision.sgr.reasoning
+
+        # STAGE 2: Execute tools if needed
+        if decision.sgr.action.type == "function_call":
+            if decision.sgr.tool_calls:
+                logger.info(
+                    f"agent_factory_006: Executing \033[33m{len(decision.sgr.tool_calls)}\033[0m tools"
+                )
+                tool_results = await execute_tool_calls_parallel(
+                    tool_calls=decision.sgr.tool_calls,
+                    tool_factory=self.tool_factory,
+                )
+
+                # Check if need to make another orchestration decision
+                # (for now, go directly to final response)
+                orchestration_summary += f"\n\nTools executed: {len(tool_results)}"
+            else:
+                logger.warning(
+                    "agent_factory_warning_001: function_call type but no tool_calls"
+                )
+
+        # STAGE 3: Generate final response
+        logger.info("agent_factory_007: Creating final output")
+        final_response = await create_output(
+            user_input=user_input,
+            orchestration_summary=orchestration_summary,
+            tool_results=tool_results if tool_results else None,
+            response_format=response_format,
+            model=model,
             state=user_state,
         )
-        formatted_messages = []
-        formatted_messages.append({"role": "system", "content": full_system_prompt})
-        formatted_messages.extend(messages)
-        logger.info(
-            f"agent_factory_004: Prepared messages - System: 1, User/Assistant: \033[33m{len(messages)}\033[0m, Total: \033[33m{len(formatted_messages)}\033[0m"
-        )
-        tools = self.tool_factory.get_tool_schemas(model, response_format)
-        response = await client.create_completion(
-            messages=formatted_messages,
-            model=model,
-            response_format=AgentResponse,
-            tools=tools,
-            previous_response_id=previous_response_id,
-        )
 
-        # Handle response (unified for OpenAI and Gemini)
-        if response.output[0].type == "function_call":
-            response = await self._handle_function_call(
-                response, formatted_messages, model
-            )
-        elif response.output[0].type == "web_search_call":
-            response = await self._handle_web_search_call(
-                response, formatted_messages, model
-            )
-        parsed_result = response.output[0].content[0].parsed
-        llm_trace = create_llm_trace_from_openai_response(response)
-        response_id = response.id if hasattr(response, "id") else None
-
-        result = AgentResponse(
-            content=parsed_result.content,
-            sgr=parsed_result.sgr,
-            llm_trace=llm_trace,
-        )
-        if response_id:
-            result.response_id = response_id
-        self._log_response(result)
         logger.info("=== AgentFactory: Response Created ===")
-        return result
+        return final_response
 
-    async def _handle_function_call(
+    async def _make_orchestration_decision(
         self,
-        response: Any,
-        messages: list[dict[str, Any]],
+        user_input: str,
         model: str,
-    ) -> Any:
-        """Handle function call response from OpenAI."""
-        logger.info("agent_factory_005: Handling function call")
-        tool_arguments = json.loads(response.output[0].arguments)
-        tool_name = response.output[0].name
-        tool_result = await self.tool_factory.execute_tool(tool_name, tool_arguments)
-        logger.info(f"agent_factory_006: Tool result: {tool_result}")
-        messages.append(
-            {
-                "role": "assistant",
-                "content": f"Function Result: {tool_name}: {tool_result}",
-            }
-        )
-        logger.info(
-            f"agent_factory_006b: Added tool result, new total: \033[33m{len(messages)}\033[0m"
-        )
-        return await self.openai_client.create_completion(
+        provider: str,
+        user_state: dict[str, Any],
+        response_format: str,
+    ) -> DecisionResponse:
+        """
+        Stage 1: Make orchestration decision using cmd_prompt.
+
+        Returns DecisionResponse with routing, action type, and tool calls.
+        """
+        logger.info("=== Stage 1: Orchestration Decision ===")
+
+        client = self.clients[provider]
+
+        # Build command prompt for orchestration
+        cmd_prompt_template = self.prompt_builder.env.get_template("cmd_prompt.jinja2")
+        cmd_prompt = cmd_prompt_template.render(state=user_state)
+
+        # Get tool schemas for this response format
+        tools = self.tool_factory.get_tool_schemas(model, response_format)
+        tools_list = "\n".join([f"- {t['name']}: {t['description']}" for t in tools])
+
+        system_message = f"{cmd_prompt}\n\nAvailable Tools:\n{tools_list}"
+
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": user_input},
+        ]
+
+        logger.info(f"agent_factory_008: Making orchestration decision with {provider}")
+
+        raw_response = await client.create_completion(
             messages=messages,
             model=model,
-            response_format=AgentResponse,
+            response_format=DecisionResponse,
+            tools=None,  # No tools for orchestration decision
         )
 
-    async def _handle_web_search_call(
-        self,
-        response: Any,
-        messages: list[dict[str, Any]],
-        model: str,
-    ) -> Any:
-        """Handle web search call response from OpenAI."""
-        logger.info("agent_factory_007: Handling web search call")
-        for output_item in response.output:
-            if output_item.type == "message":
-                messages.append(
-                    {
-                        "role": "assistant",
-                        "content": output_item.content[0].text,
-                    }
-                )
-                logger.info(
-                    f"agent_factory_007b: Added web search result, new total: \033[33m{len(messages)}\033[0m"
-                )
-                break
-        return await self.openai_client.create_completion(
-            messages=messages,
-            model=model,
-            response_format=AgentResponse,
+        # Parse response
+        parsed = parse_llm_response(
+            raw_response=raw_response,
+            provider=provider,
+            expected_type=DecisionResponse,
         )
 
-    def _log_response(self, result: AgentResponse) -> None:
-        """Log the agent response."""
-        content_text = str(result.content) if result.content else ""
         logger.info(
-            f"agent_factory_008: Response length: \033[33m{len(content_text)}\033[0m"
+            f"agent_factory_009: Decision made - Action: \033[36m{parsed.parsed_content.sgr.action.type}\033[0m"
         )
 
-        if result.sgr and result.sgr.reasoning:
-            logger.info(
-                f"agent_factory_010: Reasoning:\n\033[35m{result.sgr.reasoning}\033[0m"
-            )
-        if result.sgr and result.sgr.ui_reasoning:
-            logger.info(
-                f"agent_factory_011: UI Reasoning:\n\033[35m{result.sgr.ui_reasoning}\033[0m"
-            )
-
-        try:
-            response_dict = {
-                "content": (
-                    result.content.model_dump(mode="json") if result.content else None
-                ),
-            }
-            logger.info(
-                f"agent_factory_009: Full response:\n\033[32m{json.dumps(response_dict, indent=2, ensure_ascii=False)}\033[0m"
-            )
-        except Exception as e:
-            logger.warning(
-                f"agent_factory_warning_001: Could not serialize response: {e}"
-            )
+        return parsed.parsed_content

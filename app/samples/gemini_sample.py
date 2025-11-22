@@ -6,6 +6,9 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
+from app.models import orchestration_sgr
+from app.tools.tool_factory import ToolFactory
+from app.utils.llm_parser import parse_llm_response
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -16,6 +19,7 @@ current_date = datetime.now().strftime("%B %d, %Y")
 
 class SimpleResponse(BaseModel):
     """Simple test response model"""
+
     answer: str = Field(description="Answer text")
     reasoning: str = Field(description="Brief reasoning")
 
@@ -24,62 +28,64 @@ SIMPLE_PROMPT = """You are a helpful AI assistant.
 Current date: {current_date}
 User location: {location}
 
+Always strictly follow the provided response format.
+
+Available tools:
+{tools_list}
+
 Answer the user's question clearly and concisely."""
 
 
-schedule_meeting_function = {
-    "name": "schedule_meeting",
-    "description": "Schedules a meeting with specified attendees at a given time and date.",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "attendees": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "List of people attending the meeting.",
-            },
-            "date": {
-                "type": "string",
-                "description": "Date of the meeting (e.g., '2024-07-29')",
-            },
-            "time": {
-                "type": "string",
-                "description": "Time of the meeting (e.g., '15:00')",
-            },
-            "topic": {
-                "type": "string",
-                "description": "The subject or topic of the meeting.",
-            },
-        },
-        "required": ["attendees", "date", "time", "topic"],
-    },
-}
-
-
 def chat():
-    prompt = SIMPLE_PROMPT.format(
-        current_date=current_date,
-        location="Berlin, Germany"
-    ) + "\n\nUser question: Schedule a meeting about the new project with Alice and Bob 29.11.2025 at 10 AM."
-    
-    tools = types.Tool(function_declarations=[schedule_meeting_function])
+    tool_factory = ToolFactory()
+    model = "gemini-2.0-flash"
+    response_format = "plain"
+
+    tools = tool_factory.get_tool_schemas(model, response_format)
+    tools_formatted = json.dumps(tools, indent=2, ensure_ascii=False)
+
+    prompt = (
+        SIMPLE_PROMPT.format(
+            current_date=current_date,
+            location="Berlin, Germany",
+            tools_list=tools_formatted,
+        )
+        + "\n\nUser question: Create a dinner appointment for tomorrow at 7 PM with John"
+    )
 
     response = client.models.generate_content(
         model="gemini-2.0-flash",
         contents=prompt,
         config={
-            # "response_mime_type": "application/json",
-            # "response_json_schema": SimpleResponse.model_json_schema(),
-            "tools": [tools],
+            "response_mime_type": "application/json",
+            "response_json_schema": orchestration_sgr.DecisionResponse.model_json_schema(),
         },
     )
-    
-    # result = SimpleResponse.model_validate_json(response.text)
-    result = response
-    print(json.dumps(result.model_dump(), indent=2, ensure_ascii=False))
 
-    print("\nToken Usage:")
-    print(response.usage_metadata)
+    # Test parser
+    parsed = parse_llm_response(
+        raw_response=response,
+        provider="gemini",
+        expected_type=orchestration_sgr.DecisionResponse,
+    )
+
+    print("=== Parsed Response ===")
+    print(f"Response ID: {parsed.response_id}")
+    print(f"Has Function Call: {parsed.has_function_call}")
+    if parsed.has_function_call:
+        print(f"Function Name: {parsed.function_name}")
+        print(f"Function Arguments: {parsed.function_arguments}")
+    else:
+        print(f"Parsed Content Type: {type(parsed.parsed_content).__name__}")
+        print(
+            f"Content: {json.dumps(parsed.parsed_content.model_dump(), indent=2, ensure_ascii=False)}"
+        )
+
+    print("\n=== LLM Trace ===")
+    print(json.dumps(parsed.llm_trace.model_dump(), indent=2, ensure_ascii=False))
+
+    # print("\n=== Full Raw Response ===")
+    # print(json.dumps(response.model_dump(), indent=2, ensure_ascii=False))
 
 
 def main():

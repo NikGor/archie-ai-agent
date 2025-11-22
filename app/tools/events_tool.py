@@ -13,11 +13,11 @@ async def events_tool(
     location: str | None = None,
     description: str | None = None,
     attendees: list[str] | None = None,
-    date: str | None = None
+    date: str | None = None,
 ) -> dict[str, Any]:
     """
     Manages calendar events and appointments with backend integration.
-    
+
     Args:
         action: Action to perform (list, create, read, update, delete, today, upcoming)
         title: Event title (required for create)
@@ -28,17 +28,14 @@ async def events_tool(
         description: Event description (optional)
         attendees: List of attendee emails (optional)
         date: Specific date for filtering events (YYYY-MM-DD format)
-        
+
     Returns:
         Dict with event data or error information
     """
     logger.info(f"events_001: Action requested: \033[36m{action}\033[0m")
-    
-    result = {
-        "success": True,
-        "action": action
-    }
-    
+
+    result = {"success": True, "action": action}
+
     if action == "create":
         result["message"] = f"Event '{title}' created successfully"
         result["event"] = {
@@ -47,7 +44,7 @@ async def events_tool(
             "end_time": end_time,
             "location": location,
             "description": description,
-            "attendees": attendees
+            "attendees": attendees,
         }
     elif action == "read":
         result["message"] = f"Event with ID {event_id} retrieved successfully"
@@ -69,5 +66,5 @@ async def events_tool(
             result["date"] = date
     else:
         result["message"] = f"Action '{action}' executed successfully"
-    
+
     return result
