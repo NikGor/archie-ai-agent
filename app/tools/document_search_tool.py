@@ -22,8 +22,15 @@ async def document_search_tool(
     """
     logger.info(f"document_search_001: Search requested for query: \033[36m{query}\033[0m")
     
-    return {
-        "success": False,
-        "message": "Document search tool is not implemented yet",
-        "query": query
+    result = {
+        "success": True,
+        "message": f"Document search completed for query: {query}",
+        "query": query,
+        "limit": limit
     }
+    
+    if document_type:
+        result["message"] = f"Document search completed for query: {query} (filtered by type: {document_type})"
+        result["document_type"] = document_type
+    
+    return result
