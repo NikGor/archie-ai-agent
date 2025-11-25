@@ -78,13 +78,15 @@ def chat():
 
         print("\n=== Parsed LLM Response Object ===")
         print(f"Parsed Content Type: {type(parsed_llm_response.parsed_content)}")
-        print(f"Content: {parsed_llm_response.parsed_content.model_dump_json(indent=2)}")
+        print(
+            f"Content: {parsed_llm_response.parsed_content.model_dump_json(indent=2)}"
+        )
 
         # print("\n=== Full Raw Response ===")
         # print(json.dumps(response.model_dump(), indent=2, ensure_ascii=False))
         # print("\n=== Parsed Response ===")
         # print(json.dumps(response.model_dump(), indent=2, ensure_ascii=False))
-        
+
     except Exception as e:
         logger.error(f"openai_sample_error_001: \033[31m{e!s}\033[0m")
         raise
