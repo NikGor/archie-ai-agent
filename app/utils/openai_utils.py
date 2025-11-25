@@ -25,10 +25,7 @@ def build_openai_args(
 
     # Add reasoning parameters for thinking models
     if model.startswith(("o1", "o3", "gpt-5")):
-        args["reasoning"] = {
-            "effort": "medium",
-            "summary": "auto"
-        }
+        args["reasoning"] = {"effort": "medium", "summary": "auto"}
         logger.info(
             f"openai_utils_001: Added reasoning params for model \033[36m{model}\033[0m"
         )

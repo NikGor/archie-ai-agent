@@ -132,24 +132,26 @@ def parse_gemini_response(
     )
 
     candidate = raw_response.candidates[0]
-    
+
     # Iterate through parts to find the valid response (JSON or function call)
     # Thinking models might return thoughts as the first part(s)
     part = None
     has_function_call = False
-    
+
     # First check for function calls
     for p in candidate.content.parts:
         if hasattr(p, "function_call") and p.function_call is not None:
             part = p
             has_function_call = True
             break
-            
+
     # If no function call, look for the text part that matches our schema
     if not has_function_call:
         # If the client already parsed it (e.g. via response_schema), use it
         if hasattr(raw_response, "parsed") and raw_response.parsed:
-            part = candidate.content.parts[0] # Just for reference, content is in raw_response.parsed
+            part = candidate.content.parts[
+                0
+            ]  # Just for reference, content is in raw_response.parsed
         else:
             # Try to find the part that parses as the expected JSON
             for p in candidate.content.parts:
@@ -162,7 +164,7 @@ def parse_gemini_response(
                         break
                     except Exception:
                         continue
-            
+
             # Fallback: if no part validated, use the last text part (often the response)
             if part is None and candidate.content.parts:
                 part = candidate.content.parts[-1]
