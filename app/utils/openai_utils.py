@@ -1,7 +1,8 @@
 import logging
-from typing import Any
+from typing import Any, Callable
 from pydantic import BaseModel
 from archie_shared.chat.models import InputTokensDetails, LllmTrace, OutputTokensDetails
+from app.utils.tools_utils import openai_responses_parse
 
 
 logger = logging.getLogger(__name__)
@@ -10,18 +11,24 @@ logger = logging.getLogger(__name__)
 def build_openai_args(
     model: str,
     messages: list[dict[str, Any]],
-    response_format: type[BaseModel],
+    response_format: type[BaseModel] | None = None,
     previous_response_id: str | None = None,
+    tools: list[Callable[..., Any]] | None = None,
 ) -> dict[str, Any]:
     """Build arguments for OpenAI client.responses.parse()."""
-    args = {
+    args: dict[str, Any] = {
         "model": model,
         "input": messages,
-        "text_format": response_format,
     }
+
+    if response_format:
+        args["text_format"] = response_format
 
     if previous_response_id:
         args["previous_response_id"] = previous_response_id
+
+    if tools:
+        args["tools"] = [openai_responses_parse(func) for func in tools]
 
     # Add reasoning parameters for thinking models
     if model.startswith(("o1", "o3", "gpt-5")):
