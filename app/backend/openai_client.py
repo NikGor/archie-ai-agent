@@ -2,7 +2,7 @@
 
 import logging
 import os
-from typing import Any
+from typing import Any, Callable
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel
@@ -41,8 +41,9 @@ class OpenAIClient:
         self,
         messages: list[dict[str, Any]],
         model: str,
-        response_format: type[BaseModel],
+        response_format: type[BaseModel] | None = None,
         previous_response_id: str | None = None,
+        tools: list[Callable[..., Any]] | None = None,
     ) -> Any:
         """Create a completion using OpenAI API with structured outputs."""
         msg_breakdown = {}
@@ -59,6 +60,7 @@ class OpenAIClient:
                 messages=messages,
                 response_format=response_format,
                 previous_response_id=previous_response_id,
+                tools=tools,
             )
 
             if previous_response_id:
