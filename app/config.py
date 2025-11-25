@@ -20,20 +20,37 @@ MODEL_PROVIDERS = {
         "o3-mini",
         "o3-pro",
     ],
-    "gemini": [
-        "gemini-2.5-flash",
-        "gemini-2.5-pro",
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite",
-        "gemini-2.0-pro-exp",
-        "gemini-2.0-flash-thinking-exp",
-        "gemini-3-pro-preview",
+    "openrouter": [
+        # Google Gemini - schema too complex for AgentResponse (400 Bad Request)
+        # Works for DecisionResponse (command stage), but not for final output
+        # "google/gemini-2.5-pro",
+        # "google/gemini-2.5-flash",
+        # "google/gemini-2.5-flash-lite",
+        # Anthropic Claude - doesn't support JSON schema via OpenRouter (returns <tool_call> tags)
+        # "anthropic/claude-opus-4.5",
+        # "anthropic/claude-sonnet-4.5",
+        # "anthropic/claude-sonnet-4",
+        # "anthropic/claude-haiku-4.5",
+        # xAI Grok - works well with structured outputs
+        "x-ai/grok-4",
+        "x-ai/grok-4-fast",
+        "x-ai/grok-4.1-fast",
+        # DeepSeek
+        "deepseek/deepseek-v3.2-exp",
+        # Meta Llama
+        "meta-llama/llama-4-maverick",
+        "meta-llama/llama-4-scout",
     ],
-    "oss": [
-        "Qwen/Qwen3-4B-Instruct-2507",
-        "llama-3-70b",
-        "llama-3-13b",
-    ],
+    # Fallback - direct Gemini API (commented out)
+    # "gemini": [
+    #     "gemini-2.5-flash",
+    #     "gemini-2.5-pro",
+    #     "gemini-2.0-flash",
+    #     "gemini-2.0-flash-lite",
+    #     "gemini-2.0-pro-exp",
+    #     "gemini-2.0-flash-thinking-exp",
+    #     "gemini-3-pro-preview",
+    # ],
 }
 
 TOOLS_CONFIG = {

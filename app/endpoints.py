@@ -1,7 +1,8 @@
 import logging
-from archie_shared.chat.models import ChatMessage, ChatRequest
-from fastapi import APIRouter, HTTPException
+from archie_shared.chat.models import ChatMessage, ChatRequest, Content
+from fastapi import APIRouter
 from .api_controller import handle_chat
+from .utils.general_utils import generate_message_id
 
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,9 @@ async def chat_endpoint(request: ChatRequest) -> ChatMessage:
         return result
     except Exception as e:
         logger.error(f"endpoints_error_001: \033[31m{e!s}\033[0m", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error: {e!s}",
+        return ChatMessage(
+            message_id=generate_message_id(),
+            role="assistant",
+            content=Content(content_format="plain", text=f"Error: {e!s}"),
+            conversation_id=request.conversation_id,
         )

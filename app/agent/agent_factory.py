@@ -9,6 +9,7 @@ from ..tools.create_output_tool import create_output
 from ..utils.llm_parser import parse_llm_response
 from ..utils.tool_executor import execute_tool_calls
 from ..backend.openai_client import OpenAIClient
+from ..backend.openrouter_client import OpenRouterClient
 from ..backend.gemini_client import GeminiClient
 from .prompt_builder import PromptBuilder
 from ..backend.state_service import StateService
@@ -26,20 +27,22 @@ class AgentFactory:
         state_service: StateService | None = None,
     ):
         self.openai_client = OpenAIClient()
-        self.gemini_client = GeminiClient()
+        self.openrouter_client = OpenRouterClient()
+        self.gemini_client = GeminiClient()  # Fallback
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.tool_factory = tool_factory or ToolFactory()
         self.state_service = state_service or StateService()
         self.model_providers = MODEL_PROVIDERS
         self.clients = {
             "openai": self.openai_client,
-            "gemini": self.gemini_client,
+            "openrouter": self.openrouter_client,
+            "gemini": self.gemini_client,  # Fallback
         }
 
         logger.info("agent_factory_001: Initialized AgentFactory")
 
     def _get_provider_for_model(self, model: str) -> str:
-        """Returns 'openai' or 'gemini' based on model name."""
+        """Returns 'openai', 'openrouter', or 'gemini' based on model name."""
         for provider, models in self.model_providers.items():
             if model in models:
                 return provider
@@ -53,6 +56,7 @@ class AgentFactory:
         user_state: dict[str, Any],
         response_format: str,
         previous_results: list[dict[str, Any]] | None = None,
+        previous_response_id: str | None = None,
     ) -> DecisionResponse:
         """
         Stage 1: Analyze request and decide action using cmd_prompt.
@@ -86,6 +90,7 @@ class AgentFactory:
             messages=messages,
             model=model,
             response_format=DecisionResponse,
+            previous_response_id=previous_response_id if provider == "openai" else None,
         )
         parsed = parse_llm_response(
             raw_response=raw_response,
@@ -101,7 +106,8 @@ class AgentFactory:
     async def arun(
         self,
         messages: list[dict[str, str]],
-        model: str = "gpt-4.1",
+        command_model: str = "gpt-4.1",
+        final_output_model: str = "gpt-4.1",
         response_format: str = "plain",
         previous_response_id: str | None = None,
         user_name: str | None = None,
@@ -109,15 +115,16 @@ class AgentFactory:
         """
         Main entry point: Create an agent response through 3-stage flow.
 
-        Stage 1: Command - Analyze request and decide action
+        Stage 1: Command - Analyze request and decide action (uses command_model)
         Stage 2: Tool execution (if needed)
-        Stage 3: Final response generation
+        Stage 3: Final response generation (uses final_output_model)
         """
         logger.info("=== AgentFactory: Creating Agent Response ===")
-        provider = self._get_provider_for_model(model)
-        client = self.clients[provider]
+        cmd_provider = self._get_provider_for_model(command_model)
+        output_provider = self._get_provider_for_model(final_output_model)
         logger.info(
-            f"agent_factory_001b: Using provider: \033[34m{provider}\033[0m for model: \033[36m{model}\033[0m"
+            f"agent_factory_001b: Command: \033[34m{cmd_provider}\033[0m/\033[36m{command_model}\033[0m | "
+            f"Output: \033[34m{output_provider}\033[0m/\033[36m{final_output_model}\033[0m"
         )
         if user_name:
             self.state_service.user_name = user_name
@@ -129,6 +136,24 @@ class AgentFactory:
         logger.info(f"agent_factory_002: Persona: \033[35m{persona_key}\033[0m")
         logger.info(f"agent_factory_003: Format: \033[36m{response_format}\033[0m")
         user_input = messages[-1]["content"] if messages else ""
+
+        # Dashboard format: skip command loop, go directly to final output
+        if response_format == "dashboard":
+            logger.info("agent_factory_003b: Dashboard format - skipping command loop")
+            final_response = await create_output(
+                user_input=user_input,
+                command_summary="Dashboard request - direct output",
+                tool_results=None,
+                response_format=response_format,
+                model=final_output_model,
+                state=user_state,
+                previous_response_id=(
+                    previous_response_id if output_provider == "openai" else None
+                ),
+            )
+            logger.info("=== AgentFactory: Response Created ===")
+            return final_response
+
         tool_results = []
         command_history = []
         iteration = 0
@@ -141,11 +166,12 @@ class AgentFactory:
             # STAGE 1: Command - Analyze request and decide action
             decision = await self._make_command_call(
                 user_input=user_input,
-                model=model,
-                provider=provider,
+                model=command_model,
+                provider=cmd_provider,
                 user_state=user_state,
                 response_format=response_format,
                 previous_results=tool_results if tool_results else None,
+                previous_response_id=previous_response_id,
             )
             logger.info(
                 f"agent_factory_004: Action type: \033[36m{decision.sgr.action.type}\033[0m"
@@ -200,8 +226,11 @@ class AgentFactory:
             command_summary=command_summary,
             tool_results=tool_results if tool_results else None,
             response_format=response_format,
-            model=model,
+            model=final_output_model,
             state=user_state,
+            previous_response_id=(
+                previous_response_id if output_provider == "openai" else None
+            ),
         )
         logger.info("=== AgentFactory: Response Created ===")
         return final_response

@@ -1,6 +1,7 @@
 import logging
 from typing import Any
 from ..backend.openai_client import OpenAIClient
+from ..backend.openrouter_client import OpenRouterClient
 from ..backend.gemini_client import GeminiClient
 from ..agent.prompt_builder import PromptBuilder
 from ..config import MODEL_PROVIDERS
@@ -9,6 +10,17 @@ from ..utils.llm_parser import parse_llm_response
 
 
 logger = logging.getLogger(__name__)
+
+# Initialize clients once at module level
+_openai_client = OpenAIClient()
+_openrouter_client = OpenRouterClient()
+_gemini_client = GeminiClient()
+
+_clients = {
+    "openai": _openai_client,
+    "openrouter": _openrouter_client,
+    "gemini": _gemini_client,
+}
 
 
 def _get_provider_for_model(model: str) -> str:
@@ -26,6 +38,7 @@ async def create_output(
     response_format: str = "plain",
     model: str = "gpt-4.1",
     state: dict | None = None,
+    previous_response_id: str | None = None,
 ) -> AgentResponse:
     """
     Create final formatted output response.
@@ -40,6 +53,7 @@ async def create_output(
         response_format: Target format (plain, ui_answer, dashboard, formatted_text)
         model: LLM model to use
         state: User state context
+        previous_response_id: Previous response ID for OpenAI conversation threading
 
     Returns:
         AgentResponse: Final formatted response with SGROutput trace
@@ -48,11 +62,9 @@ async def create_output(
     logger.info(f"create_output_002: Format: \033[36m{response_format}\033[0m")
 
     prompt_builder = PromptBuilder()
-    openai_client = OpenAIClient()
-    gemini_client = GeminiClient()
 
     provider = _get_provider_for_model(model)
-    client = openai_client if provider == "openai" else gemini_client
+    client = _clients[provider]
     logger.info(
         f"create_output_002b: Using provider: \033[34m{provider}\033[0m for model: \033[36m{model}\033[0m"
     )
@@ -101,6 +113,7 @@ Create a complete, well-formatted response in the specified format."""
         messages=messages,
         model=model,
         response_format=AgentResponse,
+        previous_response_id=previous_response_id if provider == "openai" else None,
     )
 
     parsed = parse_llm_response(

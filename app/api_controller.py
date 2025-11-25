@@ -19,13 +19,15 @@ async def handle_chat(user_request: ChatRequest) -> ChatMessage:
 
     # Prepare messages for AI agent
     current_messages = [{"role": "user", "content": user_request.input}]
-    model = user_request.model if user_request.model else "gpt-4.1"
+    command_model = user_request.command_model or "gpt-4.1"
+    final_output_model = user_request.final_output_model or "gpt-4.1"
 
     # Generate AI response
     agent_factory = AgentFactory()
     agent_response = await agent_factory.arun(
         messages=current_messages,
-        model=model,
+        command_model=command_model,
+        final_output_model=final_output_model,
         response_format=user_request.response_format,
         previous_response_id=user_request.previous_message_id,
         user_name=user_request.user_name,
@@ -38,7 +40,7 @@ async def handle_chat(user_request: ChatRequest) -> ChatMessage:
         content=agent_response.content,
         conversation_id=user_request.conversation_id,
         previous_message_id=user_request.previous_message_id,
-        model=model,
+        model=f"{command_model}/{final_output_model}",
         llm_trace=agent_response.llm_trace,
     )
 

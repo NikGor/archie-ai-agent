@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Any
 from pydantic import BaseModel
@@ -5,6 +6,9 @@ from archie_shared.chat.models import InputTokensDetails, LllmTrace, OutputToken
 
 
 logger = logging.getLogger(__name__)
+
+# Fields excluded from LLM schema (added by parser after response)
+EXCLUDED_FIELDS = {"llm_trace", "response_id"}
 
 
 class ParsedLLMResponse:
@@ -105,7 +109,7 @@ def parse_gemini_response(
     expected_type: type[BaseModel],
 ) -> ParsedLLMResponse:
     """
-    Parse Gemini response into unified structure.
+    Parse Gemini response into unified structure (fallback - direct Gemini API).
 
     Args:
         raw_response: Raw response from Gemini client.models.generate_content()
@@ -214,6 +218,85 @@ def parse_gemini_response(
     )
 
 
+def _extract_openrouter_usage(raw_response: Any) -> tuple[int, int, int, int, int]:
+    """Extract token counts from OpenRouter response usage."""
+    usage = raw_response.usage
+    if not usage:
+        return 0, 0, 0, 0, 0
+    input_tokens = getattr(usage, "prompt_tokens", 0) or 0
+    output_tokens = getattr(usage, "completion_tokens", 0) or 0
+    total_tokens = getattr(usage, "total_tokens", 0) or 0
+    prompt_details = getattr(usage, "prompt_tokens_details", None)
+    cached_tokens = (
+        getattr(prompt_details, "cached_tokens", 0) or 0 if prompt_details else 0
+    )
+    completion_details = getattr(usage, "completion_tokens_details", None)
+    reasoning_tokens = (
+        getattr(completion_details, "reasoning_tokens", 0) or 0
+        if completion_details
+        else 0
+    )
+    return input_tokens, output_tokens, total_tokens, cached_tokens, reasoning_tokens
+
+
+def _extract_openrouter_content(raw_response: Any) -> str:
+    """Extract content string from OpenRouter response."""
+    if not raw_response.choices:
+        raise ValueError("OpenRouter response has no choices")
+    content = raw_response.choices[0].message.content
+    if not content:
+        raise ValueError("OpenRouter response content is empty")
+    return content
+
+
+def _parse_content_without_excluded_fields(
+    content: str,
+    expected_type: type[BaseModel],
+) -> BaseModel:
+    """Parse JSON content, ignoring missing excluded fields (llm_trace, response_id)."""
+    data = json.loads(content)
+    return expected_type.model_validate(data)
+
+
+def parse_openrouter_response(
+    raw_response: Any,
+    expected_type: type[BaseModel],
+) -> ParsedLLMResponse:
+    """
+    Parse OpenRouter response into unified structure.
+
+    OpenRouter uses OpenAI-compatible chat.completions format:
+    - choices[0].message.content = JSON string
+    - usage.prompt_tokens / completion_tokens / total_tokens
+    """
+    logger.info("llm_parser_008: Parsing OpenRouter response")
+    input_tokens, output_tokens, total_tokens, cached_tokens, reasoning_tokens = (
+        _extract_openrouter_usage(raw_response)
+    )
+    llm_trace = LllmTrace(
+        model=raw_response.model or "unknown",
+        input_tokens=input_tokens,
+        input_tokens_details=InputTokensDetails(cached_tokens=cached_tokens),
+        output_tokens=output_tokens,
+        output_tokens_details=OutputTokensDetails(reasoning_tokens=reasoning_tokens),
+        total_tokens=total_tokens,
+        total_cost=0.0,
+    )
+    content = _extract_openrouter_content(raw_response)
+    parsed_content = _parse_content_without_excluded_fields(content, expected_type)
+    logger.info(
+        f"llm_parser_009: Parsed content type: \033[36m{type(parsed_content).__name__}\033[0m"
+    )
+    return ParsedLLMResponse(
+        parsed_content=parsed_content,
+        llm_trace=llm_trace,
+        response_id=getattr(raw_response, "id", None),
+        has_function_call=False,
+        function_name=None,
+        function_arguments=None,
+    )
+
+
 def parse_llm_response(
     raw_response: Any,
     provider: str,
@@ -224,7 +307,7 @@ def parse_llm_response(
 
     Args:
         raw_response: Raw response from LLM provider
-        provider: Provider name ("openai" or "gemini")
+        provider: Provider name ("openai", "openrouter", or "gemini")
         expected_type: Expected Pydantic model type
 
     Returns:
@@ -232,6 +315,8 @@ def parse_llm_response(
     """
     if provider == "openai":
         return parse_openai_response(raw_response, expected_type)
+    elif provider == "openrouter":
+        return parse_openrouter_response(raw_response, expected_type)
     elif provider == "gemini":
         return parse_gemini_response(raw_response, expected_type)
     else:
