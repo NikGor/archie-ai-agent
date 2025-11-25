@@ -163,3 +163,42 @@ def oss_parse(func: Callable) -> dict[str, Any]:
         "name": func.__name__,
         "parameters": {"type": "object", "properties": properties},
     }
+
+
+def openai_responses_parse(func: Callable) -> dict[str, Any]:
+    """
+    Parse function into OpenAI Responses API tool format.
+
+    Returns dict ready for responses.parse() tools parameter.
+    Format: {"type": "function", "name": ..., "parameters": {...}, "strict": True}
+    Note: strict mode requires ALL properties in required array.
+
+    Args:
+        func (Callable): Function to parse
+
+    Returns:
+        dict[str, Any]: OpenAI Responses API tool schema
+    """
+    doc = docstring_parser.parse(func.__doc__ or "")
+    type_hints = get_type_hints(func)
+    properties = {}
+
+    for param in doc.params:
+        hint = type_hints.get(param.arg_name, str)
+        properties[param.arg_name] = {
+            "type": _map_type(hint),
+            "description": param.description or "",
+        }
+
+    return {
+        "type": "function",
+        "name": func.__name__,
+        "description": doc.short_description or "",
+        "parameters": {
+            "type": "object",
+            "properties": properties,
+            "required": list(properties.keys()),
+            "additionalProperties": False,
+        },
+        "strict": True,
+    }
