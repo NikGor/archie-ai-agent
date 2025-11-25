@@ -48,8 +48,9 @@ class OpenRouterClient:
         self,
         messages: list[dict[str, Any]],
         model: str,
-        response_format: type[BaseModel],
+        response_format: type[BaseModel] | None = None,
         previous_response_id: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> Any:
         """
         Create a completion using OpenRouter API with structured outputs.
@@ -70,28 +71,34 @@ class OpenRouterClient:
                 "openrouter_client_003: previous_response_id ignored (not supported by OpenRouter)"
             )
         try:
-            schema = response_format.model_json_schema()
-            if "properties" in schema:
-                schema["properties"].pop("llm_trace", None)
-                schema["properties"].pop("response_id", None)
-                if "required" in schema:
-                    schema["required"] = [
-                        field
-                        for field in schema["required"]
-                        if field not in ["llm_trace", "response_id"]
-                    ]
-            response = self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                response_format={
+            create_kwargs: dict[str, Any] = {
+                "model": model,
+                "messages": messages,
+            }
+            if response_format:
+                schema = response_format.model_json_schema()
+                if "properties" in schema:
+                    schema["properties"].pop("llm_trace", None)
+                    schema["properties"].pop("response_id", None)
+                    if "required" in schema:
+                        schema["required"] = [
+                            field
+                            for field in schema["required"]
+                            if field not in ["llm_trace", "response_id"]
+                        ]
+                create_kwargs["response_format"] = {
                     "type": "json_schema",
                     "json_schema": {
                         "name": response_format.__name__,
                         "schema": schema,
                         "strict": True,
                     },
-                },
-            )
+                }
+            if tools:
+                create_kwargs["tools"] = [
+                    {"type": "function", "function": tool} for tool in tools
+                ]
+            response = self.client.chat.completions.create(**create_kwargs)
             self._log_usage(response)
             return response
         except Exception as e:
