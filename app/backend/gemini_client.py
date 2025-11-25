@@ -1,4 +1,9 @@
-"""Gemini client for API interactions."""
+"""
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                  DEPRECATED: Use OpenRouterClient instead                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+"""
+
 
 import json
 import logging
