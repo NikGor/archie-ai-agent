@@ -57,7 +57,7 @@ TOOLS_CONFIG = {
     "smarthome": {
         "light_control_tool": "app.tools.light_control_tool",
         "climate_control_tool": "app.tools.climate_control_tool",
-        "youtube_music_tool": "app.tools.youtube_music_tool",
+        "spotify_tool": "app.tools.spotify_tool",
     },
     "internet_search": {
         "google_search_tool": "app.tools.google_search_tool",
