@@ -54,7 +54,7 @@ class ToolFactory:
 
     def get_tools_for_response_format(self, response_format: str) -> list[str]:
         """Get list of tool groups based on response format."""
-        if response_format == "dashboard":
+        if response_format in ["dashboard", "widget"]:
             logger.info(
                 f"tool_factory_003: Response format \033[36m{response_format}\033[0m -> using 'smarthome' tools"
             )

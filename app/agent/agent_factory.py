@@ -137,9 +137,9 @@ class AgentFactory:
         logger.info(f"agent_factory_003: Format: \033[36m{response_format}\033[0m")
         user_input = messages[-1]["content"] if messages else ""
 
-        # Dashboard format: skip command loop, go directly to final output
-        if response_format == "dashboard":
-            logger.info("agent_factory_003b: Dashboard format - skipping command loop")
+        # Dashboard/Widget formats: skip command loop, go directly to final output
+        if response_format in ["dashboard", "widget"]:
+            logger.info(f"agent_factory_003b: {response_format} format - skipping command loop")
             final_response = await create_output(
                 user_input=user_input,
                 command_summary="Dashboard request - direct output",

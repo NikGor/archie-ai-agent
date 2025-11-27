@@ -55,7 +55,7 @@ class PromptBuilder:
 
     def build_format_instructions(self, response_format: str) -> str:
         """Build format-specific instructions."""
-        if response_format in ["plain", "ui_answer"]:
+        if response_format in ["plain", "ui_answer", "level2_answer", "level3_answer", "dashboard", "widget"]:
             format_template_name = f"format_prompts/format_{response_format}.jinja2"
         else:
             format_template_name = "format_prompts/format_formatted_text.jinja2"

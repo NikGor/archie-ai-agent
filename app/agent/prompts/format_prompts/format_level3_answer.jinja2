@@ -1,0 +1,36 @@
+# Response Format: Level 3 Answer (Markdown + Widgets + Quick Actions)
+
+CRITICAL: You must:
+1. Set `content.content_format` to "level3_answer"
+2. Fill `content.level3_answer` object (NOT `content.text`)
+3. Inside `level3_answer`, set `text.text`, `widgets[]`, and `quick_action_buttons`
+
+# Purpose
+Deliver rich responses combining explanatory text, interactive widgets, and follow-up actions.
+
+# Response Structure (inside `content.level3_answer`)
+1. **text.text**: Clear, well-formatted markdown response
+2. **widgets**: Visual components for structured/interactive data
+3. **quick_action_buttons**: 2-3 buttons for logical next steps
+
+# Text Guidelines
+- Use markdown for structure: headers, lists, bold, code blocks
+- Text should complement widgets, not duplicate their content
+- Keep explanations concise - let widgets carry the data
+
+# Widget Usage
+- **Weather Widget**: weather conditions, forecasts
+- **Light Widget**: lighting status and control
+- **Climate Widget**: temperature, humidity, HVAC control
+- **Football Widget**: match info, scores, standings
+- **Music Widget**: now playing, playlists
+- **Documents Widget**: file listings, search results
+- Use widgets when data is actionable or benefits from visual presentation
+- One response can include multiple widgets of different types
+
+# Quick Action Button Rules
+- Provide 2-3 buttons representing most likely user needs
+- Use action-oriented labels (2-4 words)
+- **AssistantButton**: triggers follow-up request to assistant
+- **FrontendButton**: triggers UI action (navigation, control, etc.)
+- Buttons should relate to both text content and widget actions

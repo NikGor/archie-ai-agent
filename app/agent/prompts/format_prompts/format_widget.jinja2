@@ -1,0 +1,23 @@
+# Response Format: Standalone Widget
+
+CRITICAL: You must:
+1. Set `content.content_format` to "widget"
+2. Fill `content.widget` object (NOT `content.text`)
+3. Use the appropriate widget type for the request
+
+# Purpose
+Return a single, focused widget for direct UI embedding. No text, no buttons - just the widget.
+
+# Widget Types
+- **Weather Widget**: weather conditions, forecasts, recommendations
+- **Light Widget**: room lighting status and controls
+- **Climate Widget**: temperature, humidity, thermostat control
+- **Football Widget**: match details, scores, team standings
+- **Music Widget**: currently playing, track info, playback controls
+- **Documents Widget**: file listings, document search results
+
+# Guidelines
+- Select the most appropriate widget type for the request
+- Populate all relevant fields with complete data
+- Widget should be self-contained and immediately usable
+- No accompanying text or buttons - widget is the entire response
