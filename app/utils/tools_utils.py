@@ -1,10 +1,22 @@
 import inspect
 import logging
-from typing import Any, Callable, get_type_hints, get_origin, get_args
+from typing import Any, Callable, get_type_hints, get_origin, get_args, Literal
 import docstring_parser
 
 
 logger = logging.getLogger(__name__)
+
+
+def _get_literal_values(t: type) -> list[str] | None:
+    """Extract literal values if type is Literal."""
+    origin = get_origin(t)
+    if origin is Literal:
+        return list(get_args(t))
+    args = get_args(t)
+    for arg in args:
+        if get_origin(arg) is Literal:
+            return list(get_args(arg))
+    return None
 
 
 def _map_type(t: type) -> str:
@@ -20,11 +32,15 @@ def _map_type(t: type) -> str:
         str: JSON schema type string
     """
     origin = get_origin(t)
+    if origin is Literal:
+        return "string"
     if origin is not None:
         args = get_args(t)
         non_none_types = [arg for arg in args if arg is not type(None)]
         if non_none_types:
             t = non_none_types[0]
+            if get_origin(t) is Literal:
+                return "string"
 
     if t in [str]:
         return "string"
@@ -72,10 +88,14 @@ def openai_parse(func: Callable) -> dict[str, Any]:
 
     for param in doc.params:
         hint = type_hints.get(param.arg_name, str)
-        properties[param.arg_name] = {
+        prop = {
             "type": _map_type(hint),
             "description": param.description or "",
         }
+        literal_values = _get_literal_values(hint)
+        if literal_values:
+            prop["enum"] = literal_values
+        properties[param.arg_name] = prop
         if _is_required(func, param.arg_name):
             required.append(param.arg_name)
 
@@ -185,10 +205,14 @@ def openai_responses_parse(func: Callable) -> dict[str, Any]:
 
     for param in doc.params:
         hint = type_hints.get(param.arg_name, str)
-        properties[param.arg_name] = {
+        prop = {
             "type": _map_type(hint),
             "description": param.description or "",
         }
+        literal_values = _get_literal_values(hint)
+        if literal_values:
+            prop["enum"] = literal_values
+        properties[param.arg_name] = prop
 
     return {
         "type": "function",

@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Any
 from dotenv import load_dotenv
@@ -69,7 +70,10 @@ class AgentFactory:
         cmd_prompt_template = self.prompt_builder.env.get_template("cmd_prompt.jinja2")
         cmd_prompt = cmd_prompt_template.render(state=user_state)
         tools = self.tool_factory.get_tool_schemas(model, response_format)
-        tools_list = "\n".join([f"- {t['name']}: {t['description']}" for t in tools])
+        tools_list = "\n".join([
+            f"- {t['name']}: {t['description']}\n  Parameters: {json.dumps(t.get('parameters', {}), ensure_ascii=False)}"
+            for t in tools
+        ])
         system_message = f"{cmd_prompt}\n\nAvailable Tools:\n{tools_list}"
         messages = [
             {"role": "system", "content": system_message},

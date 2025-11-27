@@ -25,27 +25,18 @@ class ToolFactory:
         """Dynamically import and return tool function from module path."""
         try:
             module = importlib.import_module(module_path)
-
-            # Extract function name from module path (last part without underscores)
             module_name = module_path.split(".")[-1]
-
-            # Try to find the main function in the module
-            for attr_name in dir(module):
-                if attr_name.startswith("_"):
-                    continue
-                attr = getattr(module, attr_name)
-                if callable(attr) and hasattr(attr, "__module__"):
-                    if attr.__module__ == module_path:
-                        logger.info(
-                            f"tool_factory_002: Loaded function \033[36m{attr_name}\033[0m from \033[36m{module_path}\033[0m"
-                        )
-                        return attr
-
+            if hasattr(module, module_name):
+                func = getattr(module, module_name)
+                if callable(func):
+                    logger.info(
+                        f"tool_factory_002: Loaded function \033[36m{module_name}\033[0m from \033[36m{module_path}\033[0m"
+                    )
+                    return func
             logger.warning(
-                f"tool_factory_warning_001: No callable found in module \033[33m{module_path}\033[0m"
+                f"tool_factory_warning_001: Function \033[33m{module_name}\033[0m not found in module"
             )
             return None
-
         except Exception as e:
             logger.error(
                 f"tool_factory_error_002: Failed to import \033[31m{module_path}\033[0m: {e}"
@@ -60,14 +51,12 @@ class ToolFactory:
             )
             return ["smarthome"]
 
-        # Default: all groups except smarthome
+        # Default: all groups including smarthome
         all_groups = list(self.tools_config.keys())
-        default_groups = [g for g in all_groups if g != "smarthome"]
-
         logger.info(
-            f"tool_factory_004: Response format \033[36m{response_format}\033[0m -> using groups: \033[33m{default_groups}\033[0m"
+            f"tool_factory_004: Response format \033[36m{response_format}\033[0m -> using groups: \033[33m{all_groups}\033[0m"
         )
-        return default_groups
+        return all_groups
 
     def _get_provider_for_model(self, model: str) -> str:
         """Get provider name for a given model."""

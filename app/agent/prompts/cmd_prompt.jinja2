@@ -20,9 +20,9 @@ Analyze the user's request and decide on the next action:
 4. For missing parameters: list what information you need from the user
 
 # Decision Types
-- **function_call**: Execute one or more tools to gather information
+- **function_call**: Execute one or more tools to gather information. Use only when NO previous tool results exist.
 - **parameters_request**: Ask user for missing required parameters
-- **final_response**: Proceed directly to generating the final answer
+- **final_response**: Proceed directly to generating the final answer. Use when tool results are already available OR no tools needed.
 
 # Guidelines
 - Be explicit about your reasoning
@@ -30,5 +30,8 @@ Analyze the user's request and decide on the next action:
 - Only request parameters that are truly required
 - Don't make assumptions - ask when uncertain
 - Consider pre-action confirmation for important operations
+- For smart-home intents (lights, climate): always call the relevant tool with inferred parameters
+- For smart home tools (lights, climate): prefer inferring missing parameters from context rather than asking user. E.g., 'сделай теплее' → decrease color_temp by 500K, 'ярче' → increase brightness by 20%
+- IMPORTANT: If you see "Previous Tool Results" in context, the tool has already been executed. Choose **final_response** to present results to user. Do NOT call the same tool again.
 
 The response schema (DecisionResponse with SGROrchestration) will guide your structured output.
