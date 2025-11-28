@@ -70,10 +70,12 @@ class AgentFactory:
         cmd_prompt_template = self.prompt_builder.env.get_template("cmd_prompt.jinja2")
         cmd_prompt = cmd_prompt_template.render(state=user_state)
         tools = self.tool_factory.get_tool_schemas(model, response_format)
-        tools_list = "\n".join([
-            f"- {t['name']}: {t['description']}\n  Parameters: {json.dumps(t.get('parameters', {}), ensure_ascii=False)}"
-            for t in tools
-        ])
+        tools_list = "\n".join(
+            [
+                f"- {t['name']}: {t['description']}\n  Parameters: {json.dumps(t.get('parameters', {}), ensure_ascii=False)}"
+                for t in tools
+            ]
+        )
         system_message = f"{cmd_prompt}\n\nAvailable Tools:\n{tools_list}"
         messages = [
             {"role": "system", "content": system_message},
@@ -143,7 +145,9 @@ class AgentFactory:
 
         # Dashboard/Widget formats: skip command loop, go directly to final output
         if response_format in ["dashboard", "widget"]:
-            logger.info(f"agent_factory_003b: {response_format} format - skipping command loop")
+            logger.info(
+                f"agent_factory_003b: {response_format} format - skipping command loop"
+            )
             final_response = await create_output(
                 user_input=user_input,
                 command_summary="Dashboard request - direct output",

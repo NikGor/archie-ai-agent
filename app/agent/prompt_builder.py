@@ -57,7 +57,14 @@ class PromptBuilder:
         """Build format-specific instructions."""
         format_aliases = {"voice": "plain"}
         actual_format = format_aliases.get(response_format, response_format)
-        if actual_format in ["plain", "ui_answer", "level2_answer", "level3_answer", "dashboard", "widget"]:
+        if actual_format in [
+            "plain",
+            "ui_answer",
+            "level2_answer",
+            "level3_answer",
+            "dashboard",
+            "widget",
+        ]:
             format_template_name = f"format_prompts/format_{actual_format}.jinja2"
         else:
             format_template_name = "format_prompts/format_formatted_text.jinja2"
