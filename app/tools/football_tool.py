@@ -58,14 +58,18 @@ async def football_tool(
     logger.info(f"football_003: Built query: \033[36m{query}\033[0m")
     search_result = await google_search_tool(query)
     if not search_result.get("success"):
-        logger.error(f"football_error_001: Search failed: \033[31m{search_result.get('message')}\033[0m")
+        logger.error(
+            f"football_error_001: Search failed: \033[31m{search_result.get('message')}\033[0m"
+        )
         return {
             "success": False,
             "message": search_result.get("message", "Search failed"),
             "action": action,
             "query": query,
         }
-    logger.info(f"football_004: Search completed, grounded: \033[33m{search_result.get('grounded')}\033[0m")
+    logger.info(
+        f"football_004: Search completed, grounded: \033[33m{search_result.get('grounded')}\033[0m"
+    )
     return {
         "success": True,
         "action": action,
