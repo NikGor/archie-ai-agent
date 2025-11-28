@@ -27,15 +27,19 @@ LightDeviceId = Literal["light_001", "light_002", "light_003"]
 
 class AssistantButton(BaseModel):
     """Button that triggers assistant request."""
+
     text: str = Field(description="Button label text")
     style: str = Field(description="Button style: 'primary' or 'secondary'")
     icon: str = Field(description="Lucide icon name (e.g., 'power', 'sun', 'moon')")
     type: str = Field(default="assistant_button")
-    assistant_request: str = Field(description="Request to send to assistant when clicked")
+    assistant_request: str = Field(
+        description="Request to send to assistant when clicked"
+    )
 
 
 class QuickActionsResponse(BaseModel):
     """Response with two quick action buttons."""
+
     button_1: AssistantButton
     button_2: AssistantButton
 
@@ -46,7 +50,9 @@ def generate_quick_actions(
     current_state: dict,
 ) -> list[dict]:
     """Generate contextual quick action buttons using LLM."""
-    logger.info(f"light_control_tool_004: Generating quick actions for \033[36m{device_name}\033[0m")
+    logger.info(
+        f"light_control_tool_004: Generating quick actions for \033[36m{device_name}\033[0m"
+    )
     system_prompt = """
 You are a smart home assistant. Generate 2 contextual follow-up actions based on the user's light control request.
 Each button should be a natural next step the user might want to take.
@@ -80,13 +86,27 @@ Generate 2 follow-up action buttons.
             response_format=QuickActionsResponse,
         )
         result = response.choices[0].message.parsed
-        logger.info(f"light_control_tool_005: Generated buttons: \033[35m{result.button_1.text}\033[0m, \033[35m{result.button_2.text}\033[0m")
+        logger.info(
+            f"light_control_tool_005: Generated buttons: \033[35m{result.button_1.text}\033[0m, \033[35m{result.button_2.text}\033[0m"
+        )
         return [result.button_1.model_dump(), result.button_2.model_dump()]
     except Exception as e:
         logger.error(f"light_control_tool_error_003: LLM error: \033[31m{e}\033[0m")
         return [
-            {"text": "Выключить", "style": "primary", "icon": "power-off", "type": "assistant_button", "assistant_request": "Выключи свет"},
-            {"text": "Все лампы", "style": "secondary", "icon": "lightbulb", "type": "assistant_button", "assistant_request": "Покажи все лампы"},
+            {
+                "text": "Выключить",
+                "style": "primary",
+                "icon": "power-off",
+                "type": "assistant_button",
+                "assistant_request": "Выключи свет",
+            },
+            {
+                "text": "Все лампы",
+                "style": "secondary",
+                "icon": "lightbulb",
+                "type": "assistant_button",
+                "assistant_request": "Покажи все лампы",
+            },
         ]
 
 
@@ -154,8 +174,12 @@ async def light_control_tool(
         on_count = sum(1 for d in devices if d.get("is_on", False))
         total_count = len(devices)
         user_data["smarthome_light"]["on_count"] = on_count
-        user_data["smarthome_light"]["subtitle"] = f"{on_count} из {total_count} включены"
-        updated_device = next((d for d in devices if d.get("device_id") == device_id), {})
+        user_data["smarthome_light"][
+            "subtitle"
+        ] = f"{on_count} из {total_count} включены"
+        updated_device = next(
+            (d for d in devices if d.get("device_id") == device_id), {}
+        )
         quick_actions = generate_quick_actions(
             user_input=user_input,
             device_name=updated_device.get("name", device_id),
