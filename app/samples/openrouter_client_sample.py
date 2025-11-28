@@ -19,6 +19,7 @@ TEST_MODELS = [
 
 class SimpleResponse(BaseModel):
     """Simple structured response."""
+
     answer: str = Field(description="Answer text")
     confidence: float = Field(description="Confidence score 0-1")
 
@@ -98,7 +99,10 @@ async def test_function_calling(client: OpenRouterClient, model: str) -> bool:
     """Test 3: Function calling without structured output."""
     print(f"\n--- Function calling: {model} ---")
     messages = [
-        {"role": "system", "content": "You are a helpful assistant with access to tools. Use them when needed."},
+        {
+            "role": "system",
+            "content": "You are a helpful assistant with access to tools. Use them when needed.",
+        },
         {"role": "user", "content": "What's the weather in Berlin?"},
     ]
     # Parse tools to OpenRouter format (dict schemas)
@@ -115,7 +119,9 @@ async def test_function_calling(client: OpenRouterClient, model: str) -> bool:
                 print(f"✅ Tool call: {tc.function.name}({tc.function.arguments})")
             return True
         else:
-            print(f"⚠️ No tool call, response: {message.content[:100] if message.content else 'None'}...")
+            print(
+                f"⚠️ No tool call, response: {message.content[:100] if message.content else 'None'}..."
+            )
             return True  # Not a failure, model chose not to use tools
     except Exception as e:
         print(f"❌ Error: {e}")
@@ -129,7 +135,7 @@ async def run_all_tests():
     for model in TEST_MODELS:
         print(f"\n{'='*60}")
         print(f"TESTING: {model}")
-        print("="*60)
+        print("=" * 60)
         results[model] = {
             "simple": await test_simple_text(client, model),
             "structured": await test_structured_output(client, model),
@@ -138,7 +144,7 @@ async def run_all_tests():
     # Summary
     print(f"\n{'='*60}")
     print("SUMMARY")
-    print("="*60)
+    print("=" * 60)
     for model, tests in results.items():
         status = "✅" if all(tests.values()) else "⚠️"
         details = " | ".join(f"{k}:{'✅' if v else '❌'}" for k, v in tests.items())
@@ -150,7 +156,7 @@ async def test_single(model: str):
     client = OpenRouterClient()
     print(f"\n{'='*60}")
     print(f"TESTING: {model}")
-    print("="*60)
+    print("=" * 60)
     await test_simple_text(client, model)
     await test_structured_output(client, model)
     await test_function_calling(client, model)
@@ -158,6 +164,7 @@ async def test_single(model: str):
 
 def main():
     import sys
+
     if len(sys.argv) > 1:
         model = sys.argv[1]
         asyncio.run(test_single(model))
