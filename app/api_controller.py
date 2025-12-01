@@ -14,16 +14,13 @@ async def handle_chat(user_request: ChatRequest) -> ChatMessage:
     logger.info("=== STEP 3: AI Processing ===")
     logger.info(
         f"api_controller_001: Processing request with conversation: \033[36m{user_request.conversation_id or 'NONE'}\033[0m, "
-        f"Input len: \033[33m{len(user_request.input)}\033[0m"
+        f"Input len: \033[33m{len(user_request.input)}\033[0m, "
+        f"demo_mode: \033[35m{user_request.demo_mode}\033[0m"
     )
-
-    # Prepare messages for AI agent
     current_messages = [{"role": "user", "content": user_request.input}]
     command_model = user_request.command_model or "gpt-4.1"
     final_output_model = user_request.final_output_model or "gpt-4.1"
-
-    # Generate AI response
-    agent_factory = AgentFactory()
+    agent_factory = AgentFactory(demo_mode=user_request.demo_mode)
     agent_response = await agent_factory.arun(
         messages=current_messages,
         command_model=command_model,

@@ -118,6 +118,7 @@ async def light_control_tool(
     color_temp: int | None = None,
     rgb_color: str | None = None,
     user_name: str = "Niko",
+    demo_mode: bool = False,
 ) -> dict[str, str]:
     """
     Control smart home lights. Use this tool to turn lights on/off, adjust brightness, change color temperature or RGB color.
@@ -134,12 +135,27 @@ async def light_control_tool(
     Returns:
         dict[str, str]: Status and updated device state
     """
-    logger.info(f"light_control_tool_001: Controlling lamp \033[36m{device_id}\033[0m")
+    logger.info(
+        f"light_control_tool_001: Controlling lamp \033[36m{device_id}\033[0m, "
+        f"demo_mode: \033[35m{demo_mode}\033[0m"
+    )
     logger.info(f"light_control_tool_001a: User input: \033[35m{user_input}\033[0m")
     logger.info(
         f"light_control_tool_002: is_on: \033[33m{is_on}\033[0m, brightness: \033[33m{brightness}\033[0m, "
         f"color_temp: \033[33m{color_temp}\033[0m, rgb: \033[33m{rgb_color}\033[0m"
     )
+    if demo_mode:
+        return {
+            "status": "demo",
+            "message": f"[DEMO] Light {device_id} would be controlled",
+            "device_id": device_id,
+            "applied_settings": {
+                "is_on": is_on,
+                "brightness": brightness,
+                "color_temp": color_temp,
+                "rgb_color": rgb_color,
+            },
+        }
     redis_key = f"user_state:name:{user_name}"
     try:
         user_data_json = redis_client.get(redis_key)

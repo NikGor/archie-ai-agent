@@ -26,12 +26,13 @@ class AgentFactory:
         prompt_builder: PromptBuilder | None = None,
         tool_factory: ToolFactory | None = None,
         state_service: StateService | None = None,
+        demo_mode: bool = False,
     ):
         self.openai_client = OpenAIClient()
         self.openrouter_client = OpenRouterClient()
         self.gemini_client = GeminiClient()  # Fallback
         self.prompt_builder = prompt_builder or PromptBuilder()
-        self.tool_factory = tool_factory or ToolFactory()
+        self.tool_factory = tool_factory or ToolFactory(demo_mode=demo_mode)
         self.state_service = state_service or StateService()
         self.model_providers = MODEL_PROVIDERS
         self.clients = {
@@ -39,8 +40,9 @@ class AgentFactory:
             "openrouter": self.openrouter_client,
             "gemini": self.gemini_client,  # Fallback
         }
-
-        logger.info("agent_factory_001: Initialized AgentFactory")
+        logger.info(
+            f"agent_factory_001: Initialized AgentFactory, demo_mode: \033[35m{demo_mode}\033[0m"
+        )
 
     def _get_provider_for_model(self, model: str) -> str:
         """Returns 'openai', 'openrouter', or 'gemini' based on model name."""

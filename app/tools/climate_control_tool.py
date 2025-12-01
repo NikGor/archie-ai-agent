@@ -11,6 +11,7 @@ async def climate_control_tool(
     action: str,
     temperature: float | None = None,
     mode: str | None = None,
+    demo_mode: bool = False,
 ) -> dict[str, str]:
     """
     Control climate devices in the home.
@@ -25,12 +26,23 @@ async def climate_control_tool(
         dict[str, str]: Dictionary with status and message
     """
     logger.info(
-        f"climate_control_tool_001: Controlling device \033[36m{device_id}\033[0m"
+        f"climate_control_tool_001: Controlling device \033[36m{device_id}\033[0m, "
+        f"demo_mode: \033[35m{demo_mode}\033[0m"
     )
     logger.info(
         f"climate_control_tool_002: Action: \033[33m{action}\033[0m, temp: \033[33m{temperature}\033[0m, mode: \033[33m{mode}\033[0m"
     )
-
+    if demo_mode:
+        return {
+            "status": "demo",
+            "message": f"[DEMO] Climate device {device_id} would be controlled",
+            "device_id": device_id,
+            "applied_settings": {
+                "action": action,
+                "temperature": temperature,
+                "mode": mode,
+            },
+        }
     return {
         "status": "success",
         "message": f"Climate device {device_id} controlled successfully",

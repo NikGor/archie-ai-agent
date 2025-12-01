@@ -1,5 +1,6 @@
 """Factory for managing and executing tools."""
 
+import inspect
 import logging
 import importlib
 from typing import Any, Callable
@@ -13,12 +14,14 @@ logger = logging.getLogger(__name__)
 class ToolFactory:
     """Factory for registering and executing agent tools."""
 
-    def __init__(self):
+    def __init__(self, demo_mode: bool = False):
         self.tools: dict[str, Callable] = {}
         self.tools_config = TOOLS_CONFIG
         self.model_providers = MODEL_PROVIDERS
+        self.demo_mode = demo_mode
         logger.info(
-            f"tool_factory_001: Initialized with \033[33m{len(self.tools_config)}\033[0m tool groups"
+            f"tool_factory_001: Initialized with \033[33m{len(self.tools_config)}\033[0m tool groups, "
+            f"demo_mode: \033[35m{demo_mode}\033[0m"
         )
 
     def _load_tool_function(self, module_path: str) -> Callable | None:
@@ -133,22 +136,24 @@ class ToolFactory:
         logger.info(
             f"tool_factory_008: Executing \033[36m{tool_name}\033[0m with args: {tool_arguments}"
         )
-
         if tool_name not in self.tools:
             logger.error(
                 f"tool_factory_error_004: Unknown tool: \033[31m{tool_name}\033[0m"
             )
             return {"error": f"Unknown tool: {tool_name}"}
-
         try:
             tool_func = self.tools[tool_name]
+            sig = inspect.signature(tool_func)
+            if "demo_mode" in sig.parameters:
+                tool_arguments["demo_mode"] = self.demo_mode
+                logger.info(
+                    f"tool_factory_008a: Injected demo_mode=\033[35m{self.demo_mode}\033[0m"
+                )
             result = await tool_func(**tool_arguments)
-
             logger.info(
                 f"tool_factory_009: Tool \033[36m{tool_name}\033[0m executed successfully"
             )
             return result
-
         except Exception as e:
             logger.error(
                 f"tool_factory_error_005: Tool execution failed: \033[31m{e}\033[0m"
