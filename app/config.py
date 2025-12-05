@@ -64,7 +64,6 @@ TOOLS_CONFIG = {
     },
     "specialized": {
         "football_tool": "app.tools.football_tool",
-        "weather_tool": "app.tools.weather_tool",
     },
     "productivity": {
         "task_tool": "app.tools.task_tool",
