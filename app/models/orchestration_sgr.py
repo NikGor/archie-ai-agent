@@ -15,24 +15,6 @@ ToolName = Literal[
 ]
 
 
-class RoutingDecision(BaseModel):
-    intent: Literal[
-        "answer_general",
-        "light_control",
-        "climate_control",
-        "music_control",
-        "web_search",
-        "fast_image_generation",
-        "profi_image_generation",
-        "football",
-        "task_management",
-        "notes_management",
-        "events_management",
-        "document_search",
-    ] = Field(description="Chosen path for this turn")
-    reasoning: str = Field(description="Why this intent was chosen")
-
-
 class ActionType(BaseModel):
     type: Literal["function_call", "parameters_request", "final_response"]
     reasoning: str = Field(description="Why this action type was chosen")
@@ -61,7 +43,6 @@ class ToolCallRequest(BaseModel):
 class SGROrchestration(BaseModel):
     """SGR trace for orchestration and decision-making phase"""
 
-    routing: RoutingDecision
     action: ActionType
     tool_calls: List[ToolCallRequest] = Field(
         description="Tools to execute (can be parallel)",

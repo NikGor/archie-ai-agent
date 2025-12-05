@@ -209,20 +209,16 @@ class AgentFactory:
                     StatusUpdate(
                         step="command",
                         status="completed",
-                        message=f"Intent: {decision.sgr.routing.intent}, action: {decision.sgr.action.type}",
+                        message=f"Action: {decision.sgr.action.type}",
                     )
                 )
             logger.info(
                 f"agent_factory_004: Action type: \033[36m{decision.sgr.action.type}\033[0m"
             )
-            logger.info(
-                f"agent_factory_005: Intent: \033[36m{decision.sgr.routing.intent}\033[0m"
-            )
             command_history.append(
                 {
                     "iteration": iteration,
                     "action_type": decision.sgr.action.type,
-                    "intent": decision.sgr.routing.intent,
                     "reasoning": decision.sgr.reasoning,
                 }
             )
