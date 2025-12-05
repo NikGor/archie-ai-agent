@@ -1,15 +1,22 @@
 """API controller for handling chat requests."""
 
 import logging
+from collections.abc import Callable, Awaitable
 from archie_shared.chat.models import ChatMessage, ChatRequest
 from .agent.agent_factory import AgentFactory
+from .models.ws_models import StatusUpdate
 from .utils.general_utils import generate_message_id
 
 
 logger = logging.getLogger(__name__)
 
+StatusCallback = Callable[[StatusUpdate], Awaitable[None]] | None
 
-async def handle_chat(user_request: ChatRequest) -> ChatMessage:
+
+async def handle_chat(
+    user_request: ChatRequest,
+    on_status: StatusCallback = None,
+) -> ChatMessage:
     """Handle chat request by processing through AI agent only."""
     logger.info("=== STEP 3: AI Processing ===")
     logger.info(
@@ -28,6 +35,7 @@ async def handle_chat(user_request: ChatRequest) -> ChatMessage:
         response_format=user_request.response_format,
         previous_response_id=user_request.previous_message_id,
         user_name=user_request.user_name,
+        on_status=on_status,
     )
 
     # Create response message

@@ -12,6 +12,7 @@ async def task_tool(
     due_date: str | None = None,
     priority: str | None = None,
     status: str | None = None,
+    demo_mode: bool = False,
 ) -> dict[str, Any]:
     """
     Manages tasks and to-do lists with backend integration.

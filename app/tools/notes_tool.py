@@ -11,6 +11,7 @@ async def notes_tool(
     content: str | None = None,
     tags: list[str] | None = None,
     search_query: str | None = None,
+    demo_mode: bool = False,
 ) -> dict[str, Any]:
     """
     Manages notes and quick memos with backend integration.

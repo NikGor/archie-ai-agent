@@ -14,6 +14,7 @@ async def events_tool(
     description: str | None = None,
     attendees: list[str] | None = None,
     date: str | None = None,
+    demo_mode: bool = False,
 ) -> dict[str, Any]:
     """
     Manages calendar events and appointments with backend integration.

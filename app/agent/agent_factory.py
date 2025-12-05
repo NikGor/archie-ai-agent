@@ -1,10 +1,12 @@
 import json
 import logging
+from collections.abc import Callable, Awaitable
 from typing import Any
 from dotenv import load_dotenv
 from ..config import MODEL_PROVIDERS, MAX_COMMAND_ITERATIONS
 from ..models.orchestration_sgr import DecisionResponse
 from ..models.output_models import AgentResponse
+from ..models.ws_models import StatusUpdate
 from ..tools.tool_factory import ToolFactory
 from ..tools.create_output_tool import create_output
 from ..utils.llm_parser import parse_llm_response
@@ -18,6 +20,8 @@ from ..backend.state_service import StateService
 
 load_dotenv()
 logger = logging.getLogger(__name__)
+
+StatusCallback = Callable[[StatusUpdate], Awaitable[None]] | None
 
 
 class AgentFactory:
@@ -119,6 +123,7 @@ class AgentFactory:
         response_format: str = "plain",
         previous_response_id: str | None = None,
         user_name: str | None = None,
+        on_status: StatusCallback = None,
     ) -> AgentResponse:
         """
         Main entry point: Create an agent response through 3-stage flow.
@@ -143,6 +148,14 @@ class AgentFactory:
         persona_key = user_state.get("persona", "business")
         logger.info(f"agent_factory_002: Persona: \033[35m{persona_key}\033[0m")
         logger.info(f"agent_factory_003: Format: \033[36m{response_format}\033[0m")
+        if on_status:
+            await on_status(
+                StatusUpdate(
+                    step="init",
+                    status="completed",
+                    message=f"Persona: {persona_key}, format: {response_format}, model: {command_model}",
+                )
+            )
         user_input = messages[-1]["content"] if messages else ""
 
         # Dashboard/Widget formats: skip command loop, go directly to final output
@@ -172,6 +185,14 @@ class AgentFactory:
             logger.info(
                 f"agent_factory_003a: Command iteration \033[33m{iteration}\033[0m"
             )
+            if on_status:
+                await on_status(
+                    StatusUpdate(
+                        step="command",
+                        status="started",
+                        message=f"Analyzing request (iteration {iteration})",
+                    )
+                )
 
             # STAGE 1: Command - Analyze request and decide action
             decision = await self._make_command_call(
@@ -183,6 +204,14 @@ class AgentFactory:
                 previous_results=tool_results if tool_results else None,
                 previous_response_id=previous_response_id,
             )
+            if on_status:
+                await on_status(
+                    StatusUpdate(
+                        step="command",
+                        status="completed",
+                        message=f"Intent: {decision.sgr.routing.intent}, action: {decision.sgr.action.type}",
+                    )
+                )
             logger.info(
                 f"agent_factory_004: Action type: \033[36m{decision.sgr.action.type}\033[0m"
             )
@@ -209,6 +238,7 @@ class AgentFactory:
                 new_results = await execute_tool_calls(
                     tool_calls=decision.sgr.tool_calls,
                     tool_factory=self.tool_factory,
+                    on_status=on_status,
                 )
                 tool_results.extend(new_results)
                 logger.info(
@@ -231,6 +261,14 @@ class AgentFactory:
         )
         command_summary += f"\n\nTotal tools executed: {len(tool_results)}"
         logger.info("agent_factory_007: Creating final output")
+        if on_status:
+            await on_status(
+                StatusUpdate(
+                    step="output",
+                    status="started",
+                    message=f"Generating {response_format} response with {final_output_model}",
+                )
+            )
         final_response = await create_output(
             user_input=user_input,
             command_summary=command_summary,
@@ -242,5 +280,13 @@ class AgentFactory:
                 previous_response_id if output_provider == "openai" else None
             ),
         )
+        if on_status:
+            await on_status(
+                StatusUpdate(
+                    step="output",
+                    status="completed",
+                    message="Response ready",
+                )
+            )
         logger.info("=== AgentFactory: Response Created ===")
         return final_response

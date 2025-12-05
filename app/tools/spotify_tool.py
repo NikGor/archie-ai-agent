@@ -82,6 +82,7 @@ async def spotify_tool(
     action: str,
     query: str | None = None,
     track_id: str | None = None,
+    demo_mode: bool = False,
 ) -> dict[str, Any]:
     """
     Spotify DJ Agent entry point.
@@ -96,7 +97,10 @@ async def spotify_tool(
         Dict with action result or error information
     """
     # TODO [B5]: Replace this stub with DJ Agent call
-    logger.info(f"spotify_001: Action requested: \033[36m{action}\033[0m")
+    logger.info(
+        f"spotify_001: Action requested: \033[36m{action}\033[0m, "
+        f"demo_mode: \033[35m{demo_mode}\033[0m"
+    )
 
     result = {"success": True, "action": action}
 
