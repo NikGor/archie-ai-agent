@@ -54,10 +54,12 @@ async def ws_chat(websocket: WebSocket):
             await websocket.send_json({"type": "status", **status.model_dump()})
 
         result = await handle_chat(request, on_status=send_status)
-        await websocket.send_json({
-            "type": "final",
-            "data": result.model_dump(mode="json"),
-        })
+        await websocket.send_json(
+            {
+                "type": "final",
+                "data": result.model_dump(mode="json"),
+            }
+        )
         logger.info("ws_chat_003: Final response sent")
     except WebSocketDisconnect:
         logger.info("ws_chat_004: Client disconnected")
