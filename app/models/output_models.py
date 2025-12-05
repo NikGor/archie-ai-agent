@@ -1,58 +1,39 @@
 """Models for final response generation phase (Stage 2)."""
 
-from typing import Literal
+from typing import Union
 from pydantic import BaseModel, Field
 from archie_shared.chat.models import LllmTrace, Content
+from archie_shared.ui.models import (
+    Level2Answer,
+    Level3Answer,
+    UIAnswer,
+    Dashboard,
+    Widget,
+    LightWidget,
+    ClimateWidget,
+    FootballWidget,
+    MusicWidget,
+    DocumentsWidget,
+)
 
 
-class SourceRef(BaseModel):
-    id: int = Field(description="Local incremental id for this session (1..N)")
-    url: str = Field(description="Source URL")
-    title: str | None = Field(
+class FactCheck(BaseModel):
+    statement: str = Field(description="The factual statement in your answer to verify")
+    is_correct: bool = Field(
+        description="Whether the statement is confirmed or hallucinated"
+    )
+    evidence: str | None = Field(
         default=None,
-        description="Page/article title",
-    )
-    snippet: str | None = Field(
-        default=None,
-        description="Short relevant excerpt",
-    )
-
-
-class EvidenceItem(BaseModel):
-    claim: str = Field(
-        description="Concrete factual claim used in the response/metadata"
-    )
-    support: Literal["supported", "contradicted", "uncertain"] = Field(
-        description="Does the cited evidence support the claim?"
-    )
-    source_ids: list[int] = Field(
-        description="IDs from sources[] backing this claim (empty if uncertain)"
-    )
-
-
-class VerificationStatus(BaseModel):
-    level: Literal["verified", "partially_verified", "unverified"] = Field(
-        description="Overall verification level for factual content"
-    )
-    confidence_pct: int = Field(
-        ge=0,
-        le=100,
-        description="Calibrated confidence 0..100",
+        description="Evidence supporting the correctness of the statement (if available)",
     )
 
 
 class SGROutput(BaseModel):
     """SGR trace for final response generation phase"""
 
-    evidence: list[EvidenceItem] = Field(
-        default_factory=list,
-        description="Claims and how they are supported by sources",
+    fact_checks: list[FactCheck] = Field(
+        description="List of factual statements verified during response generation"
     )
-    sources: list[SourceRef] = Field(
-        default_factory=list,
-        description="Deduplicated list of sources used in response",
-    )
-    verification: VerificationStatus
     ui_reasoning: str = Field(
         description="Reasoning behind chosen UI format and components (cards, buttons, tables, etc.)"
     )
@@ -72,9 +53,7 @@ class AgentResponse(BaseModel):
         default=None,
         description="Main content response from the AI agent in the specified response format.",
     )
-    sgr: SGROutput = Field(
-        description="Output reasoning trace for this final response"
-    )
+    sgr: SGROutput = Field(description="Output reasoning trace for this final response")
     llm_trace: LllmTrace | None = Field(
         default=None,
         description="LLM usage tracking information (filled by parser, not LLM)",
@@ -83,3 +62,73 @@ class AgentResponse(BaseModel):
         default=None,
         description="OpenAI response ID for conversation continuity (filled by parser)",
     )
+
+
+# Format-specific response models for LLM calls
+# These are lightweight models sent to LLM instead of full Content schema
+
+
+class PlainResponse(BaseModel):
+    """LLM response model for plain text format"""
+
+    text: str = Field(description="Plain text response without formatting")
+    sgr: SGROutput = Field(description="Output reasoning trace")
+
+
+class Level2Response(BaseModel):
+    """LLM response model for level2_answer format"""
+
+    level2_answer: Level2Answer = Field(description="Text with quick action buttons")
+    sgr: SGROutput = Field(description="Output reasoning trace")
+
+
+class Level3Response(BaseModel):
+    """LLM response model for level3_answer format"""
+
+    level3_answer: Level3Answer = Field(
+        description="Text with widgets and quick actions"
+    )
+    sgr: SGROutput = Field(description="Output reasoning trace")
+
+
+class UIResponse(BaseModel):
+    """LLM response model for ui_answer format"""
+
+    ui_answer: UIAnswer = Field(description="Full UI elements content")
+    sgr: SGROutput = Field(description="Output reasoning trace")
+
+
+class DashboardResponse(BaseModel):
+    """LLM response model for dashboard format"""
+
+    dashboard: Dashboard = Field(description="Dashboard with tiles and quick actions")
+    sgr: SGROutput = Field(description="Output reasoning trace")
+
+
+WidgetType = Union[
+    Widget, LightWidget, ClimateWidget, FootballWidget, MusicWidget, DocumentsWidget
+]
+
+
+class WidgetResponse(BaseModel):
+    """LLM response model for widget format"""
+
+    widget: WidgetType = Field(description="Standalone widget content")
+    sgr: SGROutput = Field(description="Output reasoning trace")
+
+
+# Mapping from response_format to LLM response model
+FORMAT_TO_MODEL: dict[str, type[BaseModel]] = {
+    "plain": PlainResponse,
+    "voice": PlainResponse,
+    "level2_answer": Level2Response,
+    "level3_answer": Level3Response,
+    "ui_answer": UIResponse,
+    "dashboard": DashboardResponse,
+    "widget": WidgetResponse,
+}
+
+
+def get_response_model_for_format(response_format: str) -> type[BaseModel]:
+    """Get the appropriate LLM response model for the given format."""
+    return FORMAT_TO_MODEL.get(response_format, PlainResponse)

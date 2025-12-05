@@ -101,15 +101,12 @@ class AgentResponse(BaseModel):
 
     content: Content | None = Field(
         default=None,
-        description="Main content response from the AI agent in the specified response format."
+        description="Main content response from the AI agent in the specified response format.",
     )
     sgr: SGRTrace = Field(
         description="Mandatory SGR reasoning trace for this turn (internal; not to be shown to user as-is)"
     )
-    llm_trace: LllmTrace = Field(
-        description="LLM usage tracking information"
-    )
+    llm_trace: LllmTrace = Field(description="LLM usage tracking information")
     response_id: str | None = Field(
-        default=None,
-        description="OpenAI response ID for conversation continuity"
+        default=None, description="OpenAI response ID for conversation continuity"
     )

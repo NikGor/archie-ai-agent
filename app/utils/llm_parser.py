@@ -2,7 +2,12 @@ import json
 import logging
 from typing import Any
 from pydantic import BaseModel
-from archie_shared.chat.models import InputTokensDetails, LllmTrace, OutputTokensDetails
+from archie_shared.chat.models import (
+    Content,
+    InputTokensDetails,
+    LllmTrace,
+    OutputTokensDetails,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -324,3 +329,64 @@ def parse_llm_response(
             f"llm_parser_error_001: Unknown provider: \033[31m{provider}\033[0m"
         )
         raise ValueError(f"Unsupported provider: {provider}")
+
+
+def build_content_from_parsed(
+    parsed_content: BaseModel,
+    response_format: str,
+) -> Content:
+    """
+    Build Content object from format-specific parsed response.
+
+    Maps the parsed LLM response to the appropriate Content field
+    based on the response_format.
+
+    Args:
+        parsed_content: Parsed response model (PlainResponse, Level2Response, etc.)
+        response_format: Target format name
+
+    Returns:
+        Content: Unified content object with appropriate field populated
+    """
+    format_aliases = {"voice": "plain"}
+    actual_format = format_aliases.get(response_format, response_format)
+
+    if actual_format == "plain":
+        return Content(
+            content_format="plain",
+            text=parsed_content.text,
+        )
+    elif actual_format == "level2_answer":
+        return Content(
+            content_format="level2_answer",
+            level2_answer=parsed_content.level2_answer,
+        )
+    elif actual_format == "level3_answer":
+        return Content(
+            content_format="level3_answer",
+            level3_answer=parsed_content.level3_answer,
+        )
+    elif actual_format == "ui_answer":
+        return Content(
+            content_format="ui_answer",
+            ui_answer=parsed_content.ui_answer,
+        )
+    elif actual_format == "dashboard":
+        return Content(
+            content_format="dashboard",
+            dashboard=parsed_content.dashboard,
+        )
+    elif actual_format == "widget":
+        return Content(
+            content_format="widget",
+            widget=parsed_content.widget,
+        )
+    else:
+        logger.warning(
+            f"llm_parser_warning_002: Unknown format \033[33m{response_format}\033[0m, falling back to plain"
+        )
+        text = getattr(parsed_content, "text", str(parsed_content))
+        return Content(
+            content_format="plain",
+            text=text,
+        )

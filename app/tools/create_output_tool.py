@@ -5,8 +5,9 @@ from ..backend.openrouter_client import OpenRouterClient
 from ..backend.gemini_client import GeminiClient
 from ..agent.prompt_builder import PromptBuilder
 from ..config import MODEL_PROVIDERS
-from ..models.output_models import AgentResponse
-from ..utils.llm_parser import parse_llm_response
+from ..models.output_models import AgentResponse, get_response_model_for_format
+from ..utils.llm_parser import parse_llm_response, build_content_from_parsed
+from archie_shared.chat.models import Content
 
 
 logger = logging.getLogger(__name__)
@@ -109,21 +110,31 @@ Create a complete, well-formatted response in the specified format."""
         f"create_output_004: Calling LLM with \033[33m{len(messages)}\033[0m messages"
     )
 
+    response_model = get_response_model_for_format(response_format)
+    logger.info(
+        f"create_output_004b: Using response model: \033[36m{response_model.__name__}\033[0m"
+    )
+
     raw_response = await client.create_completion(
         messages=messages,
         model=model,
-        response_format=AgentResponse,
+        response_format=response_model,
         previous_response_id=previous_response_id if provider == "openai" else None,
     )
 
     parsed = parse_llm_response(
         raw_response=raw_response,
         provider=provider,
-        expected_type=AgentResponse,
+        expected_type=response_model,
+    )
+
+    content = build_content_from_parsed(
+        parsed_content=parsed.parsed_content,
+        response_format=response_format,
     )
 
     result = AgentResponse(
-        content=parsed.parsed_content.content,
+        content=content,
         sgr=parsed.parsed_content.sgr,
         llm_trace=parsed.llm_trace,
         response_id=parsed.response_id,

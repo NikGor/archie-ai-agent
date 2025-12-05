@@ -1,16 +1,11 @@
 # Response Format: Level 2 Answer (Markdown + Quick Actions)
 
-CRITICAL: You must:
-1. Set `content.content_format` to "level2_answer"
-2. Fill `content.level2_answer` object (NOT `content.text`)
-3. Inside `level2_answer`, set `text.text` for main content and `quick_action_buttons` for buttons
+Fill the `level2_answer` object with:
+- `text.text`: Your markdown response
+- `quick_action_buttons`: 2-3 follow-up action buttons
 
 # Purpose
 Deliver informative responses with markdown formatting and contextual follow-up buttons.
-
-# Response Structure (inside `content.level2_answer`)
-1. **text.text**: Clear, well-formatted markdown response
-2. **quick_action_buttons**: 2-3 buttons for logical next steps
 
 # Text Guidelines
 - Use markdown for structure: headers, lists, bold, code blocks
