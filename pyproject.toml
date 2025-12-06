@@ -16,7 +16,7 @@ fastapi = "^0.115.0"
 uvicorn = "^0.31.1"
 httpx = "^0.28.0"
 pyyaml = "^6.0.2"
-archie-shared = {git = "https://github.com/NikGor/homeassistant.git", subdirectory = "archie-shared", tag = "v0.1.50"}
+archie-shared = {git = "https://github.com/NikGor/homeassistant.git", subdirectory = "archie-shared", tag = "v0.1.52"}
 grpcio = "^1.76.0"
 google-genai = "^1.50.1"
 redis = "^7.1.0"
