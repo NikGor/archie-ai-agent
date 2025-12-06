@@ -40,6 +40,7 @@ async def create_output(
     model: str = "gpt-4.1",
     state: dict | None = None,
     previous_response_id: str | None = None,
+    chat_history: str | None = None,
 ) -> AgentResponse:
     """
     Create final formatted output response.
@@ -55,6 +56,7 @@ async def create_output(
         model: LLM model to use
         state: User state context
         previous_response_id: Previous response ID for OpenAI conversation threading
+        chat_history: Chat history text for non-OpenAI providers
 
     Returns:
         AgentResponse: Final formatted response with SGROutput trace
@@ -105,6 +107,15 @@ Create a complete, well-formatted response in the specified format."""
         {"role": "system", "content": system_prompt_content},
         {"role": "user", "content": user_input},
     ]
+
+    if chat_history:
+        messages.insert(
+            1,
+            {"role": "system", "content": f"Chat History:\n{chat_history}"},
+        )
+        logger.info(
+            f"create_output_003b: Added chat_history to context (len: \033[33m{len(chat_history)}\033[0m)"
+        )
 
     logger.info(
         f"create_output_004: Calling LLM with \033[33m{len(messages)}\033[0m messages"

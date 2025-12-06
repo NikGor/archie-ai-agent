@@ -64,6 +64,7 @@ class AgentFactory:
         response_format: str,
         previous_results: list[dict[str, Any]] | None = None,
         previous_response_id: str | None = None,
+        chat_history: str | None = None,
     ) -> DecisionResponse:
         """
         Stage 1: Analyze request and decide action using cmd_prompt.
@@ -87,6 +88,14 @@ class AgentFactory:
             {"role": "system", "content": system_message},
             {"role": "user", "content": user_input},
         ]
+        if chat_history and provider != "openai":
+            messages.insert(
+                1,
+                {"role": "system", "content": f"Chat History:\n{chat_history}"},
+            )
+            logger.info(
+                f"agent_factory_008b: Added chat_history to context (len: \033[33m{len(chat_history)}\033[0m)"
+            )
         if previous_results:
             results_context = "\n\nPrevious Tool Results:\n"
             for result in previous_results:
@@ -122,6 +131,7 @@ class AgentFactory:
         final_output_model: str = "gpt-4.1",
         response_format: str = "plain",
         previous_response_id: str | None = None,
+        chat_history: str | None = None,
         user_name: str | None = None,
         on_status: StatusCallback = None,
     ) -> AgentResponse:
@@ -173,6 +183,7 @@ class AgentFactory:
                 previous_response_id=(
                     previous_response_id if output_provider == "openai" else None
                 ),
+                chat_history=chat_history if output_provider != "openai" else None,
             )
             logger.info("=== AgentFactory: Response Created ===")
             return final_response
@@ -203,6 +214,7 @@ class AgentFactory:
                 response_format=response_format,
                 previous_results=tool_results if tool_results else None,
                 previous_response_id=previous_response_id,
+                chat_history=chat_history,
             )
             if on_status:
                 await on_status(
@@ -275,6 +287,7 @@ class AgentFactory:
             previous_response_id=(
                 previous_response_id if output_provider == "openai" else None
             ),
+            chat_history=chat_history if output_provider != "openai" else None,
         )
         if on_status:
             await on_status(

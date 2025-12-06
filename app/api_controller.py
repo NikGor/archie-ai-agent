@@ -34,6 +34,7 @@ async def handle_chat(
         final_output_model=final_output_model,
         response_format=user_request.response_format,
         previous_response_id=user_request.previous_message_id,
+        chat_history=user_request.chat_history,
         user_name=user_request.user_name,
         on_status=on_status,
     )

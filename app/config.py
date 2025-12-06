@@ -23,14 +23,15 @@ MODEL_PROVIDERS = {
     "openrouter": [
         # Google Gemini - schema too complex for AgentResponse (400 Bad Request)
         # Works for DecisionResponse (command stage), but not for final output
-        # "google/gemini-2.5-pro",
-        # "google/gemini-2.5-flash",
-        # "google/gemini-2.5-flash-lite",
+        "google/gemini-2.5-pro",
+        "google/gemini-2.5-flash",
+        "google/gemini-2.5-flash-lite",
+        "google/gemini-3-pro-image-preview",
         # Anthropic Claude - doesn't support JSON schema via OpenRouter (returns <tool_call> tags)
-        # "anthropic/claude-opus-4.5",
-        # "anthropic/claude-sonnet-4.5",
-        # "anthropic/claude-sonnet-4",
-        # "anthropic/claude-haiku-4.5",
+        "anthropic/claude-opus-4.5",
+        "anthropic/claude-sonnet-4.5",
+        "anthropic/claude-sonnet-4",
+        "anthropic/claude-haiku-4.5",
         # xAI Grok - works well with structured outputs
         "x-ai/grok-4",
         "x-ai/grok-4-fast",

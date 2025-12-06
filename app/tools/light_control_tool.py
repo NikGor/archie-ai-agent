@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from enum import Enum
 import redis
 from openai import OpenAI
 from pydantic import BaseModel, Field
@@ -22,7 +23,20 @@ redis_client = redis.Redis(
 )
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-LightDeviceId = Literal["light_001", "light_002", "light_003"]
+
+class LightDevice(str, Enum):
+    """Light device mapping: name -> device_id."""
+
+    floor_lamp_living_room = "light_001"
+    ceiling_light_kitchen = "light_002"
+    bedroom_light = "light_003"
+
+
+LightDeviceName = Literal[
+    "floor_lamp_living_room",
+    "ceiling_light_kitchen",
+    "bedroom_light",
+]
 
 
 class AssistantButton(BaseModel):
@@ -54,21 +68,21 @@ def generate_quick_actions(
         f"light_control_tool_004: Generating quick actions for \033[36m{device_name}\033[0m"
     )
     system_prompt = """
-You are a smart home assistant. Generate 2 contextual follow-up actions based on the user's light control request.
-Each button should be a natural next step the user might want to take.
+        You are a smart home assistant. Generate 2 contextual follow-up actions based on the user's light control request.
+        Each button should be a natural next step the user might want to take.
 
-Rules:
-- button_1: primary style, most likely next action
-- button_2: secondary style, alternative action
-- Use simple Russian text for button labels (2-3 words max)
-- assistant_request should be a natural command in Russian
-- Icons: power, power-off, sun, moon, lightbulb, lamp, palette, thermometer
+        Rules:
+        - button_1: primary style, most likely next action
+        - button_2: secondary style, alternative action
+        - Use simple text for button labels (2-3 words max)
+        - assistant_request should be a natural command.
+        - Icons: power, power-off, sun, moon, lightbulb, lamp, palette, thermometer
 
-Examples of good buttons:
-- After turning on: "Ярче" / "Теплее свет"
-- After turning off: "Включить обратно" / "Включить все"
-- After brightness change: "Ещё ярче" / "Приглушить"
-"""
+        Examples of good buttons:
+        - After turning on: "Brighter" / "Warmer light"
+        - After turning off: "Turn back on" / "All lights on"
+        - After brightness change: "Even brighter" / "Dim down"
+    """
     user_prompt = f"""
 User request: {user_input}
 Device: {device_name}
@@ -94,25 +108,25 @@ Generate 2 follow-up action buttons.
         logger.error(f"light_control_tool_error_003: LLM error: \033[31m{e}\033[0m")
         return [
             {
-                "text": "Выключить",
+                "text": "Turn off",
                 "style": "primary",
                 "icon": "power-off",
                 "type": "assistant_button",
-                "assistant_request": "Выключи свет",
+                "assistant_request": "Turn off the light",
             },
             {
-                "text": "Все лампы",
+                "text": "All lights",
                 "style": "secondary",
                 "icon": "lightbulb",
                 "type": "assistant_button",
-                "assistant_request": "Покажи все лампы",
+                "assistant_request": "Show all lights",
             },
         ]
 
 
 async def light_control_tool(
     user_input: str,
-    device_id: LightDeviceId,
+    device_name: LightDeviceName,
     is_on: bool | None = None,
     brightness: int | None = None,
     color_temp: int | None = None,
@@ -122,21 +136,31 @@ async def light_control_tool(
 ) -> dict[str, str]:
     """
     Control smart home lights. Use this tool to turn lights on/off, adjust brightness, change color temperature or RGB color.
+    IMPORTANT: Users don't know numeric values (brightness percentages, Kelvin temperatures, etc.).
+    The assistant must choose appropriate values based on context and NEVER mention any numbers to the user.
+    Use natural language descriptions only (e.g., "made it brighter", "set warm light").
 
     Args:
         user_input: Original user request in natural language
-        device_id: Smart light device - 'light_001' (Торшер в гостиной), 'light_002' (Потолочный свет на кухне), 'light_003' (Свет в спальне)
-        is_on: True to turn on, False to turn off. Set based on user intent ('включи'/'выключи')
-        brightness: 0-100 percent. Interpret naturally: 'ярче'=+20, 'приглушить'=-20, 'максимум'=100, 'минимум'=10
-        color_temp: Color warmth in Kelvin. 2700=warm/тёплый, 4000=neutral, 6500=cold/холодный. 'теплее'=-500K, 'холоднее'=+500K
+        device_name: Smart light device name - 'floor_lamp_living_room', 'ceiling_light_kitchen', 'bedroom_light'
+        is_on: True to turn on, False to turn off. Set based on user intent ('turn on'/'turn off')
+        brightness: 0-100 percent. Interpret naturally: 'brighter'=+20, 'dim'=-20, 'max'=100, 'min'=10
+        color_temp: Color warmth in Kelvin. 2700=warm, 4000=neutral, 6500=cold. 'warmer'=-500K, 'colder'=+500K
         rgb_color: Hex color for RGB mode, e.g. '#FF0000' for red, '#00FF00' for green
         user_name: User name for state lookup
 
     Returns:
         dict[str, str]: Status and updated device state
     """
+    device_id = LightDevice[device_name].value
+    if isinstance(is_on, str):
+        is_on = is_on.lower() == "true"
+    if isinstance(brightness, str):
+        brightness = int(brightness)
+    if isinstance(color_temp, str):
+        color_temp = int(color_temp)
     logger.info(
-        f"light_control_tool_001: Controlling lamp \033[36m{device_id}\033[0m, "
+        f"light_control_tool_001: Controlling lamp \033[36m{device_name}\033[0m -> \033[36m{device_id}\033[0m, "
         f"demo_mode: \033[35m{demo_mode}\033[0m"
     )
     logger.info(f"light_control_tool_001a: User input: \033[35m{user_input}\033[0m")
@@ -192,7 +216,7 @@ async def light_control_tool(
         user_data["smarthome_light"]["on_count"] = on_count
         user_data["smarthome_light"][
             "subtitle"
-        ] = f"{on_count} из {total_count} включены"
+        ] = f"{on_count} of {total_count} turned on"
         updated_device = next(
             (d for d in devices if d.get("device_id") == device_id), {}
         )
