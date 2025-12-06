@@ -16,7 +16,7 @@ fastapi = "^0.115.0"
 uvicorn = "^0.31.1"
 httpx = "^0.28.0"
 pyyaml = "^6.0.2"
-archie-shared = {git = "https://github.com/NikGor/homeassistant.git", subdirectory = "archie-shared", tag = "v0.1.52"}
+archie-shared = {git = "https://github.com/NikGor/homeassistant.git", subdirectory = "archie-shared", tag = "v0.1.53"}
 grpcio = "^1.76.0"
 google-genai = "^1.50.1"
 redis = "^7.1.0"
@@ -29,6 +29,8 @@ black = "^24.0.0"
 mypy = "^1.8.0"
 ruff = "^0.6.0"
 types-pyyaml = "^6.0.12.20250915"
+pytest = "^9.0.1"
+pytest-asyncio = "^1.3.0"
 
 [tool.black]
 line-length = 88
