@@ -38,6 +38,7 @@ async def document_search_tool(
     Returns:
         Dict with search results or error information
     """
+    limit = int(limit)
     logger.info(
         f"document_search_001: Search requested for query: \033[36m{query}\033[0m"
     )
