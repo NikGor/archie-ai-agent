@@ -7,6 +7,7 @@ ToolName = Literal[
     "climate_control_tool",
     "spotify_tool",
     "google_search_tool",
+    "google_places_search_tool",
     "football_tool",
     "task_tool",
     "notes_tool",

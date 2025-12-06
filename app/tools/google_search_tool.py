@@ -11,11 +11,20 @@ load_dotenv()
 
 async def google_search_tool(query: str) -> dict[str, Any]:
     """
-    Performs a Google search using Gemini API with Google Search grounding.
-    Returns search results with sources, citations, and grounding metadata.
+    Web search for general information, news, facts, events, articles.
+    DO NOT use for finding physical locations, places, businesses, or addresses.
+    
+    Use cases: news, weather, sports scores, factual questions, current events,
+    Wikipedia-style lookups, product info, how-to guides.
+    
+    FALLBACK: Use this tool if other tools returned errors or incomplete data
+    (e.g., missing opening hours, prices, reviews from google_places_search_tool).
+    
+    For finding places (restaurants, parking, hotels, shops, addresses) ->
+    use google_places_search_tool FIRST, then fallback to this tool if needed.
 
     Args:
-        query: Search query string
+        query: Search query string (e.g., "Bitcoin price", "Champions League results")
 
     Returns:
         Dict with search results including text, sources, and metadata

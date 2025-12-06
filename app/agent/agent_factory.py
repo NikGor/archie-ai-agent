@@ -227,6 +227,9 @@ class AgentFactory:
             logger.info(
                 f"agent_factory_004: Action type: \033[36m{decision.sgr.action.type}\033[0m"
             )
+            logger.info(
+                f"agent_factory_004a: SGR reasoning: \033[33m{decision.sgr.reasoning}\033[0m"
+            )
             command_history.append(
                 {
                     "iteration": iteration,
@@ -240,6 +243,10 @@ class AgentFactory:
                 )
                 break
             if decision.sgr.tool_calls:
+                for tc in decision.sgr.tool_calls:
+                    logger.info(
+                        f"agent_factory_006_reason: Tool \033[36m{tc.tool_name}\033[0m - reason: \033[33m{tc.reason}\033[0m"
+                    )
                 logger.info(
                     f"agent_factory_006: Executing \033[33m{len(decision.sgr.tool_calls)}\033[0m tools"
                 )

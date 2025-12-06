@@ -62,6 +62,7 @@ TOOLS_CONFIG = {
     },
     "internet_search": {
         "google_search_tool": "app.tools.google_search_tool",
+        "google_places_search_tool": "app.tools.google_places_search_tool",
     },
     "specialized": {
         "football_tool": "app.tools.football_tool",
