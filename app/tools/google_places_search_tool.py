@@ -39,15 +39,15 @@ async def google_places_search_tool(
     """
     Search for physical locations, places, businesses, and addresses.
     ALWAYS use this tool FIRST when user asks about places, locations, or "where".
-    
+
     Use cases: restaurants, cafes, parking, hotels, shops, banks, pharmacies,
     gas stations, attractions, airports, any "near me" or "in [city]" queries,
     finding addresses, business locations.
-    
+
     Returns: name, address, coordinates, rating, reviews (count + texts),
     opening hours, price level, phone, description, parking options,
     website, Google Maps link.
-    
+
     If you need more specific details not returned by this tool,
     use google_search_tool as fallback.
 
@@ -115,7 +115,11 @@ async def google_places_search_tool(
                     "radius": radius_meters,
                 }
             }
-        if sort_by == "distance" and location_lat is not None and location_lng is not None:
+        if (
+            sort_by == "distance"
+            and location_lat is not None
+            and location_lng is not None
+        ):
             payload["rankPreference"] = "DISTANCE"
         elif sort_by == "relevance":
             payload["rankPreference"] = "RELEVANCE"
@@ -143,9 +147,7 @@ async def google_places_search_tool(
         data = response.json()
         places = data.get("places", [])
 
-        logger.info(
-            f"google_places_003: Found \033[33m{len(places)}\033[0m places"
-        )
+        logger.info(f"google_places_003: Found \033[33m{len(places)}\033[0m places")
 
         results = []
         for place in places:
