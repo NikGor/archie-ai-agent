@@ -155,5 +155,8 @@ Create a complete, well-formatted response in the specified format."""
     logger.info(
         f"create_output_005: Created response with length: \033[33m{len(content_text)}\033[0m"
     )
+    logger.info(
+        f"create_output_006: UI reasoning: \033[35m{result.sgr.ui_reasoning}\033[0m"
+    )
 
     return result
