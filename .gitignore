@@ -219,7 +219,6 @@ audio_temp/
 # AI model cache
 .cache/
 cache/
-models/
 
 # Logs
 logs/
