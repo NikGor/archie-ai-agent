@@ -16,8 +16,8 @@ load_dotenv()
 class OpenAIClient:
     """Client for OpenAI API interactions."""
 
-    def __init__(self, api_key: str | None = None):
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+    def __init__(self):
+        self.api_key = os.getenv("OPENAI_API_KEY")
         self.client = OpenAI(api_key=self.api_key)
         logger.info("openai_client_001: Initialized OpenAI client")
 

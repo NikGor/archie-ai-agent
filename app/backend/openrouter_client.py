@@ -17,8 +17,8 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 class OpenRouterClient:
     """Client for OpenRouter API interactions using OpenAI SDK."""
 
-    def __init__(self, api_key: str | None = None):
-        self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
+    def __init__(self):
+        self.api_key = os.getenv("OPENROUTER_API_KEY")
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=OPENROUTER_BASE_URL,
