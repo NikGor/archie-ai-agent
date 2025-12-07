@@ -13,13 +13,13 @@ async def google_search_tool(query: str) -> dict[str, Any]:
     """
     Web search for general information, news, facts, events, articles.
     DO NOT use for finding physical locations, places, businesses, or addresses.
-    
+
     Use cases: news, weather, sports scores, factual questions, current events,
     Wikipedia-style lookups, product info, how-to guides.
-    
+
     FALLBACK: Use this tool if other tools returned errors or incomplete data
     (e.g., missing opening hours, prices, reviews from google_places_search_tool).
-    
+
     For finding places (restaurants, parking, hotels, shops, addresses) ->
     use google_places_search_tool FIRST, then fallback to this tool if needed.
 
