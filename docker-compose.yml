@@ -14,7 +14,7 @@ services:
       - "8005:8005"
     environment:
       - PYTHONPATH=/app
-      - REDIS_HOST=localhost
+      - REDIS_HOST=redis
       - REDIS_PORT=6379
       - BACKEND_API_URL=http://archie-backend:8002
     env_file:
