@@ -16,13 +16,16 @@ fastapi = "^0.115.0"
 uvicorn = "^0.31.1"
 httpx = "^0.28.0"
 pyyaml = "^6.0.2"
-archie-shared = {git = "https://github.com/NikGor/homeassistant.git", subdirectory = "archie-shared", tag = "v0.1.54"}
+archie-shared = {git = "https://github.com/NikGor/homeassistant.git", subdirectory = "archie-shared", tag = "v0.1.57"}
 grpcio = "^1.76.0"
 google-genai = "^1.50.1"
 redis = "^7.1.0"
 docstring-parser = "^0.17.0"
 instructor = ">=1.7.0"
 pillow = "^12.0.0"
+google-api-python-client = "^2.187.0"
+google-auth-httplib2 = "^0.2.1"
+google-auth-oauthlib = "^1.2.3"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.0.0"
