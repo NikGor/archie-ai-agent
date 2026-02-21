@@ -8,6 +8,7 @@ from typing import Any
 
 import redis
 
+from ..config import DEFAULT_STATE_CONFIG
 from ..models.state_models import UserState
 
 
@@ -17,15 +18,8 @@ logger = logging.getLogger(__name__)
 class StateService:
     """Service for managing application and user state."""
 
-    def __init__(
-        self,
-        user_name: str | None = None,
-        persona: str = "business",
-        default_city: str = "Bad Mergentheim",
-    ):
+    def __init__(self, user_name: str | None = None):
         self.user_name = user_name
-        self.persona = persona
-        self.default_city = default_city
 
         redis_host = os.getenv("REDIS_HOST", "localhost")
         redis_port = int(os.getenv("REDIS_PORT", "6379"))
@@ -55,20 +49,12 @@ class StateService:
         datetime_info = self._get_datetime_info()
         return {
             "user_name": self.user_name or "User",
-            "persona": self.persona,
-            "default_city": self.default_city,
-            "default_country": "Germany",
+            **DEFAULT_STATE_CONFIG,
             **datetime_info,
-            "user_timezone": "Europe/Berlin",
             "measurement_units": "metric",
-            "language": "ru",
-            "currency": "EUR",
             "date_format": "DD Month YYYY",
             "time_format": "24h",
-            "commercial_holidays": "DE-BW",
             "commercial_check_open_now": True,
-            "transport_preferences": ["car", "bicycle"],
-            "cuisine_preferences": ["italian", "russian", "ukrainian"],
         }
 
     def get_user_state(self) -> UserState:

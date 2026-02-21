@@ -1,6 +1,21 @@
 """Configuration constants for the application."""
 
+import os
+
+
 MAX_COMMAND_ITERATIONS = 3
+
+DEFAULT_STATE_CONFIG = {
+    "persona": os.getenv("DEFAULT_PERSONA", "business"),
+    "default_city": os.getenv("DEFAULT_CITY", "London"),
+    "default_country": os.getenv("DEFAULT_COUNTRY", "UK"),
+    "user_timezone": os.getenv("DEFAULT_TIMEZONE", "UTC"),
+    "language": os.getenv("DEFAULT_LANGUAGE", "en"),
+    "currency": os.getenv("DEFAULT_CURRENCY", "USD"),
+    "commercial_holidays": os.getenv("DEFAULT_HOLIDAYS", "GB"),
+    "transport_preferences": os.getenv("DEFAULT_TRANSPORT", "car,public_transport").split(","),
+    "cuisine_preferences": os.getenv("DEFAULT_CUISINE", "italian,asian,local").split(","),
+}
 
 MODEL_PROVIDERS = {
     "openai": [
