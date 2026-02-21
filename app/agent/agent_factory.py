@@ -1,24 +1,24 @@
 import json
 import logging
 from collections.abc import Callable, Awaitable
-from typing import Any
-from dotenv import load_dotenv
+
+from ..backend.gemini_client import GeminiClient
+from ..backend.openai_client import OpenAIClient
+from ..backend.openrouter_client import OpenRouterClient
+from ..backend.state_service import StateService
 from ..config import MODEL_PROVIDERS, MAX_COMMAND_ITERATIONS
 from ..models.orchestration_sgr import DecisionResponse
 from ..models.output_models import AgentResponse
+from ..models.state_models import UserState
+from ..models.tool_models import ToolResult
 from ..models.ws_models import StatusUpdate
-from ..tools.tool_factory import ToolFactory
 from ..tools.create_output_tool import create_output
+from ..tools.tool_factory import ToolFactory
 from ..utils.llm_parser import parse_llm_response
 from ..utils.tool_executor import execute_tool_calls
-from ..backend.openai_client import OpenAIClient
-from ..backend.openrouter_client import OpenRouterClient
-from ..backend.gemini_client import GeminiClient
 from .prompt_builder import PromptBuilder
-from ..backend.state_service import StateService
 
 
-load_dotenv()
 logger = logging.getLogger(__name__)
 
 StatusCallback = Callable[[StatusUpdate], Awaitable[None]] | None
@@ -60,9 +60,9 @@ class AgentFactory:
         user_input: str,
         model: str,
         provider: str,
-        user_state: dict[str, Any],
+        user_state: UserState,
         response_format: str,
-        previous_results: list[dict[str, Any]] | None = None,
+        previous_results: list[ToolResult] | None = None,
         previous_response_id: str | None = None,
         chat_history: str | None = None,
     ) -> DecisionResponse:
@@ -75,7 +75,7 @@ class AgentFactory:
         logger.info("=== Stage 1: Command Decision ===")
         client = self.clients[provider]
         cmd_prompt_template = self.prompt_builder.env.get_template("cmd_prompt.jinja2")
-        cmd_prompt = cmd_prompt_template.render(state=user_state)
+        cmd_prompt = cmd_prompt_template.render(state=user_state.model_dump())
         tools = self.tool_factory.get_tool_schemas(model, response_format)
         tools_list = "\n".join(
             [
@@ -99,8 +99,8 @@ class AgentFactory:
         if previous_results:
             results_context = "\n\nPrevious Tool Results:\n"
             for result in previous_results:
-                tool_name = result.get("tool_name", "unknown")
-                tool_output = result.get("output", {})
+                tool_name = result.tool_name
+                tool_output = result.output
                 results_context += f"- {tool_name}: {tool_output}\n"
             messages.append({"role": "assistant", "content": results_context})
             logger.info(
@@ -155,7 +155,7 @@ class AgentFactory:
                 f"agent_factory_001c: Set user_name: \033[35m{user_name}\033[0m"
             )
         user_state = self.state_service.get_user_state()
-        persona_key = user_state.get("persona", "business")
+        persona_key = user_state.persona
         logger.info(f"agent_factory_002: Persona: \033[35m{persona_key}\033[0m")
         logger.info(f"agent_factory_003: Format: \033[36m{response_format}\033[0m")
         if on_status:
@@ -179,7 +179,7 @@ class AgentFactory:
                 tool_results=None,
                 response_format=response_format,
                 model=final_output_model,
-                state=user_state,
+                state=user_state.model_dump(),
                 previous_response_id=(
                     previous_response_id if output_provider == "openai" else None
                 ),
@@ -290,7 +290,7 @@ class AgentFactory:
             tool_results=tool_results if tool_results else None,
             response_format=response_format,
             model=final_output_model,
-            state=user_state,
+            state=user_state.model_dump(),
             previous_response_id=(
                 previous_response_id if output_provider == "openai" else None
             ),
