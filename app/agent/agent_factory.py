@@ -6,7 +6,8 @@ from ..backend.gemini_client import GeminiClient
 from ..backend.openai_client import OpenAIClient
 from ..backend.openrouter_client import OpenRouterClient
 from ..backend.state_service import StateService
-from ..config import MODEL_PROVIDERS, MAX_COMMAND_ITERATIONS
+from ..config import MAX_COMMAND_ITERATIONS
+from ..utils.provider_utils import get_provider_for_model
 from ..models.orchestration_sgr import DecisionResponse
 from ..models.output_models import AgentResponse
 from ..models.state_models import UserState
@@ -38,7 +39,6 @@ class AgentFactory:
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.tool_factory = tool_factory or ToolFactory(demo_mode=demo_mode)
         self.state_service = state_service or StateService()
-        self.model_providers = MODEL_PROVIDERS
         self.clients = {
             "openai": self.openai_client,
             "openrouter": self.openrouter_client,
@@ -47,13 +47,6 @@ class AgentFactory:
         logger.info(
             f"agent_factory_001: Initialized AgentFactory, demo_mode: \033[35m{demo_mode}\033[0m"
         )
-
-    def _get_provider_for_model(self, model: str) -> str:
-        """Returns 'openai', 'openrouter', or 'gemini' based on model name."""
-        for provider, models in self.model_providers.items():
-            if model in models:
-                return provider
-        return "openai"
 
     async def _make_command_call(
         self,
@@ -143,8 +136,8 @@ class AgentFactory:
         Stage 3: Final response generation (uses final_output_model)
         """
         logger.info("=== AgentFactory: Creating Agent Response ===")
-        cmd_provider = self._get_provider_for_model(command_model)
-        output_provider = self._get_provider_for_model(final_output_model)
+        cmd_provider = get_provider_for_model(command_model)
+        output_provider = get_provider_for_model(final_output_model)
         logger.info(
             f"agent_factory_001b: Command: \033[34m{cmd_provider}\033[0m/\033[36m{command_model}\033[0m | "
             f"Output: \033[34m{output_provider}\033[0m/\033[36m{final_output_model}\033[0m"

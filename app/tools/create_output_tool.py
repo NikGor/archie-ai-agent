@@ -7,10 +7,10 @@ from ..agent.prompt_builder import PromptBuilder
 from ..backend.gemini_client import GeminiClient
 from ..backend.openai_client import OpenAIClient
 from ..backend.openrouter_client import OpenRouterClient
-from ..config import MODEL_PROVIDERS
 from ..models.output_models import AgentResponse, get_response_model_for_format
 from ..models.tool_models import ToolResult
 from ..utils.llm_parser import parse_llm_response, build_content_from_parsed
+from ..utils.provider_utils import get_provider_for_model
 
 
 logger = logging.getLogger(__name__)
@@ -25,14 +25,6 @@ _clients = {
     "openrouter": _openrouter_client,
     "gemini": _gemini_client,
 }
-
-
-def _get_provider_for_model(model: str) -> str:
-    """Returns provider name for a given model."""
-    for provider, models in MODEL_PROVIDERS.items():
-        if model in models:
-            return provider
-    return "openai"
 
 
 async def create_output(
@@ -69,7 +61,7 @@ async def create_output(
 
     prompt_builder = PromptBuilder()
 
-    provider = _get_provider_for_model(model)
+    provider = get_provider_for_model(model)
     client = _clients[provider]
     logger.info(
         f"create_output_002b: Using provider: \033[34m{provider}\033[0m for model: \033[36m{model}\033[0m"

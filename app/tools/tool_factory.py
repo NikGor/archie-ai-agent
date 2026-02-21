@@ -4,7 +4,8 @@ import inspect
 import logging
 import importlib
 from typing import Any, Callable
-from ..config import MODEL_PROVIDERS, TOOLS_CONFIG
+from ..config import TOOLS_CONFIG
+from ..utils.provider_utils import get_provider_for_model
 from ..utils.tools_utils import openai_parse, gemini_parse, oss_parse
 
 
@@ -17,7 +18,6 @@ class ToolFactory:
     def __init__(self, demo_mode: bool = False):
         self.tools: dict[str, Callable] = {}
         self.tools_config = TOOLS_CONFIG
-        self.model_providers = MODEL_PROVIDERS
         self.demo_mode = demo_mode
         logger.info(
             f"tool_factory_001: Initialized with \033[33m{len(self.tools_config)}\033[0m tool groups, "
@@ -61,13 +61,6 @@ class ToolFactory:
         )
         return all_groups
 
-    def _get_provider_for_model(self, model: str) -> str:
-        """Get provider name for a given model."""
-        for provider, models in self.model_providers.items():
-            if model in models:
-                return provider
-        return "openai"  # default fallback
-
     def get_tool_schemas(
         self, model: str, response_format: str
     ) -> list[dict[str, Any]]:
@@ -98,7 +91,7 @@ class ToolFactory:
                     self.tools[func.__name__] = func
 
         # Determine provider based on model
-        provider = self._get_provider_for_model(model)
+        provider = get_provider_for_model(model)
 
         # Choose parser based on provider
         if provider == "openai":
