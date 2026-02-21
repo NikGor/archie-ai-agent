@@ -3,14 +3,14 @@
 import logging
 import os
 from typing import Any, Callable
-from dotenv import load_dotenv
+
 from openai import OpenAI
 from pydantic import BaseModel
+
 from app.utils.openai_utils import build_openai_args
 
 
 logger = logging.getLogger(__name__)
-load_dotenv()
 
 
 class OpenAIClient:

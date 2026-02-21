@@ -3,13 +3,12 @@
 import logging
 import os
 from typing import Any
-from dotenv import load_dotenv
+
 from openai import OpenAI
 from pydantic import BaseModel
 
 
 logger = logging.getLogger(__name__)
-load_dotenv()
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 

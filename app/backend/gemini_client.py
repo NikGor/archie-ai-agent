@@ -8,14 +8,13 @@ import json
 import logging
 import os
 from typing import Any
-from dotenv import load_dotenv
+
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
 
 
 logger = logging.getLogger(__name__)
-load_dotenv()
 
 
 class GeminiClient:
