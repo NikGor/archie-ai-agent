@@ -3,13 +3,12 @@ import logging
 import os
 from typing import Any, Literal
 from io import BytesIO
-from dotenv import load_dotenv
+
 from google import genai
 from google.genai import types
 from PIL import Image
 
 logger = logging.getLogger(__name__)
-load_dotenv()
 
 
 async def fast_image_generation_tool(

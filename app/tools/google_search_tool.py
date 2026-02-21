@@ -1,12 +1,11 @@
 import logging
 import os
 from typing import Any
-from dotenv import load_dotenv
+
 from google import genai
 from google.genai import types
 
 logger = logging.getLogger(__name__)
-load_dotenv()
 
 
 async def google_search_tool(query: str) -> dict[str, Any]:
@@ -24,7 +23,7 @@ async def google_search_tool(query: str) -> dict[str, Any]:
     use google_places_search_tool FIRST, then fallback to this tool if needed.
 
     Args:
-        query: Search query string (e.g., "Bitcoin price", "Champions League results")
+        query: Search query string (e.g., "Bitcoin price", "Champions League results"). Always must be in English or German. Don't use russian language for queries.
 
     Returns:
         Dict with search results including text, sources, and metadata

@@ -1,11 +1,10 @@
 import logging
 import os
 from typing import Any
+
 import httpx
-from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
-load_dotenv()
 
 
 PLACES_FIELD_MASK = (
