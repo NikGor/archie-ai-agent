@@ -5,7 +5,10 @@ import logging
 import os
 from datetime import datetime
 from typing import Any
+
 import redis
+
+from ..models.state_models import UserState
 
 
 logger = logging.getLogger(__name__)
@@ -68,13 +71,14 @@ class StateService:
             "cuisine_preferences": ["italian", "russian", "ukrainian"],
         }
 
-    def get_user_state(self) -> dict[str, Any]:
+    def get_user_state(self) -> UserState:
         """Get complete user state for prompt context."""
         if not self.user_name:
             logger.info(
                 "state_service_002: No user_name provided, returning default state"
             )
-            return self._get_default_state()
+            data = self._get_default_state()
+            return UserState(**data)
 
         redis_key = f"user_state:name:{self.user_name}"
         logger.info(
@@ -87,19 +91,22 @@ class StateService:
                 logger.warning(
                     f"state_service_004: No data found in Redis for key: {redis_key}, using default"
                 )
-                return self._get_default_state()
+                data = self._get_default_state()
+                return UserState(**data)
 
             user_data = json.loads(user_data_json)
             logger.info(
                 f"state_service_005: Loaded user state for: \033[35m{user_data.get('user_name')}\033[0m"
             )
-            return user_data
+            return UserState(**user_data)
 
         except redis.RedisError as e:
             logger.error(f"state_service_error_001: Redis error: \033[31m{e}\033[0m")
-            return self._get_default_state()
+            data = self._get_default_state()
+            return UserState(**data)
         except json.JSONDecodeError as e:
             logger.error(
                 f"state_service_error_002: JSON decode error: \033[31m{e}\033[0m"
             )
-            return self._get_default_state()
+            data = self._get_default_state()
+            return UserState(**data)
