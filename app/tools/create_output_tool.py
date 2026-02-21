@@ -1,13 +1,16 @@
 import logging
 from typing import Any
+
+from archie_shared.chat.models import Content
+
+from ..agent.prompt_builder import PromptBuilder
+from ..backend.gemini_client import GeminiClient
 from ..backend.openai_client import OpenAIClient
 from ..backend.openrouter_client import OpenRouterClient
-from ..backend.gemini_client import GeminiClient
-from ..agent.prompt_builder import PromptBuilder
 from ..config import MODEL_PROVIDERS
 from ..models.output_models import AgentResponse, get_response_model_for_format
+from ..models.tool_models import ToolResult
 from ..utils.llm_parser import parse_llm_response, build_content_from_parsed
-from archie_shared.chat.models import Content
 
 
 logger = logging.getLogger(__name__)
@@ -35,7 +38,7 @@ def _get_provider_for_model(model: str) -> str:
 async def create_output(
     user_input: str,
     command_summary: str,
-    tool_results: list[dict[str, Any]] | None = None,
+    tool_results: list[ToolResult] | None = None,
     response_format: str = "plain",
     model: str = "gpt-4.1",
     state: dict | None = None,
@@ -82,8 +85,8 @@ async def create_output(
     if tool_results:
         tools_context = "\n\nTool Results:\n"
         for result in tool_results:
-            tool_name = result.get("tool_name", "unknown")
-            tool_output = result.get("output", {})
+            tool_name = result.tool_name
+            tool_output = result.output
             tools_context += f"- {tool_name}: {tool_output}\n"
         logger.info(
             f"create_output_003: Added \033[33m{len(tool_results)}\033[0m tool results to context"
