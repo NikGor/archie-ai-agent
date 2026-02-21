@@ -13,15 +13,19 @@ RUN apt-get update && apt-get install -y \
     portaudio19-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry
-RUN pip install --upgrade pip && pip install poetry
+# Install Poetry with extended timeout
+RUN pip install --upgrade pip && \
+    pip install --default-timeout=100 poetry
 
 # Copy Poetry files
 COPY pyproject.toml poetry.lock ./
 
-# Install dependencies via Poetry
+# Install dependencies via Poetry with retries and extended timeout
 RUN poetry config virtualenvs.create false && \
-    poetry install --no-interaction --no-ansi --no-root
+    poetry config installer.max-workers 10 && \
+    poetry install --no-interaction --no-ansi --no-root || \
+    (echo "Retry 1..." && poetry install --no-interaction --no-ansi --no-root) || \
+    (echo "Retry 2..." && poetry install --no-interaction --no-ansi --no-root)
 
 # Copy application code
 COPY . .

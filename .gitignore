@@ -243,3 +243,13 @@ poetry.lock
 
 # Application state
 app/response_understand.py
+
+# AI-generated reports and plans
+audit-report.html
+test-plan.html
+prompt.md
+LOGGING_GUIDELINES.md
+PROJECT_STATE.md
+SESSION_LOG.md
+CLAUDE.md
+.github/copilot-instructions.md

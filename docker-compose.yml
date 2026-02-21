@@ -6,7 +6,10 @@ networks:
 
 services:
   archie-ai-agent:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: host
     container_name: archie-ai-agent
     networks:
       - shared_network
