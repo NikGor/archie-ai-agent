@@ -2,7 +2,9 @@ import logging
 import asyncio
 from collections.abc import Callable, Awaitable
 from typing import Any
+
 from ..models.orchestration_sgr import ToolCallRequest, Parameter
+from ..models.tool_models import ToolResult
 from ..models.ws_models import StatusUpdate
 from ..tools.tool_factory import ToolFactory
 
@@ -20,7 +22,7 @@ async def execute_tool_call(
     tool_call: ToolCallRequest,
     tool_factory: ToolFactory | None = None,
     on_status: StatusCallback = None,
-) -> dict[str, Any]:
+) -> ToolResult:
     logger.info(
         f"tool_executor_001: Executing tool: \033[36m{tool_call.tool_name}\033[0m"
     )
@@ -52,11 +54,11 @@ async def execute_tool_call(
                     message=f"{tool_call.tool_name} completed",
                 )
             )
-        return {
-            "tool_name": tool_call.tool_name,
-            "success": True,
-            "output": result,
-        }
+        return ToolResult(
+            tool_name=tool_call.tool_name,
+            success=True,
+            output=result,
+        )
     except Exception as e:
         logger.error(
             f"tool_executor_error_001: Tool \033[31m{tool_call.tool_name}\033[0m failed: {e}"
@@ -69,18 +71,19 @@ async def execute_tool_call(
                     message=f"{tool_call.tool_name} failed: {e!s}",
                 )
             )
-        return {
-            "tool_name": tool_call.tool_name,
-            "success": False,
-            "error": str(e),
-        }
+        return ToolResult(
+            tool_name=tool_call.tool_name,
+            success=False,
+            output={},
+            error=str(e),
+        )
 
 
 async def execute_tool_calls(
     tool_calls: list[ToolCallRequest],
     tool_factory: ToolFactory | None = None,
     on_status: StatusCallback = None,
-) -> list[dict[str, Any]]:
+) -> list[ToolResult]:
     logger.info(f"tool_executor_004: Executing \033[33m{len(tool_calls)}\033[0m tools")
     if tool_factory is None:
         tool_factory = ToolFactory()
@@ -89,11 +92,20 @@ async def execute_tool_calls(
         for tool_call in tool_calls
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    successful = sum(1 for r in results if isinstance(r, dict) and r.get("success"))
+    successful = sum(1 for r in results if isinstance(r, ToolResult) and r.success)
     logger.info(
         f"tool_executor_005: Completed: \033[32m{successful}\033[0m successful, \033[31m{len(results) - successful}\033[0m failed"
     )
     return [
-        r if isinstance(r, dict) else {"success": False, "error": str(r)}
+        (
+            r
+            if isinstance(r, ToolResult)
+            else ToolResult(
+                tool_name="unknown",
+                success=False,
+                output={},
+                error=str(r),
+            )
+        )
         for r in results
     ]
