@@ -1,9 +1,10 @@
 import os
 from pyexpat.errors import messages
+
 import instructor
+from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel, Field
-from dotenv import load_dotenv
 
 load_dotenv()
 
