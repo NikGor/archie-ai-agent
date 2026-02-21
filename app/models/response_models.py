@@ -95,6 +95,7 @@ class SGRTrace(BaseModel):
         description="Reasoning behind the chosen UI format and components"
     )
 
+
 class AgentResponse(BaseModel):
     """Response model for AI agent output"""
 
