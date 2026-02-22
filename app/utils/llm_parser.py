@@ -18,8 +18,17 @@ EXCLUDED_FIELDS = {"llm_trace", "response_id"}
 
 
 def calculate_token_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    """Calculate LLM call cost in USD using MODEL_TOKEN_PRICES ($/1M tokens)."""
+    """Calculate LLM call cost in USD using MODEL_TOKEN_PRICES ($/1M tokens).
+
+    Supports versioned model names returned by providers (e.g. gpt-4.1-2025-04-14
+    matched against stored key gpt-4.1 via prefix lookup).
+    """
     prices = MODEL_TOKEN_PRICES.get(model)
+    if prices is None:
+        prices = next(
+            (v for k, v in MODEL_TOKEN_PRICES.items() if model.startswith(k)),
+            None,
+        )
     if prices is None:
         return 0.0
     return (input_tokens / 1_000_000) * prices["input"] + (
