@@ -226,9 +226,7 @@ class JiraTool:
             issue_summary = fields["summary"]
             status = fields["status"]["name"]
             issue_type = fields["issuetype"]["name"]
-            parent_key = (
-                fields["parent"]["key"] if fields.get("parent") else "—"
-            )
+            parent_key = fields["parent"]["key"] if fields.get("parent") else "—"
             print(
                 f"  \033[36m{key}\033[0m [{issue_type}] {issue_summary}  "
                 f"(\033[33m{status}\033[0m, parent: {parent_key})"
@@ -240,7 +238,9 @@ class JiraTool:
         body = {
             "type": "doc",
             "version": 1,
-            "content": [{"type": "paragraph", "content": [{"type": "text", "text": text}]}],
+            "content": [
+                {"type": "paragraph", "content": [{"type": "text", "text": text}]}
+            ],
         }
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -269,7 +269,9 @@ class JiraTool:
                 timeout=15.0,
             )
         if response.status_code == 204:
-            print(f"\033[32m✓\033[0m Transitioned: \033[36m{issue_key}\033[0m → {transition_id}")
+            print(
+                f"\033[32m✓\033[0m Transitioned: \033[36m{issue_key}\033[0m → {transition_id}"
+            )
             return
         logger.error(
             f"\033[31m✗ Failed ({response.status_code}): {response.text}\033[0m"
@@ -382,7 +384,9 @@ def build_parser() -> argparse.ArgumentParser:
     comment_parser.add_argument("key", help="Issue key (e.g. MBA-21)")
     comment_parser.add_argument("text", help="Comment text")
 
-    transition_parser = subparsers.add_parser("transition", help="Transition issue status")
+    transition_parser = subparsers.add_parser(
+        "transition", help="Transition issue status"
+    )
     transition_parser.add_argument("key", help="Issue key (e.g. MBA-21)")
     transition_parser.add_argument(
         "transition_id",
@@ -424,7 +428,9 @@ async def main() -> None:
     elif args.command == "comment":
         await jira.add_comment(issue_key=args.key, text=args.text)
     elif args.command == "transition":
-        await jira.transition_issue(issue_key=args.key, transition_id=args.transition_id)
+        await jira.transition_issue(
+            issue_key=args.key, transition_id=args.transition_id
+        )
 
 
 if __name__ == "__main__":

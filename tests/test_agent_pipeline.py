@@ -19,23 +19,32 @@ pytestmark = pytest.mark.llm
 # Response shape
 # ---------------------------------------------------------------------------
 
+
 async def test_response_is_agent_response(agent_factory, simple_messages):
-    response = await agent_factory.arun(messages=simple_messages, response_format="plain")
+    response = await agent_factory.arun(
+        messages=simple_messages, response_format="plain"
+    )
     assert isinstance(response, AgentResponse)
 
 
 async def test_response_has_content(agent_factory, simple_messages):
-    response = await agent_factory.arun(messages=simple_messages, response_format="plain")
+    response = await agent_factory.arun(
+        messages=simple_messages, response_format="plain"
+    )
     assert response.content is not None
 
 
 async def test_response_has_sgr(agent_factory, simple_messages):
-    response = await agent_factory.arun(messages=simple_messages, response_format="plain")
+    response = await agent_factory.arun(
+        messages=simple_messages, response_format="plain"
+    )
     assert response.sgr is not None
 
 
 async def test_response_has_llm_trace(agent_factory, simple_messages):
-    response = await agent_factory.arun(messages=simple_messages, response_format="plain")
+    response = await agent_factory.arun(
+        messages=simple_messages, response_format="plain"
+    )
     assert response.llm_trace is not None
 
 
@@ -43,13 +52,18 @@ async def test_response_has_llm_trace(agent_factory, simple_messages):
 # Plain format contract
 # ---------------------------------------------------------------------------
 
+
 async def test_plain_format_content_format(agent_factory, simple_messages):
-    response = await agent_factory.arun(messages=simple_messages, response_format="plain")
+    response = await agent_factory.arun(
+        messages=simple_messages, response_format="plain"
+    )
     assert response.content.content_format == "plain"
 
 
 async def test_plain_format_text_is_nonempty_string(agent_factory, simple_messages):
-    response = await agent_factory.arun(messages=simple_messages, response_format="plain")
+    response = await agent_factory.arun(
+        messages=simple_messages, response_format="plain"
+    )
     assert isinstance(response.content.text, str)
     assert len(response.content.text) > 0
 
@@ -58,8 +72,11 @@ async def test_plain_format_text_is_nonempty_string(agent_factory, simple_messag
 # Token tracking
 # ---------------------------------------------------------------------------
 
+
 async def test_llm_trace_has_nonzero_tokens(agent_factory, simple_messages):
-    response = await agent_factory.arun(messages=simple_messages, response_format="plain")
+    response = await agent_factory.arun(
+        messages=simple_messages, response_format="plain"
+    )
     assert response.llm_trace.total_tokens > 0
     assert response.llm_trace.input_tokens > 0
 
@@ -67,6 +84,7 @@ async def test_llm_trace_has_nonzero_tokens(agent_factory, simple_messages):
 # ---------------------------------------------------------------------------
 # Status callback
 # ---------------------------------------------------------------------------
+
 
 async def test_status_callback_fires(agent_factory, simple_messages):
     events: list[StatusUpdate] = []
@@ -88,11 +106,16 @@ async def test_status_callback_fires(agent_factory, simple_messages):
 # Dashboard format — bypasses Stage 1 (separate code path)
 # ---------------------------------------------------------------------------
 
+
 async def test_dashboard_format_returns_content(agent_factory, simple_messages):
-    response = await agent_factory.arun(messages=simple_messages, response_format="dashboard")
+    response = await agent_factory.arun(
+        messages=simple_messages, response_format="dashboard"
+    )
     assert response.content is not None
 
 
 async def test_dashboard_format_content_format(agent_factory, simple_messages):
-    response = await agent_factory.arun(messages=simple_messages, response_format="dashboard")
+    response = await agent_factory.arun(
+        messages=simple_messages, response_format="dashboard"
+    )
     assert response.content.content_format == "dashboard"

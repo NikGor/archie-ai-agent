@@ -19,6 +19,7 @@ from app.utils.llm_parser import ParsedLLMResponse, parse_llm_response
 # Helpers — minimal fake raw responses matching each provider's structure
 # ---------------------------------------------------------------------------
 
+
 def _sgr_dict() -> dict:
     return {
         "fact_checks": [],
@@ -56,30 +57,35 @@ def _fake_openai_response(parsed_obj=None) -> SimpleNamespace:
     )
 
 
-def _fake_openrouter_response(content_dict: dict | None = None, usage=True) -> SimpleNamespace:
+def _fake_openrouter_response(
+    content_dict: dict | None = None, usage=True
+) -> SimpleNamespace:
     if content_dict is None:
         content_dict = {"text": "Hello", "sgr": _sgr_dict()}
     return SimpleNamespace(
         id="chatcmpl_test",
         model="some-model",
         choices=[
-            SimpleNamespace(
-                message=SimpleNamespace(content=json.dumps(content_dict))
-            )
+            SimpleNamespace(message=SimpleNamespace(content=json.dumps(content_dict)))
         ],
-        usage=SimpleNamespace(
-            prompt_tokens=80,
-            completion_tokens=40,
-            total_tokens=120,
-            prompt_tokens_details=None,
-            completion_tokens_details=None,
-        ) if usage else None,
+        usage=(
+            SimpleNamespace(
+                prompt_tokens=80,
+                completion_tokens=40,
+                total_tokens=120,
+                prompt_tokens_details=None,
+                completion_tokens_details=None,
+            )
+            if usage
+            else None
+        ),
     )
 
 
 # ---------------------------------------------------------------------------
 # OpenAI parser
 # ---------------------------------------------------------------------------
+
 
 def test_parse_openai_returns_parsed_llm_response():
     raw = _fake_openai_response()
@@ -110,6 +116,7 @@ def test_parse_openai_extracts_response_id():
 # ---------------------------------------------------------------------------
 # OpenRouter parser
 # ---------------------------------------------------------------------------
+
 
 def test_parse_openrouter_returns_parsed_llm_response():
     raw = _fake_openrouter_response()
@@ -142,6 +149,7 @@ def test_parse_openrouter_missing_usage_returns_zeros():
 # ---------------------------------------------------------------------------
 # Unknown provider
 # ---------------------------------------------------------------------------
+
 
 def test_parse_unknown_provider_raises_value_error():
     raw = _fake_openai_response()

@@ -6,6 +6,7 @@ import os
 
 # Load .env before any app module is imported — app clients initialize at module level.
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import pytest

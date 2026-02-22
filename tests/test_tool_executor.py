@@ -18,7 +18,10 @@ from app.utils.tool_executor import execute_tool_call, execute_tool_calls
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_tool_call(tool_name: str = "google_search_tool", query: str = "test") -> ToolCallRequest:
+
+def _make_tool_call(
+    tool_name: str = "google_search_tool", query: str = "test"
+) -> ToolCallRequest:
     return ToolCallRequest(
         tool_name=tool_name,
         arguments=[Parameter(name="query", value=query)],
@@ -41,6 +44,7 @@ def _mock_factory(return_value=None, side_effect=None) -> MagicMock:
 # execute_tool_call — single tool
 # ---------------------------------------------------------------------------
 
+
 async def test_successful_tool_returns_tool_result():
     factory = _mock_factory(return_value={"result": "some data"})
     result = await execute_tool_call(_make_tool_call(), tool_factory=factory)
@@ -55,7 +59,9 @@ async def test_successful_tool_has_success_true():
 
 async def test_successful_tool_preserves_tool_name():
     factory = _mock_factory()
-    result = await execute_tool_call(_make_tool_call("google_search_tool"), tool_factory=factory)
+    result = await execute_tool_call(
+        _make_tool_call("google_search_tool"), tool_factory=factory
+    )
     assert result.tool_name == "google_search_tool"
 
 
@@ -83,9 +89,13 @@ async def test_failed_tool_error_contains_message():
 # execute_tool_calls — batch / parallel
 # ---------------------------------------------------------------------------
 
+
 async def test_multiple_tools_all_results_returned():
     factory = _mock_factory(return_value={"ok": True})
-    calls = [_make_tool_call("google_search_tool"), _make_tool_call("google_search_tool")]
+    calls = [
+        _make_tool_call("google_search_tool"),
+        _make_tool_call("google_search_tool"),
+    ]
     results = await execute_tool_calls(calls, tool_factory=factory)
     assert len(results) == 2
 

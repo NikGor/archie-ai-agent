@@ -30,6 +30,7 @@ def dashboard_schemas(factory):
 # Basic shape
 # ---------------------------------------------------------------------------
 
+
 def test_plain_schemas_is_nonempty_list(plain_schemas):
     assert isinstance(plain_schemas, list)
     assert len(plain_schemas) > 0
@@ -60,7 +61,10 @@ def test_schema_names_are_strings(plain_schemas):
 # Format-based filtering
 # ---------------------------------------------------------------------------
 
-def test_dashboard_format_returns_fewer_schemas_than_plain(plain_schemas, dashboard_schemas):
+
+def test_dashboard_format_returns_fewer_schemas_than_plain(
+    plain_schemas, dashboard_schemas
+):
     """Dashboard/widget formats only expose smarthome tools."""
     assert len(dashboard_schemas) < len(plain_schemas)
 
@@ -80,6 +84,7 @@ def test_widget_format_same_as_dashboard(factory):
 # ---------------------------------------------------------------------------
 # Schema names match known tool registry
 # ---------------------------------------------------------------------------
+
 
 def test_plain_schemas_include_search_tools(plain_schemas):
     names = {s["name"] for s in plain_schemas}
