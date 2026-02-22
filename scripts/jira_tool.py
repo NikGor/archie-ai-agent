@@ -235,6 +235,47 @@ class JiraTool:
             )
         return issues
 
+    async def add_comment(self, issue_key: str, text: str) -> None:
+        """Add a comment to a JIRA issue."""
+        body = {
+            "type": "doc",
+            "version": 1,
+            "content": [{"type": "paragraph", "content": [{"type": "text", "text": text}]}],
+        }
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/issue/{issue_key}/comment",
+                auth=self._get_auth(),
+                headers={"Content-Type": "application/json"},
+                json={"body": body},
+                timeout=15.0,
+            )
+        if response.status_code == 201:
+            print(f"\033[32m✓\033[0m Comment added to \033[36m{issue_key}\033[0m")
+            return
+        logger.error(
+            f"\033[31m✗ Failed ({response.status_code}): {response.text}\033[0m"
+        )
+        sys.exit(1)
+
+    async def transition_issue(self, issue_key: str, transition_id: str) -> None:
+        """Transition a JIRA issue to a new status."""
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/issue/{issue_key}/transitions",
+                auth=self._get_auth(),
+                headers={"Content-Type": "application/json"},
+                json={"transition": {"id": transition_id}},
+                timeout=15.0,
+            )
+        if response.status_code == 204:
+            print(f"\033[32m✓\033[0m Transitioned: \033[36m{issue_key}\033[0m → {transition_id}")
+            return
+        logger.error(
+            f"\033[31m✗ Failed ({response.status_code}): {response.text}\033[0m"
+        )
+        sys.exit(1)
+
     async def get_issue(self, issue_key: str) -> dict:
         """Get a single JIRA issue details."""
         async with httpx.AsyncClient() as client:
@@ -282,6 +323,8 @@ def build_parser() -> argparse.ArgumentParser:
   python scripts/jira_tool.py update MBA-17 -d "Updated desc" --ac "Criterion 1"
   python scripts/jira_tool.py list "parent = MBA-10"
   python scripts/jira_tool.py get MBA-10
+  python scripts/jira_tool.py transition MBA-21 41
+  python scripts/jira_tool.py comment MBA-21 "Реализовано. Issues: none."
 """,
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -335,6 +378,17 @@ def build_parser() -> argparse.ArgumentParser:
     get_parser = subparsers.add_parser("get", help="Get issue details")
     get_parser.add_argument("key", help="Issue key (e.g. MBA-10)")
 
+    comment_parser = subparsers.add_parser("comment", help="Add a comment to an issue")
+    comment_parser.add_argument("key", help="Issue key (e.g. MBA-21)")
+    comment_parser.add_argument("text", help="Comment text")
+
+    transition_parser = subparsers.add_parser("transition", help="Transition issue status")
+    transition_parser.add_argument("key", help="Issue key (e.g. MBA-21)")
+    transition_parser.add_argument(
+        "transition_id",
+        help="Transition ID: 11=К выполнению, 21=В работе, 31=Postponed, 41=Готово",
+    )
+
     return parser
 
 
@@ -367,6 +421,10 @@ async def main() -> None:
         )
     elif args.command == "get":
         await jira.get_issue(issue_key=args.key)
+    elif args.command == "comment":
+        await jira.add_comment(issue_key=args.key, text=args.text)
+    elif args.command == "transition":
+        await jira.transition_issue(issue_key=args.key, transition_id=args.transition_id)
 
 
 if __name__ == "__main__":
