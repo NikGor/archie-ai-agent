@@ -234,6 +234,7 @@ logs/
 *~
 
 # Project specific
+.claude/settings.local.json
 test_recordings/
 temp/
 recordings/
