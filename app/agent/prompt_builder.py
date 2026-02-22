@@ -23,23 +23,6 @@ class PromptBuilder:
             f"prompt_builder_001: Initialized with templates: \033[36m{templates_dir}\033[0m"
         )
 
-    def build_system_prompt(
-        self,
-        persona: str,
-        response_format: str,
-        format_instructions: str,
-    ) -> str:
-        """Build system prompt from template."""
-        logger.info(
-            f"prompt_builder_002: Building system prompt for persona: \033[35m{persona}\033[0m"
-        )
-        template = self.env.get_template("main_agent_prompt.jinja2")
-        return template.render(
-            persona=persona,
-            response_format=response_format,
-            format_instructions=format_instructions,
-        )
-
     def build_assistant_prompt(
         self,
         state: dict,
@@ -79,21 +62,3 @@ class PromptBuilder:
         )
         template = self.env.get_template(format_template_name)
         return template.render(response_format=response_format)
-
-    def build_full_prompt(
-        self,
-        persona: str,
-        response_format: str,
-        state: dict,
-    ) -> str:
-        """Build complete system prompt with all components."""
-        format_instructions = self.build_format_instructions(response_format)
-        system_prompt = self.build_system_prompt(
-            persona, response_format, format_instructions
-        )
-        assistant_prompt = self.build_assistant_prompt(state, response_format)
-        full_prompt = f"{system_prompt}\n\n# Assistant Context\n{assistant_prompt}"
-        logger.info(
-            f"prompt_builder_006: Built full prompt: \033[33m{len(full_prompt)}\033[0m chars"
-        )
-        return full_prompt
