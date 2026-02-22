@@ -390,7 +390,7 @@ def build_parser() -> argparse.ArgumentParser:
     transition_parser.add_argument("key", help="Issue key (e.g. ARCHIE-21)")
     transition_parser.add_argument(
         "transition_id",
-        help="Transition ID: 11=К выполнению, 21=В работе, 31=Postponed, 41=Готово",
+        help="Transition ID: 2=PR OPEN, 11=К выполнению, 21=В работе, 31=Postponed, 41=Готово",
     )
 
     return parser
