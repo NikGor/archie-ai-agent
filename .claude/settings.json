@@ -19,5 +19,19 @@
       "Bash(git reset --hard*)",
       "Read(**/.env)"
     ]
-  }
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "make format"
+          }
+        ]
+      }
+    ]
+  },
+  "language": "ru"
 }
