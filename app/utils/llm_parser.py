@@ -8,12 +8,23 @@ from archie_shared.chat.models import (
     LllmTrace,
     OutputTokensDetails,
 )
+from ..config import MODEL_TOKEN_PRICES
 
 
 logger = logging.getLogger(__name__)
 
 # Fields excluded from LLM schema (added by parser after response)
 EXCLUDED_FIELDS = {"llm_trace", "response_id"}
+
+
+def calculate_token_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    """Calculate LLM call cost in USD using MODEL_TOKEN_PRICES ($/1M tokens)."""
+    prices = MODEL_TOKEN_PRICES.get(model)
+    if prices is None:
+        return 0.0
+    return (input_tokens / 1_000_000) * prices["input"] + (
+        output_tokens / 1_000_000
+    ) * prices["output"]
 
 
 class ParsedLLMResponse:
@@ -71,7 +82,14 @@ def parse_openai_response(
             reasoning_tokens=usage.output_tokens_details.reasoning_tokens
         ),
         total_tokens=usage.total_tokens,
-        total_cost=0.0,
+        total_cost=calculate_token_cost(
+            raw_response.model, usage.input_tokens, usage.output_tokens
+        ),
+    )
+    logger.info(
+        f"llm_parser_010: Cost: \033[33m${llm_trace.total_cost:.6f}\033[0m "
+        f"(\033[33m{llm_trace.input_tokens}\033[0m in / \033[33m{llm_trace.output_tokens}\033[0m out) "
+        f"model: \033[36m{llm_trace.model}\033[0m"
     )
 
     output_item = next(
@@ -126,18 +144,28 @@ def parse_gemini_response(
     logger.info("llm_parser_004: Parsing Gemini response")
 
     usage_metadata = raw_response.usage_metadata
+    gemini_model = (
+        raw_response.model_version
+        if hasattr(raw_response, "model_version")
+        else "gemini"
+    )
     llm_trace = LllmTrace(
-        model=(
-            raw_response.model_version
-            if hasattr(raw_response, "model_version")
-            else "gemini"
-        ),
+        model=gemini_model,
         input_tokens=usage_metadata.prompt_token_count,
         input_tokens_details=InputTokensDetails(cached_tokens=0),
         output_tokens=usage_metadata.candidates_token_count,
         output_tokens_details=OutputTokensDetails(reasoning_tokens=0),
         total_tokens=usage_metadata.total_token_count,
-        total_cost=0.0,
+        total_cost=calculate_token_cost(
+            gemini_model,
+            usage_metadata.prompt_token_count,
+            usage_metadata.candidates_token_count,
+        ),
+    )
+    logger.info(
+        f"llm_parser_010: Cost: \033[33m${llm_trace.total_cost:.6f}\033[0m "
+        f"(\033[33m{llm_trace.input_tokens}\033[0m in / \033[33m{llm_trace.output_tokens}\033[0m out) "
+        f"model: \033[36m{llm_trace.model}\033[0m"
     )
 
     candidate = raw_response.candidates[0]
@@ -278,14 +306,20 @@ def parse_openrouter_response(
     input_tokens, output_tokens, total_tokens, cached_tokens, reasoning_tokens = (
         _extract_openrouter_usage(raw_response)
     )
+    openrouter_model = raw_response.model or "unknown"
     llm_trace = LllmTrace(
-        model=raw_response.model or "unknown",
+        model=openrouter_model,
         input_tokens=input_tokens,
         input_tokens_details=InputTokensDetails(cached_tokens=cached_tokens),
         output_tokens=output_tokens,
         output_tokens_details=OutputTokensDetails(reasoning_tokens=reasoning_tokens),
         total_tokens=total_tokens,
-        total_cost=0.0,
+        total_cost=calculate_token_cost(openrouter_model, input_tokens, output_tokens),
+    )
+    logger.info(
+        f"llm_parser_010: Cost: \033[33m${llm_trace.total_cost:.6f}\033[0m "
+        f"(\033[33m{llm_trace.input_tokens}\033[0m in / \033[33m{llm_trace.output_tokens}\033[0m out) "
+        f"model: \033[36m{llm_trace.model}\033[0m"
     )
     content = _extract_openrouter_content(raw_response)
     parsed_content = _parse_content_without_excluded_fields(content, expected_type)
