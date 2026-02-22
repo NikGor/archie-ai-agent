@@ -14,6 +14,9 @@ method signatures, and examples rather than relying on training data cutoff.
 - `httpx` — async HTTP client (`app/backend/`)
 - `redis` — state storage (`app/backend/state_service.py`)
 - `jinja2` — prompt templates (`app/agent/prompts/`)
+- `google-genai` —  gemini LLM 
+- `google-api-python-client` — google api interface
+
 
 **Usage pattern:**
 1. Call `mcp__context7__resolve-library-id` with the library name to get its context7 ID
