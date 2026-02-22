@@ -34,6 +34,8 @@ MODEL_PROVIDERS = {
         "o3",
         "o3-mini",
         "o3-pro",
+    ],
+    "openrouter": [
         # Google Gemini - schema too complex for AgentResponse (400 Bad Request)
         # Works for DecisionResponse (command stage), but not for final output
         "google/gemini-2.5-pro",
