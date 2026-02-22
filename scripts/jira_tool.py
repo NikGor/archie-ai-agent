@@ -38,7 +38,7 @@ class JiraTool:
         self.host = host or os.getenv("JIRA_HOST", "")
         self.email = email or os.getenv("JIRA_EMAIL", "")
         self.api_token = api_token or os.getenv("JIRA_API_TOKEN", "")
-        self.project = project or os.getenv("JIRA_PROJECT", "MBA")
+        self.project = project or os.getenv("JIRA_PROJECT", "ARCHIE")
         self.base_url = f"https://{self.host}/rest/api/3"
         self._validate_config()
 
@@ -319,14 +319,14 @@ def build_parser() -> argparse.ArgumentParser:
         description="JIRA CLI tool for archie-ai-agent",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-  python scripts/jira_tool.py create story MBA-8 "New feature"
-  python scripts/jira_tool.py create subtask MBA-10 "Fix bug" -d "Details" --ac "Tests pass" --ac "No errors"
-  python scripts/jira_tool.py create bug MBA-8 "Login broken" -d "Cannot login"
-  python scripts/jira_tool.py update MBA-17 -d "Updated desc" --ac "Criterion 1"
-  python scripts/jira_tool.py list "parent = MBA-10"
-  python scripts/jira_tool.py get MBA-10
-  python scripts/jira_tool.py transition MBA-21 41
-  python scripts/jira_tool.py comment MBA-21 "Реализовано. Issues: none."
+  python scripts/jira_tool.py create story ARCHIE-8 "New feature"
+  python scripts/jira_tool.py create subtask ARCHIE-10 "Fix bug" -d "Details" --ac "Tests pass" --ac "No errors"
+  python scripts/jira_tool.py create bug ARCHIE-8 "Login broken" -d "Cannot login"
+  python scripts/jira_tool.py update ARCHIE-17 -d "Updated desc" --ac "Criterion 1"
+  python scripts/jira_tool.py list "parent = ARCHIE-10"
+  python scripts/jira_tool.py get ARCHIE-10
+  python scripts/jira_tool.py transition ARCHIE-21 41
+  python scripts/jira_tool.py comment ARCHIE-21 "Реализовано. Issues: none."
 """,
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -338,7 +338,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     create_parser.add_argument(
         "parent",
-        help="Parent issue key (e.g. MBA-8)",
+        help="Parent issue key (e.g. ARCHIE-8)",
     )
     create_parser.add_argument("summary", help="Issue title")
     create_parser.add_argument("--description", "-d", help="Description text")
@@ -355,7 +355,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     update_parser = subparsers.add_parser("update", help="Update an existing issue")
-    update_parser.add_argument("key", help="Issue key (e.g. MBA-17)")
+    update_parser.add_argument("key", help="Issue key (e.g. ARCHIE-17)")
     update_parser.add_argument("--summary", "-s", help="New summary")
     update_parser.add_argument("--description", "-d", help="New description text")
     update_parser.add_argument(
@@ -368,7 +368,7 @@ def build_parser() -> argparse.ArgumentParser:
     list_parser = subparsers.add_parser("list", help="Search issues by JQL")
     list_parser.add_argument(
         "jql",
-        help='JQL query (e.g. "parent = MBA-10")',
+        help='JQL query (e.g. "parent = ARCHIE-10")',
     )
     list_parser.add_argument(
         "--max",
@@ -378,16 +378,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     get_parser = subparsers.add_parser("get", help="Get issue details")
-    get_parser.add_argument("key", help="Issue key (e.g. MBA-10)")
+    get_parser.add_argument("key", help="Issue key (e.g. ARCHIE-10)")
 
     comment_parser = subparsers.add_parser("comment", help="Add a comment to an issue")
-    comment_parser.add_argument("key", help="Issue key (e.g. MBA-21)")
+    comment_parser.add_argument("key", help="Issue key (e.g. ARCHIE-21)")
     comment_parser.add_argument("text", help="Comment text")
 
     transition_parser = subparsers.add_parser(
         "transition", help="Transition issue status"
     )
-    transition_parser.add_argument("key", help="Issue key (e.g. MBA-21)")
+    transition_parser.add_argument("key", help="Issue key (e.g. ARCHIE-21)")
     transition_parser.add_argument(
         "transition_id",
         help="Transition ID: 11=К выполнению, 21=В работе, 31=Postponed, 41=Готово",
