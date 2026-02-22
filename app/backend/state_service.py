@@ -84,7 +84,12 @@ class StateService:
             logger.info(
                 f"state_service_005: Loaded user state for: \033[35m{user_data.get('user_name')}\033[0m"
             )
-            return UserState(**user_data)
+            default_data = self._get_default_state()
+            merged = {
+                **default_data,
+                **{k: v for k, v in user_data.items() if v is not None},
+            }
+            return UserState(**merged)
 
         except redis.RedisError as e:
             logger.error(f"state_service_error_001: Redis error: \033[31m{e}\033[0m")
