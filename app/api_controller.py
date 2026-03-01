@@ -48,6 +48,7 @@ async def handle_chat(
         previous_message_id=user_request.previous_message_id,
         model=f"{command_model}/{final_output_model}",
         llm_trace=agent_response.llm_trace,
+        pipeline_trace=agent_response.pipeline_trace,
     )
 
     content_text = str(assistant_message.content) if assistant_message.content else ""
