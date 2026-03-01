@@ -1,6 +1,9 @@
 import json
 import logging
+import time
 from collections.abc import Callable, Awaitable
+
+from archie_shared.chat.models import LllmTrace, PipelineTrace
 
 from ..backend.gemini_client import GeminiClient
 from ..backend.openai_client import OpenAIClient
@@ -17,6 +20,7 @@ from ..tools.create_output_tool import create_output
 from ..tools.tool_factory import ToolFactory
 from ..utils.llm_parser import parse_llm_response
 from ..utils.tool_executor import execute_tool_calls
+from ..utils.trace_utils import StepTimer, accumulate_llm_traces, make_step_trace
 from .prompt_builder import PromptBuilder
 
 
@@ -58,11 +62,11 @@ class AgentFactory:
         previous_results: list[ToolResult] | None = None,
         previous_response_id: str | None = None,
         chat_history: str | None = None,
-    ) -> DecisionResponse:
+    ) -> tuple[DecisionResponse, LllmTrace | None]:
         """
         Stage 1: Analyze request and decide action using cmd_prompt.
 
-        Returns DecisionResponse with routing, action type, and tool calls.
+        Returns (DecisionResponse, LllmTrace) with routing, action type, tool calls, and token usage.
         Can be called multiple times in a loop with previous_results from prior iterations.
         """
         logger.info("=== Stage 1: Command Decision ===")
@@ -115,7 +119,7 @@ class AgentFactory:
             f"agent_factory_009: Decision made - Action: \033[36m{parsed.parsed_content.sgr.action.type}\033[0m"
         )
 
-        return parsed.parsed_content
+        return parsed.parsed_content, parsed.llm_trace
 
     async def arun(
         self,
@@ -136,6 +140,7 @@ class AgentFactory:
         Stage 3: Final response generation (uses final_output_model)
         """
         logger.info("=== AgentFactory: Creating Agent Response ===")
+        arun_start = time.monotonic()
         cmd_provider = get_provider_for_model(command_model)
         output_provider = get_provider_for_model(final_output_model)
         logger.info(
@@ -166,23 +171,38 @@ class AgentFactory:
             logger.info(
                 f"agent_factory_003b: {response_format} format - skipping command loop"
             )
-            final_response = await create_output(
-                user_input=user_input,
-                command_summary="Dashboard request - direct output",
-                tool_results=None,
-                response_format=response_format,
-                model=final_output_model,
-                state=user_state.model_dump(),
-                previous_response_id=(
-                    previous_response_id if output_provider == "openai" else None
+            with StepTimer() as stage3_timer:
+                final_response = await create_output(
+                    user_input=user_input,
+                    command_summary="Dashboard request - direct output",
+                    tool_results=None,
+                    response_format=response_format,
+                    model=final_output_model,
+                    state=user_state.model_dump(),
+                    previous_response_id=(
+                        previous_response_id if output_provider == "openai" else None
+                    ),
+                    chat_history=chat_history if output_provider != "openai" else None,
+                )
+            total_ms = int((time.monotonic() - arun_start) * 1000)
+            final_response.pipeline_trace = PipelineTrace(
+                stage3=make_step_trace(
+                    stage3_timer.duration_ms, final_response.llm_trace
                 ),
-                chat_history=chat_history if output_provider != "openai" else None,
+                total_ms=total_ms,
+            )
+            logger.info(
+                f"agent_factory_010: Pipeline trace (direct): stage3=\033[33m{stage3_timer.duration_ms}\033[0mms, "
+                f"total=\033[33m{total_ms}\033[0mms"
             )
             logger.info("=== AgentFactory: Response Created ===")
             return final_response
 
         tool_results = []
         command_history = []
+        stage1_duration_ms = 0
+        stage1_llm_traces: list[LllmTrace] = []
+        stage2_duration_ms = 0
         iteration = 0
         while iteration < MAX_COMMAND_ITERATIONS:
             iteration += 1
@@ -199,16 +219,20 @@ class AgentFactory:
                 )
 
             # STAGE 1: Command - Analyze request and decide action
-            decision = await self._make_command_call(
-                user_input=user_input,
-                model=command_model,
-                provider=cmd_provider,
-                user_state=user_state,
-                response_format=response_format,
-                previous_results=tool_results if tool_results else None,
-                previous_response_id=previous_response_id,
-                chat_history=chat_history,
-            )
+            with StepTimer() as s1_timer:
+                decision, s1_llm_trace = await self._make_command_call(
+                    user_input=user_input,
+                    model=command_model,
+                    provider=cmd_provider,
+                    user_state=user_state,
+                    response_format=response_format,
+                    previous_results=tool_results if tool_results else None,
+                    previous_response_id=previous_response_id,
+                    chat_history=chat_history,
+                )
+            stage1_duration_ms += s1_timer.duration_ms
+            if s1_llm_trace:
+                stage1_llm_traces.append(s1_llm_trace)
             if on_status:
                 await on_status(
                     StatusUpdate(
@@ -243,11 +267,15 @@ class AgentFactory:
                 logger.info(
                     f"agent_factory_006: Executing \033[33m{len(decision.sgr.tool_calls)}\033[0m tools"
                 )
-                new_results = await execute_tool_calls(
-                    tool_calls=decision.sgr.tool_calls,
-                    tool_factory=self.tool_factory,
-                    on_status=on_status,
-                )
+
+                # STAGE 2: Tool execution
+                with StepTimer() as s2_timer:
+                    new_results = await execute_tool_calls(
+                        tool_calls=decision.sgr.tool_calls,
+                        tool_factory=self.tool_factory,
+                        on_status=on_status,
+                    )
+                stage2_duration_ms += s2_timer.duration_ms
                 tool_results.extend(new_results)
                 logger.info(
                     f"agent_factory_006a: Total tool results: \033[33m{len(tool_results)}\033[0m"
@@ -277,18 +305,21 @@ class AgentFactory:
                     message=f"Generating {response_format} response with {final_output_model}",
                 )
             )
-        final_response = await create_output(
-            user_input=user_input,
-            command_summary=command_summary,
-            tool_results=tool_results if tool_results else None,
-            response_format=response_format,
-            model=final_output_model,
-            state=user_state.model_dump(),
-            previous_response_id=(
-                previous_response_id if output_provider == "openai" else None
-            ),
-            chat_history=chat_history if output_provider != "openai" else None,
-        )
+
+        # STAGE 3: Final output generation
+        with StepTimer() as stage3_timer:
+            final_response = await create_output(
+                user_input=user_input,
+                command_summary=command_summary,
+                tool_results=tool_results if tool_results else None,
+                response_format=response_format,
+                model=final_output_model,
+                state=user_state.model_dump(),
+                previous_response_id=(
+                    previous_response_id if output_provider == "openai" else None
+                ),
+                chat_history=chat_history if output_provider != "openai" else None,
+            )
         if on_status:
             await on_status(
                 StatusUpdate(
@@ -297,5 +328,23 @@ class AgentFactory:
                     message="Response ready",
                 )
             )
+        total_ms = int((time.monotonic() - arun_start) * 1000)
+        stage2_trace = (
+            make_step_trace(stage2_duration_ms) if stage2_duration_ms else None
+        )
+        final_response.pipeline_trace = PipelineTrace(
+            stage1=make_step_trace(
+                stage1_duration_ms, accumulate_llm_traces(stage1_llm_traces)
+            ),
+            stage2=stage2_trace,
+            stage3=make_step_trace(stage3_timer.duration_ms, final_response.llm_trace),
+            total_ms=total_ms,
+        )
+        logger.info(
+            f"agent_factory_010: Pipeline trace: stage1=\033[33m{stage1_duration_ms}\033[0mms, "
+            f"stage2=\033[33m{stage2_duration_ms}\033[0mms, "
+            f"stage3=\033[33m{stage3_timer.duration_ms}\033[0mms, "
+            f"total=\033[33m{total_ms}\033[0mms"
+        )
         logger.info("=== AgentFactory: Response Created ===")
         return final_response
