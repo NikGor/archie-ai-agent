@@ -2,7 +2,7 @@
 
 from typing import Union
 from pydantic import BaseModel, Field
-from archie_shared.chat.models import LllmTrace, Content
+from archie_shared.chat.models import LllmTrace, PipelineTrace, Content
 from archie_shared.ui.models import (
     Level2Answer,
     Level3Answer,
@@ -61,6 +61,10 @@ class AgentResponse(BaseModel):
     response_id: str | None = Field(
         default=None,
         description="OpenAI response ID for conversation continuity (filled by parser)",
+    )
+    pipeline_trace: PipelineTrace | None = Field(
+        default=None,
+        description="Per-stage timing and LLM cost trace for the full arun() call",
     )
 
 
