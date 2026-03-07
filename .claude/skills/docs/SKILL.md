@@ -1,7 +1,7 @@
 ---
 name: docs
 description: Look up current library documentation via context7 MCP before implementing features that depend on external libraries
-argument-hint: [library name]
+argument-hint: "library name"
 ---
 
 Use context7 MCP to get up-to-date docs for `$ARGUMENTS` (or the relevant library).
