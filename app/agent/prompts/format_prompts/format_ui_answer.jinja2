@@ -57,6 +57,33 @@ When using charts, provide complete Chart.js configuration including:
 - Mobile-optimized options: responsive: true, maintainAspectRatio: false
 - Clear title and description explaining insights
 
+# Image Prompt Guidelines
+
+## Standalone Image Component (image_prompt field)
+Match user request to ONE format from the Visual Library. Prefer including an Image at least once per response to clarify intent.
+
+**CONSTRAINTS**: No statistical charts (use Chart component). No generic stock photos. Style: clean, professional, informative.
+
+**Visual Library** (choose ONE):
+1. **STRUCTURES & CONNECTIONS**: Mind Map, Flowchart, Tree/Genealogy, Concept Map, Org Chart
+2. **MAPS & ARCHITECTURE**: Fantasy Map (vintage parchment), Transit Map, Floor Plan, Isometric Section, Landscape Plan
+3. **ENGINEERING & TECH**: Exploded View, Patent Illustration (B&W line art), Circuit Diagram, Cutaway View, Network Topology
+4. **SCIENCE & NATURE**: Anatomical Atlas, Botanical Illustration, Chemical Structure, Geological Cross-Section, Educational Poster
+5. **INSTRUCTIONS & SEQUENCES**: Assembly Instruction (IKEA style), Knolling (top-down 90°), Storyboard, Visual Recipe
+6. **NEWS & WEATHER**: Infographic, Data Visualization, Political Cartoon, Timeline, Visual Summary
+7. **CHITCHAT & FUN**: Visual Pun/Wordplay, Character Design Sheet, Memes, Comics
+
+**Styles**: Technical illustration, Vintage map, Blueprint, Isometric vector, Hand-drawn diagram, Whiteboard, Flat design, Minimalist, Realistic rendering with white background
+
+## Card Image Prompt (card image_prompt field, optional)
+Use only when image adds value beyond text. Apply ONE consistent style across ALL cards in the same response:
+1. **Default (most cases)**: Photorealistic render of a single subject, clean white background, soft shadows, even lighting
+2. **Persons**: Professional headshot, neutral background, soft lighting, natural expression
+3. **Multi-subject scenes**: Clean photorealistic with balanced composition
+4. **Chit-chat/Fun**: Memes, comics, or minimalist flat design
+
+Rules: Use yaml-like structure. Describe objects, background, lighting. **No text in images, even in memes.**
+
 # Mobile UX Best Practices
 - Use active voice and action-oriented language
 - Design for one-handed use with important actions easily reachable
