@@ -9,9 +9,7 @@
       "Bash(./execute_tests.sh*)",
       "Bash(git diff*)",
       "Bash(git log*)",
-      "Bash(git status)",
-      "Bash(python scripts/jira_tool.py list*)",
-      "Bash(python scripts/jira_tool.py get*)"
+      "Bash(git status)"
     ],
     "deny": [
       "Bash(rm -rf*)",
