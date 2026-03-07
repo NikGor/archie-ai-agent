@@ -1,5 +1,8 @@
 ---
-description: Create a git commit following project conventions
+name: commit
+description: Stage and commit changes following project conventions (conventional commits + JIRA key)
+disable-model-invocation: true
+allowed-tools: Bash(git *)
 ---
 
 Stage and commit following CLAUDE.md step 6:
