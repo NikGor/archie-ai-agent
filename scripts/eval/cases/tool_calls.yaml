@@ -1,0 +1,57 @@
+# Stage 1 tool selection tests: verify correct tool is chosen
+
+- name: "light control"
+  input: "Выключи свет в спальне"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: function_call
+    tools_called: [light_control_tool]
+
+- name: "climate control"
+  input: "Установи температуру 22 градуса"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: function_call
+    tools_called: [climate_control_tool]
+
+- name: "spotify"
+  input: "Включи джаз на Spotify"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: function_call
+    tools_called: [spotify_tool]
+
+- name: "google search"
+  input: "Найди информацию о ближайших кинотеатрах"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: function_call
+    tools_called: [google_search_tool]
+
+- name: "task tool"
+  input: "Напомни мне завтра позвонить врачу"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: function_call
+    tools_called: [task_tool]
+
+- name: "notes tool"
+  input: "Запиши в заметки: купить подарок"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: function_call
+    tools_called: [notes_tool]
+
+- name: "football tool"
+  input: "Какой счёт в последнем матче Реал Мадрид?"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: function_call
+    tools_called: [football_tool]

@@ -1,0 +1,46 @@
+# Full pipeline tests: verify output format and content quality
+
+- name: "plain greeting"
+  input: "Привет! Как дела?"
+  response_format: plain
+  stage: full
+  expect:
+    content_not_empty: true
+    max_total_tokens: 1000
+    max_latency_ms: 15000
+
+- name: "plain day of week"
+  input: "Какой сейчас день недели?"
+  response_format: plain
+  stage: full
+  expect:
+    content_not_empty: true
+    max_total_tokens: 800
+    max_latency_ms: 15000
+
+- name: "plain capabilities"
+  input: "Что ты умеешь делать?"
+  response_format: plain
+  stage: full
+  expect:
+    content_not_empty: true
+    max_total_tokens: 1200
+    max_latency_ms: 20000
+
+- name: "level2 greeting"
+  input: "Добрый вечер!"
+  response_format: level2_answer
+  stage: full
+  expect:
+    content_not_empty: true
+    max_total_tokens: 1200
+    max_latency_ms: 15000
+
+- name: "dashboard format"
+  input: "Покажи панель управления"
+  response_format: dashboard
+  stage: full
+  expect:
+    content_not_empty: true
+    max_total_tokens: 1500
+    max_latency_ms: 20000

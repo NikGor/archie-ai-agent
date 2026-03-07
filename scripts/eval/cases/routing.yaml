@@ -1,0 +1,57 @@
+# Stage 1 routing tests: verify action_type classification
+
+- name: "simple greeting"
+  input: "Привет!"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: final_response
+
+- name: "ask day of week"
+  input: "Какой сейчас день недели?"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: final_response
+
+- name: "ask current time"
+  input: "Который сейчас час?"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: final_response
+
+- name: "turn on light"
+  input: "Включи свет на кухне"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: function_call
+
+- name: "play music"
+  input: "Включи что-нибудь на Spotify"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: function_call
+
+- name: "web search"
+  input: "Найди в интернете погоду в Москве"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: function_call
+
+- name: "add task"
+  input: "Добавь задачу купить молоко"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: function_call
+
+- name: "vague task without tool"
+  input: "Что ты умеешь?"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: final_response
