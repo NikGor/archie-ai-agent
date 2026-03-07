@@ -1,56 +1,66 @@
 ---
 name: sandbox
-description: Run sandbox scripts to test LLM provider API syntax, response structure, and parser compatibility. Use when debugging provider integration, testing a new model, or validating parser output. Scripts live in scripts/.
-argument-hint: "provider or script name (openai | openrouter | gemini | qwen | pipeline | models)"
-allowed-tools: Bash(PYTHONPATH=. poetry run python scripts/* *)
+description: Run sandbox scripts to test LLM provider API syntax, response structure, and parser compatibility. Use when debugging provider integration, testing a new model, or validating parser output.
+argument-hint: "provider or script (openai | openrouter [model_id] | gemini | qwen | pipeline | models)"
+disable-model-invocation: true
+allowed-tools: Bash(PYTHONPATH=. poetry run python *)
 ---
 
-Sandbox scripts for testing provider APIs and internal clients.
-All run from repo root with: `PYTHONPATH=. poetry run python scripts/<script>.py`
+Sandbox scripts for testing provider APIs, internal clients, and the full agent pipeline.
+All scripts live in `${CLAUDE_SKILL_DIR}/scripts/`.
 
 ## Scripts
 
-| Script | What it tests | Key args |
-|--------|--------------|----------|
+| Script | Tests | Args |
+|--------|-------|------|
 | `openai_sample.py` | OpenAI Responses API (`client.responses.parse`) + `DecisionResponse` + `parse_llm_response` | — |
 | `openai_client_sample.py` | Internal `OpenAIClient.create_completion`: text / structured / tools / mixed | — |
-| `openrouter_sample.py` | Raw OpenRouter API, multi-model, full response struct dump + `parse_openrouter_response` | `[model_id]` to test one model |
-| `openrouter_client_sample.py` | Internal `OpenRouterClient.create_completion`: text / structured / tools | `[model_id]` to test one model |
+| `openrouter_sample.py` | Raw OpenRouter API, multi-model, full response struct dump + `parse_openrouter_response` | `[model_id]` |
+| `openrouter_client_sample.py` | Internal `OpenRouterClient.create_completion`: text / structured / tools | `[model_id]` |
 | `gemini_sample.py` | Gemini native SDK + `parse_llm_response` | — |
-| `full_pipeline_test.py` | E2E `AgentFactory.arun()` for OpenAI + Gemini (standard + thinking) | — |
-| `list_models.py` | List available OpenAI models (gpt-4/o-series) | — |
-| `list_gemini_models.py` | List available Gemini models | — |
+| `full_pipeline_test.py` | E2E `AgentFactory.arun()`: OpenAI + Gemini (standard + thinking) | — |
+| `list_models.py` | Available OpenAI models (gpt-4/o-series) | — |
+| `list_gemini_models.py` | Available Gemini models | — |
 | `qwen_sample.py` | Qwen3 via HuggingFace router + instructor | — |
 
-## Picking the right script
+## Pick the right script based on $ARGUMENTS
 
-- **New model on OpenRouter** → `openrouter_sample.py <model_id>` — shows raw response structure
-- **Internal client broken** → `openai_client_sample.py` or `openrouter_client_sample.py`
-- **Parser mismatch** → run provider-specific sample; output shows `parse_*_response` result
-- **Full pipeline smoke** → `full_pipeline_test.py`
-- **What models are available** → `list_models.py` (OpenAI) or `list_gemini_models.py`
+- **`openai`** → run `openai_sample.py`, then `openai_client_sample.py`
+- **`openrouter`** or **`openrouter <model_id>`** → run `openrouter_sample.py` (optionally with model arg), then `openrouter_client_sample.py`
+- **`gemini`** → run `gemini_sample.py`
+- **`qwen`** → run `qwen_sample.py`
+- **`pipeline`** → run `full_pipeline_test.py`
+- **`models`** → run `list_models.py` and `list_gemini_models.py`
+- **no args or `all`** → run all provider samples + full pipeline
 
-## Run examples
+## Run commands
 
 ```bash
-# Test all OpenRouter models
-PYTHONPATH=. poetry run python scripts/openrouter_sample.py
+# OpenAI
+PYTHONPATH=. poetry run python ${CLAUDE_SKILL_DIR}/scripts/openai_sample.py
+PYTHONPATH=. poetry run python ${CLAUDE_SKILL_DIR}/scripts/openai_client_sample.py
 
-# Test specific OpenRouter model
-PYTHONPATH=. poetry run python scripts/openrouter_sample.py anthropic/claude-sonnet-4
+# OpenRouter — all models
+PYTHONPATH=. poetry run python ${CLAUDE_SKILL_DIR}/scripts/openrouter_sample.py
+# OpenRouter — one model
+PYTHONPATH=. poetry run python ${CLAUDE_SKILL_DIR}/scripts/openrouter_sample.py anthropic/claude-sonnet-4
 
-# Test OpenAI client wrapper (all 4 scenarios)
-PYTHONPATH=. poetry run python scripts/openai_client_sample.py
+# Gemini
+PYTHONPATH=. poetry run python ${CLAUDE_SKILL_DIR}/scripts/gemini_sample.py
 
 # Full pipeline E2E
-PYTHONPATH=. poetry run python scripts/full_pipeline_test.py
+PYTHONPATH=. poetry run python ${CLAUDE_SKILL_DIR}/scripts/full_pipeline_test.py
+
+# List available models
+PYTHONPATH=. poetry run python ${CLAUDE_SKILL_DIR}/scripts/list_models.py
+PYTHONPATH=. poetry run python ${CLAUDE_SKILL_DIR}/scripts/list_gemini_models.py
 ```
 
 ## Output interpretation
 
-- `✅ model — SUCCESS` / `❌ model — FAILED: ...` — per-model result in openrouter_sample
-- `Parser OK: {...}` — parser returned correct types and token counts
+- `✅ model — SUCCESS` / `❌ model — FAILED: ...` — per-model in openrouter_sample
+- `Parser OK: {parsed_type, model, input_tokens, output_tokens}` — parser returned correct types
 - `LLM Trace: model=..., in=..., out=...` — verify token accounting
-- Any `❌ Error:` — print full traceback and investigate
+- Any `❌ Error:` — print full traceback and investigate root cause
 
-Based on `$ARGUMENTS`, select and run the appropriate script(s). Report: what was tested, pass/fail per model, any errors with context.
+Report: what was tested, pass/fail per script/model, any errors with full context.
