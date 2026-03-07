@@ -245,6 +245,9 @@ poetry.lock
 # Application state
 app/response_understand.py
 
+# Eval results (JSON history)
+eval_results/*.json
+
 # AI-generated reports and plans
 audit-report.html
 test-plan.html
