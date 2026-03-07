@@ -56,13 +56,16 @@ def chat():
     )
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash-thinking-exp",
+        model=model,
         contents=prompt,
         config={
             "response_mime_type": "application/json",
             "response_json_schema": orchestration_sgr.DecisionResponse.model_json_schema(),
         },
     )
+
+    print("=== Raw usage_metadata ===")
+    print(str(response.usage_metadata))
 
     # Test parser
     parsed = parse_llm_response(
@@ -71,7 +74,7 @@ def chat():
         expected_type=orchestration_sgr.DecisionResponse,
     )
 
-    print("=== Parsed Response ===")
+    print("\n=== Parsed Response ===")
     print(f"Response ID: {parsed.response_id}")
     print(f"Has Function Call: {parsed.has_function_call}")
     if parsed.has_function_call:
@@ -83,11 +86,8 @@ def chat():
             f"Content: {json.dumps(parsed.parsed_content.model_dump(), indent=2, ensure_ascii=False)}"
         )
 
-    print("\n=== LLM Trace ===")
+    print("\n=== LLM Trace (parsed) ===")
     print(json.dumps(parsed.llm_trace.model_dump(), indent=2, ensure_ascii=False))
-
-    # print("\n=== Full Raw Response ===")
-    # print(json.dumps(response.model_dump(), indent=2, ensure_ascii=False))
 
 
 def main():
