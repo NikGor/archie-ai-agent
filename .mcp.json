@@ -17,6 +17,13 @@
         "-c",
         "set -a && source /home/niko/Documents/projects/archie/archie-ai-agent/.env && set +a && exec npx -y @upstash/context7-mcp"
       ]
+    },
+    "jira-mcp": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "set -a && source /home/niko/Documents/projects/archie/archie-ai-agent/.env && set +a && exec npx -y @aashari/mcp-server-atlassian-jira"
+      ]
     }
   }
 }
