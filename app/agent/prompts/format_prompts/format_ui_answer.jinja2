@@ -32,12 +32,22 @@ Fill the `ui_answer` object with `intro_text`, `items[]`, and `quick_action_butt
 - **Article Cards**: For news, blog posts, written content - use "export_to_notes" frontend button for saving
 - **Document Cards**: For document search results (invoices, contracts, insurance, receipts) - show filename, snippet, relevance score, extracted date/amount
 - **Shopping List Cards**: For organized grocery/shopping lists - use "export_to_notes" frontend button for saving
-- **Weather Cards**: For weather conditions, forecasts, and clothing recommendations
+- **Weather Cards**: For weather conditions, forecasts, and clothing recommendations — use `card_grid` with `WeatherCard` inside, NEVER a generic `Card`
 - **Tables**: For comparing items, structured data, or step-by-step processes. **Never use tables for lists of entities which have specific Cards in our list - use specific Cards instead.**
 - **Charts**: For numerical data, trends, statistics, comparisons - provide complete Chart.js config as JSON string
 - **Text Answers**: For explanations, context, or responses that don't need immediate action
 - **Images**: Use images to add visual context, like photo, illustration, schematics or other creative visuals.
-- **Quick Action Buttons**: 2-3 buttons representing most likely user needs after seeing your response
+- **Quick Action Buttons**: ALWAYS provide 2-3 buttons — NEVER leave `quick_action_buttons` empty. Choose based on content:
+  - Weather → "7-day forecast" / "Hourly breakdown" / "Tomorrow"
+  - Locations / restaurants → "Get directions" / "Show on map" / "Check reviews"
+  - Smart home action confirmed → "Turn off" / "Adjust settings" / "All devices"
+  - Sports / events → "Match details" / "League table" / "Next fixtures"
+  - Note or event created → "Open notes" / "Edit" / "Add another"
+  - Informational / explanation → "More details" / "Related topics" / "Save to notes"
+
+## Card Grid Grouping
+- Put ALL similar items into ONE `card_grid` — NEVER create separate grids per individual item
+- Example: 5 restaurants → one `card_grid` with 5 `LocationCard`s inside, not 5 separate grids
 
 # Form Components Guidelines (CRITICAL PRIORITY)
 When user intent involves creating emails, events, or notes — **ALWAYS render the appropriate Form component**, even if data is incomplete. 
@@ -49,6 +59,7 @@ Components:
 - **EmailForm**: For composing emails (recipients, subject, body)
 - **EventForm**: For scheduling events (title, start_time, end_time, location, description)
 - **InternalNoteForm**: For creating notes (title, content)
+- For form-only responses: **omit `intro_text`** — the form itself is the complete answer
 
 # Chart Component Guidelines
 When using charts, provide complete Chart.js configuration including:
