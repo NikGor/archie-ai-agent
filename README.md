@@ -1,5 +1,7 @@
 # Archie AI Agent
 
+[![CI](https://github.com/NikGor/archie-ai-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/NikGor/archie-ai-agent/actions/workflows/ci.yml)
+
 A sophisticated AI-powered conversational agent built with FastAPI, featuring multiple personas, web search capabilities, and external backend integration.
 
 ## Features
