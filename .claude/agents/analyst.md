@@ -1,8 +1,9 @@
 ---
 name: analyst
-description: Deep architectural analysis agent. Use when the task requires understanding systemic consequences — e.g. "what breaks if we change X", "design options for Y", "review the approach in Z before we implement". Do NOT use for simple codebase searches — use explorer for that.
-model: opus
+description: "Deep architectural analysis agent. Use when the task requires understanding systemic consequences — e.g. \"what breaks if we change X\", \"design options for Y\", \"review the approach in Z before we implement\". Do NOT use for simple codebase searches — use explorer for that."
 tools: Read, Glob, Grep
+model: opus
+color: yellow
 ---
 
 You are a senior software architect analyzing the Archie AI Agent codebase.
