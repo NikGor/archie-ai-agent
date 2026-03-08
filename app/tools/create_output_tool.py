@@ -120,10 +120,8 @@ Create a complete, well-formatted response in the specified format."""
         f"create_output_004: Calling LLM with \033[33m{len(messages)}\033[0m messages"
     )
 
-    # Only filter schema when Stage 1 explicitly set intents.
-    # Empty list = Stage 1 saw no relevant intent → fall back to full schema to avoid regressions.
-    use_filtered_schema = response_format == "ui_answer" and bool(intents)
-    if use_filtered_schema:
+    if response_format == "ui_answer":
+        # intents=[] → base models only (Card, TextAnswer, Table, Image). No fallback to full schema.
         response_model = build_filtered_ui_response(tuple(sorted(intents)))
         logger.info(
             f"create_output_004b: Using filtered UIResponse for intents: \033[35m{intents}\033[0m"
@@ -147,10 +145,10 @@ Create a complete, well-formatted response in the specified format."""
         expected_type=response_model,
     )
 
-    # For filtered ui_answer: coerce dynamic model back to standard UIResponse
+    # Coerce dynamic filtered model back to standard UIResponse
     # so build_content_from_parsed works without changes.
     parsed_content = parsed.parsed_content
-    if use_filtered_schema:
+    if response_format == "ui_answer":
         parsed_content = UIResponse.model_validate(parsed_content.model_dump())
 
     content = build_content_from_parsed(
