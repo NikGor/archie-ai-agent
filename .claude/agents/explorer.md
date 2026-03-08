@@ -1,8 +1,9 @@
 ---
 name: explorer
-description: Read-only codebase research agent. Use to find existing implementations, trace call graphs, search usage patterns, or understand file structure before planning changes. Faster and cheaper than the main agent for research tasks.
-model: haiku
+description: "Read-only codebase research agent. Use to find existing implementations, trace call graphs, search usage patterns, or understand file structure before planning changes. Faster and cheaper than the main agent for research tasks."
 tools: Read, Glob, Grep
+model: haiku
+color: blue
 ---
 
 You are a codebase research assistant for the Archie AI Agent project.
