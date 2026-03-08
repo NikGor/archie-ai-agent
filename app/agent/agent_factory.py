@@ -204,6 +204,7 @@ class AgentFactory:
         stage1_llm_traces: list[LllmTrace] = []
         stage2_duration_ms = 0
         iteration = 0
+        decision: DecisionResponse | None = None
         while iteration < MAX_COMMAND_ITERATIONS:
             iteration += 1
             logger.info(
@@ -296,7 +297,10 @@ class AgentFactory:
             ]
         )
         command_summary += f"\n\nTotal tools executed: {len(tool_results)}"
-        logger.info("agent_factory_007: Creating final output")
+        ui_intents: list[str] = [str(i) for i in decision.sgr.intents] if decision else []
+        logger.info(
+            f"agent_factory_007: Creating final output, intents: \033[35m{ui_intents}\033[0m"
+        )
         if on_status:
             await on_status(
                 StatusUpdate(
@@ -319,6 +323,7 @@ class AgentFactory:
                     previous_response_id if output_provider == "openai" else None
                 ),
                 chat_history=chat_history if output_provider != "openai" else None,
+                intents=ui_intents,
             )
         if on_status:
             await on_status(
