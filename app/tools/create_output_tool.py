@@ -1,6 +1,7 @@
 import logging
 from typing import Any
 
+from pydantic import ValidationError
 from archie_shared.chat.models import Content
 
 from ..agent.prompt_builder import PromptBuilder
@@ -149,7 +150,11 @@ Create a complete, well-formatted response in the specified format."""
     # so build_content_from_parsed works without changes.
     parsed_content = parsed.parsed_content
     if response_format == "ui_answer":
-        parsed_content = UIResponse.model_validate(parsed_content.model_dump())
+        try:
+            parsed_content = UIResponse.model_validate(parsed_content.model_dump())
+        except ValidationError as e:
+            logger.error(f"create_output_007: UIResponse coercion failed: {e}")
+            raise
 
     content = build_content_from_parsed(
         parsed_content=parsed_content,
