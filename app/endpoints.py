@@ -1,6 +1,7 @@
 import logging
 from archie_shared.chat.models import ChatMessage, ChatRequest, Content
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import ValidationError
 from .api_controller import handle_chat
 from .models.ws_models import StatusUpdate
 from .utils.general_utils import generate_message_id
@@ -28,8 +29,18 @@ async def chat_endpoint(request: ChatRequest) -> ChatMessage:
         content_text = str(result.content) if result.content else ""
         logger.info(f"endpoints_002: Response len: \033[33m{len(content_text)}\033[0m")
         return result
+    except HTTPException:
+        raise
+    except ValidationError as e:
+        logger.exception(f"endpoints_error_002: \033[31mValidation error\033[0m")
+        return ChatMessage(
+            message_id=generate_message_id(),
+            role="assistant",
+            content=Content(content_format="plain", text=f"Validation error: {e!s}"),
+            conversation_id=request.conversation_id,
+        )
     except Exception as e:
-        logger.error(f"endpoints_error_001: \033[31m{e!s}\033[0m", exc_info=True)
+        logger.exception(f"endpoints_error_001: \033[31m{e!s}\033[0m")
         return ChatMessage(
             message_id=generate_message_id(),
             role="assistant",
@@ -63,8 +74,11 @@ async def ws_chat(websocket: WebSocket):
         logger.info("ws_chat_003: Final response sent")
     except WebSocketDisconnect:
         logger.info("ws_chat_004: Client disconnected")
+    except ValidationError as e:
+        logger.exception(f"ws_chat_error_002: \033[31mValidation error\033[0m")
+        await websocket.send_json({"type": "error", "message": f"Validation error: {e!s}"})
     except Exception as e:
-        logger.error(f"ws_chat_error_001: \033[31m{e!s}\033[0m", exc_info=True)
+        logger.exception(f"ws_chat_error_001: \033[31m{e!s}\033[0m")
         await websocket.send_json({"type": "error", "message": str(e)})
     finally:
         await websocket.close()
