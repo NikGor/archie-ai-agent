@@ -6,6 +6,8 @@ Usage:
     python -m scripts.eval.eval_runner --suite routing
     python -m scripts.eval.eval_runner --model gpt-4.1-mini --compare gpt-4.1
     python -m scripts.eval.eval_runner --suite routing --diff eval_results/2026-01-01_10-00.json
+    python -m scripts.eval.eval_runner --suite ui_answer --judge
+    python -m scripts.eval.eval_runner --suite ui_answer --judge --judge-model gpt-4.1
 """
 
 import argparse
@@ -26,6 +28,7 @@ from app.utils.provider_utils import get_provider_for_model
 
 from .assertion_engine import check_full, check_stage1
 from .eval_types import EvalCase, Expect, EvalResult
+from .judge import evaluate_response
 from .report import (
     build_run_summary,
     export_json,
@@ -55,6 +58,10 @@ def load_cases(suite: str) -> list[EvalCase]:
             max_total_tokens=expect_data.get("max_total_tokens"),
             max_latency_ms=expect_data.get("max_latency_ms"),
             text_contains=expect_data.get("text_contains"),
+            min_ui_items=expect_data.get("min_ui_items"),
+            has_quick_actions=expect_data.get("has_quick_actions"),
+            has_form=expect_data.get("has_form"),
+            expected_item_types=expect_data.get("expected_item_types"),
         )
         cases.append(
             EvalCase(
@@ -62,6 +69,7 @@ def load_cases(suite: str) -> list[EvalCase]:
                 input=item["input"],
                 response_format=item.get("response_format", "plain"),
                 stage=item.get("stage", "full"),
+                judge=item.get("judge", False),
                 expect=expect,
             )
         )
@@ -72,6 +80,7 @@ async def run_case(
     case: EvalCase,
     agent_factory: AgentFactory,
     model: str,
+    judge_model: str | None = None,
 ) -> EvalResult:
     try:
         if case.stage == "stage1":
@@ -93,7 +102,10 @@ async def run_case(
                 final_output_model=model,
                 response_format=case.response_format,
             )
-            return check_full(case, response)
+            result = check_full(case, response)
+            if case.judge and judge_model is not None:
+                result.judge = await evaluate_response(case, response, judge_model)
+            return result
     except Exception as e:
         return EvalResult(
             name=case.name,
@@ -106,11 +118,12 @@ async def run_suite(
     suite: str,
     model: str,
     agent_factory: AgentFactory,
+    judge_model: str | None = None,
 ) -> list[EvalResult]:
     cases = load_cases(suite)
     results = []
     for case in cases:
-        result = await run_case(case, agent_factory, model)
+        result = await run_case(case, agent_factory, model, judge_model=judge_model)
         results.append(result)
     return results
 
@@ -132,8 +145,19 @@ async def main() -> None:
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Command + output model")
     parser.add_argument("--compare", help="Second model for A/B comparison")
     parser.add_argument("--diff", help="Path to previous JSON report for comparison")
+    parser.add_argument(
+        "--judge",
+        action="store_true",
+        help="Enable LLM-as-judge for cases with judge: true in config",
+    )
+    parser.add_argument(
+        "--judge-model",
+        default=DEFAULT_MODEL,
+        help="Model to use for LLM judge (default: same as --model)",
+    )
     args = parser.parse_args()
 
+    judge_model = args.judge_model if args.judge else None
     agent_factory = AgentFactory(demo_mode=True)
 
     suites = [args.suite] if args.suite else get_all_suites()
@@ -145,7 +169,9 @@ async def main() -> None:
     all_results_b: list[EvalResult] = []
 
     for suite in suites:
-        results_a = await run_suite(suite, args.model, agent_factory)
+        results_a = await run_suite(
+            suite, args.model, agent_factory, judge_model=judge_model
+        )
         all_results_a.extend(results_a)
         summary_a = build_run_summary(results_a, args.model, suite)
         print_summary(summary_a)
@@ -154,7 +180,9 @@ async def main() -> None:
         print(f"  Saved: {out_path}\n")
 
         if args.compare:
-            results_b = await run_suite(suite, args.compare, agent_factory)
+            results_b = await run_suite(
+                suite, args.compare, agent_factory, judge_model=judge_model
+            )
             all_results_b.extend(results_b)
             summary_b = build_run_summary(results_b, args.compare, suite)
             print_summary(summary_b)
