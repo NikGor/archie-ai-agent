@@ -7,7 +7,8 @@ from ..agent.prompt_builder import PromptBuilder
 from ..backend.gemini_client import GeminiClient
 from ..backend.openai_client import OpenAIClient
 from ..backend.openrouter_client import OpenRouterClient
-from ..models.output_models import AgentResponse, get_response_model_for_format
+from ..models.output_models import AgentResponse, UIResponse, get_response_model_for_format
+from ..utils.schema_filter import build_filtered_ui_response
 from ..models.tool_models import ToolResult
 from ..utils.llm_parser import parse_llm_response, build_content_from_parsed
 from ..utils.provider_utils import get_provider_for_model
@@ -36,6 +37,7 @@ async def create_output(
     state: dict | None = None,
     previous_response_id: str | None = None,
     chat_history: str | None = None,
+    intents: list[str] | None = None,
 ) -> AgentResponse:
     """
     Create final formatted output response.
@@ -69,8 +71,10 @@ async def create_output(
 
     if state is None:
         state = {}
+    if intents is None:
+        intents = []
 
-    format_instructions = prompt_builder.build_format_instructions(response_format)
+    format_instructions = prompt_builder.build_format_instructions(response_format, intents=intents)
     assistant_context = prompt_builder.build_assistant_prompt(state, response_format)
 
     tools_context = ""
@@ -116,10 +120,17 @@ Create a complete, well-formatted response in the specified format."""
         f"create_output_004: Calling LLM with \033[33m{len(messages)}\033[0m messages"
     )
 
-    response_model = get_response_model_for_format(response_format)
-    logger.info(
-        f"create_output_004b: Using response model: \033[36m{response_model.__name__}\033[0m"
-    )
+    use_filtered_schema = response_format == "ui_answer" and intents is not None
+    if use_filtered_schema:
+        response_model = build_filtered_ui_response(tuple(sorted(intents)))
+        logger.info(
+            f"create_output_004b: Using filtered UIResponse for intents: \033[35m{intents}\033[0m"
+        )
+    else:
+        response_model = get_response_model_for_format(response_format)
+        logger.info(
+            f"create_output_004b: Using response model: \033[36m{response_model.__name__}\033[0m"
+        )
 
     raw_response = await client.create_completion(
         messages=messages,
@@ -134,14 +145,20 @@ Create a complete, well-formatted response in the specified format."""
         expected_type=response_model,
     )
 
+    # For filtered ui_answer: coerce dynamic model back to standard UIResponse
+    # so build_content_from_parsed works without changes.
+    parsed_content = parsed.parsed_content
+    if use_filtered_schema:
+        parsed_content = UIResponse.model_validate(parsed_content.model_dump())
+
     content = build_content_from_parsed(
-        parsed_content=parsed.parsed_content,
+        parsed_content=parsed_content,
         response_format=response_format,
     )
 
     result = AgentResponse(
         content=content,
-        sgr=parsed.parsed_content.sgr,
+        sgr=parsed_content.sgr,
         llm_trace=parsed.llm_trace,
         response_id=parsed.response_id,
     )
