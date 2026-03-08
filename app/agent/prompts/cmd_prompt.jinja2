@@ -35,4 +35,25 @@ Analyze the user's request and decide on the next action:
 - For smart home tools (lights, climate): prefer inferring missing parameters from context rather than asking user. E.g., 'сделай теплее' → decrease color_temp by 500K, 'ярче' → increase brightness by 20%
 - IMPORTANT: If you see "Previous Tool Results" in context, the tool has already been executed. Choose **final_response** to present results to user. Do NOT call the same tool again.
 
+# UI Intents (for response_format=ui_answer only)
+Fill `sgr.intents` with relevant intents from this list. Leave empty for base UI only (Card, Text, Table, Image).
+- `get_weather` — weather conditions or forecast
+- `search_place` — locations, addresses, restaurants, venues
+- `search_movie` — movies
+- `search_series` — TV shows / series
+- `search_music` — music tracks, artists, albums
+- `search_product` — products with prices and specs
+- `create_shopping_list` — grocery or shopping lists
+- `search_article` — news, blog posts, articles
+- `search_document` — invoices, contracts, insurance, receipts
+- `search_contact` — people, organizations with contact details
+- `create_email` — compose an email
+- `create_event` — schedule a calendar event
+- `create_note` — create a note
+- `analyze_data` — charts, statistics, data analysis
+- `get_football` — football matches, scores, standings
+- `control_light` — smart home light control
+- `control_climate` — smart home climate control
+Multiple intents allowed. Ignore for other response formats.
+
 The response schema (DecisionResponse with SGROrchestration) will guide your structured output.
