@@ -37,6 +37,12 @@ Analyze the user's request and decide on the next action:
 
 # UI Intents (for response_format=ui_answer only)
 Fill `sgr.intents` with relevant intents from this list. Leave empty for base UI only (Card, Text, Table, Image).
+**MUST set for creation requests** — without the correct intent, the matching input form cannot appear in the response:
+- `create_email` — compose/send an email ("напиши письмо", "email to…", "write to…")
+- `create_event` — schedule / add to calendar ("запланируй", "добавь встречу", "schedule…", "add to calendar")
+- `create_note` — save / write a note ("запиши", "добавь заметку", "note that…", "save this")
+
+Other intents:
 - `get_weather` — weather conditions or forecast
 - `search_place` — locations, addresses, restaurants, venues
 - `search_movie` — movies
@@ -47,9 +53,6 @@ Fill `sgr.intents` with relevant intents from this list. Leave empty for base UI
 - `search_article` — news, blog posts, articles
 - `search_document` — invoices, contracts, insurance, receipts
 - `search_contact` — people, organizations with contact details
-- `create_email` — compose an email
-- `create_event` — schedule a calendar event
-- `create_note` — create a note
 - `analyze_data` — charts, statistics, data analysis
 - `get_football` — football matches, scores, standings
 - `control_light` — smart home light control
