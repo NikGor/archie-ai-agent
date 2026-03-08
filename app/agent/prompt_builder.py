@@ -36,7 +36,9 @@ class PromptBuilder:
             response_format=response_format,
         )
 
-    def build_format_instructions(self, response_format: str) -> str:
+    def build_format_instructions(
+        self, response_format: str, intents: list[str] | None = None
+    ) -> str:
         """Build format-specific instructions."""
         format_aliases = {"voice": "plain"}
         actual_format = format_aliases.get(response_format, response_format)
@@ -61,4 +63,4 @@ class PromptBuilder:
             f"prompt_builder_005: Loaded format template: \033[36m{format_template_name}\033[0m"
         )
         template = self.env.get_template(format_template_name)
-        return template.render(response_format=response_format)
+        return template.render(response_format=response_format, intents=intents or [])
