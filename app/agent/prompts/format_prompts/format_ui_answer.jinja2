@@ -39,57 +39,57 @@ Fill the `ui_answer` object with `intro_text`, `items[]`, and `quick_action_butt
 - Put ALL similar items into ONE `card_grid` — NEVER create separate grids per individual item
 - Example: 5 restaurants → one `card_grid` with 5 `LocationCard`s inside, not 5 separate grids
 
-{% if "search_place" in intents %}
+{% if not intents or "search_place" in intents %}
 ## Location Cards
 - **Location Cards**: For locations, addresses, places — never for abstract concepts. Use `open_map` frontend button for navigation.
 {% endif %}
 
-{% if "search_contact" in intents %}
+{% if not intents or "search_contact" in intents %}
 ## Contact Cards
 - **Contact Cards**: Only for people, organizations with communication methods. Include call/email/message buttons.
 {% endif %}
 
-{% if "search_product" in intents %}
+{% if not intents or "search_product" in intents %}
 ## Product Cards
 - **Product Cards**: For physical/digital products with specifications and purchase research — use "show_details" frontend button. Include price, rating, 3-5 key specs.
 {% endif %}
 
-{% if "search_movie" in intents %}
+{% if not intents or "search_movie" in intents %}
 ## Movie Cards
 - **Movie Cards**: For entertainment media — use "open_on_youtube_video" frontend button for watching the movie on YouTube. Include director, cast, rating, plot summary.
 {% endif %}
 
-{% if "search_series" in intents %}
+{% if not intents or "search_series" in intents %}
 ## Series Cards
 - **Series Cards**: For TV shows — use "open_on_youtube_video" frontend button. Include network, seasons, rating, show summary.
 {% endif %}
 
-{% if "search_music" in intents %}
+{% if not intents or "search_music" in intents %}
 ## Music Cards
 - **Music Cards**: For music content — use "open_on_youtube_music" frontend button for listening. Include artist, album, year, genre.
 {% endif %}
 
-{% if "search_article" in intents %}
+{% if not intents or "search_article" in intents %}
 ## Article Cards
 - **Article Cards**: For news, blog posts, written content — use "export_to_notes" frontend button for saving. Include source, date, summary.
 {% endif %}
 
-{% if "search_document" in intents %}
+{% if not intents or "search_document" in intents %}
 ## Document Cards
 - **Document Cards**: For document search results (invoices, contracts, insurance, receipts) — show filename, snippet, relevance score, extracted date/amount.
 {% endif %}
 
-{% if "create_shopping_list" in intents %}
+{% if not intents or "create_shopping_list" in intents %}
 ## Shopping List Cards
 - **Shopping List Cards**: For organized grocery/shopping lists — use "export_to_notes" frontend button for saving. Group items by department.
 {% endif %}
 
-{% if "get_weather" in intents %}
+{% if not intents or "get_weather" in intents %}
 ## Weather Cards
 - **Weather Cards**: For weather conditions, forecasts, and clothing recommendations — use `card_grid` with `WeatherCard` inside, NEVER a generic `Card`. Include temperature, condition, forecast, clothing advice.
 {% endif %}
 
-{% if "analyze_data" in intents or "search_product" in intents %}
+{% if not intents or "analyze_data" in intents or "search_product" in intents %}
 ## Chart Component
 When using charts, provide complete Chart.js configuration including:
 - Proper chart type (bar, line, pie, doughnut, area, scatter)
@@ -98,20 +98,20 @@ When using charts, provide complete Chart.js configuration including:
 - Clear title and description explaining insights
 {% endif %}
 
-{% if "create_email" in intents or "create_event" in intents or "create_note" in intents %}
+{% if not intents or "create_email" in intents or "create_event" in intents or "create_note" in intents %}
 # Form Components Guidelines (CRITICAL PRIORITY)
 When user intent involves creating emails, events, or notes — **ALWAYS render the appropriate Form component**, even if data is incomplete.
 - **DO NOT** ask clarifying questions via text + buttons when a Form exists for that action
 - **DO NOT** wait for complete information — pre-fill what you know, leave other fields empty for user input
 - The Form itself is the interaction mechanism for collecting missing data
 
-{% if "create_email" in intents %}
+{% if not intents or "create_email" in intents %}
 - **EmailForm**: For composing emails (recipients, subject, body)
 {% endif %}
-{% if "create_event" in intents %}
+{% if not intents or "create_event" in intents %}
 - **EventForm**: For scheduling events (title, start_time, end_time, location, description)
 {% endif %}
-{% if "create_note" in intents %}
+{% if not intents or "create_note" in intents %}
 - **InternalNoteForm**: For creating notes (title, content)
 {% endif %}
 - For form-only responses: **omit `intro_text`** — the form itself is the complete answer
