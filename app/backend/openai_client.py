@@ -68,7 +68,7 @@ class OpenAIClient:
                     f"openai_client_003: Using previous response ID: \033[36m{previous_response_id}\033[0m"
                 )
 
-            response = self.client.responses.parse(**openai_args)
+            response = self.client.responses.parse(**openai_args, timeout=60)
             self._log_usage(response)
             return response
         except Exception as e:
