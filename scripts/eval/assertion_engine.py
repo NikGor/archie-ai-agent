@@ -1,5 +1,7 @@
 """Assertion engine — checks eval expectations against agent responses."""
 
+from typing import Any
+
 from archie_shared.chat.models import PipelineTrace
 
 from app.models.orchestration_sgr import DecisionResponse
@@ -76,8 +78,40 @@ def check_full(case: EvalCase, response: AgentResponse) -> EvalResult:
             failures.append(
                 AssertionFailure("max_latency_ms", expect.max_latency_ms, total_ms)
             )
-    if expect.action_type is not None and pt and pt.stage1:
-        pass
+    # UI quality metrics (ui_answer format)
+    content: Any = response.content
+    ui_answer_candidate = getattr(content, "ui_answer", None)
+    if ui_answer_candidate is not None and hasattr(ui_answer_candidate, "items"):
+        ui_answer: Any = ui_answer_candidate
+    elif hasattr(content, "items"):
+        ui_answer = content
+    else:
+        ui_answer = None
+    ui_items_count = len(ui_answer.items) if ui_answer is not None else None
+
+    if expect.min_ui_items is not None and ui_items_count is not None:
+        if ui_items_count < expect.min_ui_items:
+            failures.append(
+                AssertionFailure(
+                    "min_ui_items", f">={expect.min_ui_items}", ui_items_count
+                )
+            )
+    if expect.has_quick_actions is True and ui_answer is not None:
+        if not ui_answer.quick_action_buttons:
+            failures.append(AssertionFailure("has_quick_actions", True, None))
+    if expect.has_form is True and ui_answer is not None:
+        form_types = {"event_form", "note_form", "email_form"}
+        actual_types = {item.type for item in ui_answer.items}
+        if not form_types & actual_types:
+            failures.append(AssertionFailure("has_form", True, sorted(actual_types)))
+    if expect.expected_item_types is not None and ui_answer is not None:
+        actual_types = {item.type for item in ui_answer.items}
+        for t in expect.expected_item_types:
+            if t not in actual_types:
+                failures.append(
+                    AssertionFailure("expected_item_types", t, sorted(actual_types))
+                )
+
     return EvalResult(
         name=case.name,
         passed=len(failures) == 0,
@@ -87,4 +121,5 @@ def check_full(case: EvalCase, response: AgentResponse) -> EvalResult:
         stage3_ms=stage3_ms,
         total_ms=total_ms,
         total_tokens=total_tokens,
+        ui_items_count=ui_items_count,
     )
