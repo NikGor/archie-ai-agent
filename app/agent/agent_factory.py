@@ -152,7 +152,7 @@ class AgentFactory:
             logger.info(
                 f"agent_factory_001c: Set user_name: \033[35m{user_name}\033[0m"
             )
-        user_state = self.state_service.get_user_state()
+        user_state = await self.state_service.get_user_state()
         persona_key = user_state.persona
         logger.info(f"agent_factory_002: Persona: \033[35m{persona_key}\033[0m")
         logger.info(f"agent_factory_003: Format: \033[36m{response_format}\033[0m")
