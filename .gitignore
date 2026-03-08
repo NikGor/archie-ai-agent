@@ -223,6 +223,7 @@ audio_temp/
 # AI model cache
 .cache/
 cache/
+.ruff_cache/
 
 # Logs
 logs/
@@ -234,7 +235,6 @@ logs/
 *~
 
 # Project specific
-.claude/settings.local.json
 test_recordings/
 temp/
 recordings/
@@ -245,6 +245,20 @@ poetry.lock
 # Application state
 app/response_understand.py
 
+# AI agent instructions & config (local only)
+.claude/
+.mcp.json
+.github/copilot-instructions.md
+agent_docs/
+docs/
+
+# Tests & evaluation (local only)
+tests/
+pytest.ini
+execute_tests.sh
+scripts/
+eval_results/
+
 # AI-generated reports and plans
 audit-report.html
 test-plan.html
@@ -253,4 +267,4 @@ LOGGING_GUIDELINES.md
 PROJECT_STATE.md
 SESSION_LOG.md
 CLAUDE.md
-.github/copilot-instructions.md
+openrouter_model_catalog.md

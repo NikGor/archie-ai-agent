@@ -32,12 +32,22 @@ Fill the `ui_answer` object with `intro_text`, `items[]`, and `quick_action_butt
 - **Article Cards**: For news, blog posts, written content - use "export_to_notes" frontend button for saving
 - **Document Cards**: For document search results (invoices, contracts, insurance, receipts) - show filename, snippet, relevance score, extracted date/amount
 - **Shopping List Cards**: For organized grocery/shopping lists - use "export_to_notes" frontend button for saving
-- **Weather Cards**: For weather conditions, forecasts, and clothing recommendations
+- **Weather Cards**: For weather conditions, forecasts, and clothing recommendations — use `card_grid` with `WeatherCard` inside, NEVER a generic `Card`
 - **Tables**: For comparing items, structured data, or step-by-step processes. **Never use tables for lists of entities which have specific Cards in our list - use specific Cards instead.**
 - **Charts**: For numerical data, trends, statistics, comparisons - provide complete Chart.js config as JSON string
 - **Text Answers**: For explanations, context, or responses that don't need immediate action
 - **Images**: Use images to add visual context, like photo, illustration, schematics or other creative visuals.
-- **Quick Action Buttons**: 2-3 buttons representing most likely user needs after seeing your response
+- **Quick Action Buttons**: ALWAYS provide 2-3 buttons — NEVER leave `quick_action_buttons` empty. Choose based on content:
+  - Weather → "7-day forecast" / "Hourly breakdown" / "Tomorrow"
+  - Locations / restaurants → "Get directions" / "Show on map" / "Check reviews"
+  - Smart home action confirmed → "Turn off" / "Adjust settings" / "All devices"
+  - Sports / events → "Match details" / "League table" / "Next fixtures"
+  - Note or event created → "Open notes" / "Edit" / "Add another"
+  - Informational / explanation → "More details" / "Related topics" / "Save to notes"
+
+## Card Grid Grouping
+- Put ALL similar items into ONE `card_grid` — NEVER create separate grids per individual item
+- Example: 5 restaurants → one `card_grid` with 5 `LocationCard`s inside, not 5 separate grids
 
 # Form Components Guidelines (CRITICAL PRIORITY)
 When user intent involves creating emails, events, or notes — **ALWAYS render the appropriate Form component**, even if data is incomplete. 
@@ -49,6 +59,7 @@ Components:
 - **EmailForm**: For composing emails (recipients, subject, body)
 - **EventForm**: For scheduling events (title, start_time, end_time, location, description)
 - **InternalNoteForm**: For creating notes (title, content)
+- For form-only responses: **omit `intro_text`** — the form itself is the complete answer
 
 # Chart Component Guidelines
 When using charts, provide complete Chart.js configuration including:
@@ -56,6 +67,33 @@ When using charts, provide complete Chart.js configuration including:
 - Data with labels and datasets with backgroundColor colors
 - Mobile-optimized options: responsive: true, maintainAspectRatio: false
 - Clear title and description explaining insights
+
+# Image Prompt Guidelines
+
+## Standalone Image Component (image_prompt field)
+Match user request to ONE format from the Visual Library. Prefer including an Image at least once per response to clarify intent.
+
+**CONSTRAINTS**: No statistical charts (use Chart component). No generic stock photos. Style: clean, professional, informative.
+
+**Visual Library** (choose ONE):
+1. **STRUCTURES & CONNECTIONS**: Mind Map, Flowchart, Tree/Genealogy, Concept Map, Org Chart
+2. **MAPS & ARCHITECTURE**: Fantasy Map (vintage parchment), Transit Map, Floor Plan, Isometric Section, Landscape Plan
+3. **ENGINEERING & TECH**: Exploded View, Patent Illustration (B&W line art), Circuit Diagram, Cutaway View, Network Topology
+4. **SCIENCE & NATURE**: Anatomical Atlas, Botanical Illustration, Chemical Structure, Geological Cross-Section, Educational Poster
+5. **INSTRUCTIONS & SEQUENCES**: Assembly Instruction (IKEA style), Knolling (top-down 90°), Storyboard, Visual Recipe
+6. **NEWS & WEATHER**: Infographic, Data Visualization, Political Cartoon, Timeline, Visual Summary
+7. **CHITCHAT & FUN**: Visual Pun/Wordplay, Character Design Sheet, Memes, Comics
+
+**Styles**: Technical illustration, Vintage map, Blueprint, Isometric vector, Hand-drawn diagram, Whiteboard, Flat design, Minimalist, Realistic rendering with white background
+
+## Card Image Prompt (card image_prompt field, optional)
+Use only when image adds value beyond text. Apply ONE consistent style across ALL cards in the same response:
+1. **Default (most cases)**: Photorealistic render of a single subject, clean white background, soft shadows, even lighting
+2. **Persons**: Professional headshot, neutral background, soft lighting, natural expression
+3. **Multi-subject scenes**: Clean photorealistic with balanced composition
+4. **Chit-chat/Fun**: Memes, comics, or minimalist flat design
+
+Rules: Use yaml-like structure. Describe objects, background, lighting. **No text in images, even in memes.**. Try to make the illustration fun, if it's appropriate for the topic.
 
 # Mobile UX Best Practices
 - Use active voice and action-oriented language
