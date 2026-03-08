@@ -1,6 +1,8 @@
 from typing import List, Literal
 from pydantic import BaseModel, Field
 
+from ..utils.intent_config import IntentType
+
 
 ToolName = Literal[
     "light_control_tool",
@@ -50,6 +52,14 @@ class SGROrchestration(BaseModel):
     )
     reasoning: str = Field(
         description="Step-by-step reasoning for this orchestration decision"
+    )
+    intents: List[IntentType] = Field(
+        default_factory=list,
+        description=(
+            "UI intents for response_format=ui_answer. "
+            "Controls which specialized UI components are available in Stage 3. "
+            "Leave empty for base components only (TextAnswer, Card, CardGrid, Table, Image)."
+        ),
     )
 
 
