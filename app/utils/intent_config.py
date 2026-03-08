@@ -10,7 +10,6 @@ from archie_shared.ui.models import (
     DocumentCard,
     EmailForm,
     EventForm,
-    Image,
     InternalNoteForm,
     LocationCard,
     MovieCard,
@@ -18,8 +17,6 @@ from archie_shared.ui.models import (
     ProductCard,
     SeriesCard,
     ShoppingListCard,
-    Table,
-    TextAnswer,
     WeatherCard,
 )
 
@@ -47,7 +44,7 @@ IntentType = Literal[
 BASE_ITEM_TYPES: list[str] = ["text_answer", "card_grid", "table", "image"]
 
 # Base card types always available inside CardGrid
-BASE_CARD_TYPES: list[type] = [Card, TextAnswer, Table, Image]
+BASE_CARD_TYPES: list[type] = [Card]
 
 # Intent → additional card types and item types unlocked
 INTENT_EXTENSIONS: dict[str, dict[str, list]] = {
