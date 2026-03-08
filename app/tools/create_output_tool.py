@@ -120,7 +120,9 @@ Create a complete, well-formatted response in the specified format."""
         f"create_output_004: Calling LLM with \033[33m{len(messages)}\033[0m messages"
     )
 
-    use_filtered_schema = response_format == "ui_answer" and intents is not None
+    # Only filter schema when Stage 1 explicitly set intents.
+    # Empty list = Stage 1 saw no relevant intent → fall back to full schema to avoid regressions.
+    use_filtered_schema = response_format == "ui_answer" and bool(intents)
     if use_filtered_schema:
         response_model = build_filtered_ui_response(tuple(sorted(intents)))
         logger.info(
