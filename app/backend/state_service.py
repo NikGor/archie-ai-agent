@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 import redis
+import redis.asyncio as aioredis
 
 from ..config import DEFAULT_STATE_CONFIG
 from ..models.state_models import UserState
@@ -25,7 +26,7 @@ class StateService:
         redis_port = int(os.getenv("REDIS_PORT", "6379"))
         redis_db = int(os.getenv("REDIS_DB", "0"))
 
-        self.redis_client = redis.Redis(
+        self.redis_client = aioredis.Redis(
             host=redis_host,
             port=redis_port,
             db=redis_db,
@@ -57,7 +58,7 @@ class StateService:
             "commercial_check_open_now": True,
         }
 
-    def get_user_state(self) -> UserState:
+    async def get_user_state(self) -> UserState:
         """Get complete user state for prompt context."""
         if not self.user_name:
             logger.info(
@@ -72,7 +73,7 @@ class StateService:
         )
 
         try:
-            user_data_json = self.redis_client.get(redis_key)
+            user_data_json = await self.redis_client.get(redis_key)
             if not user_data_json:
                 logger.warning(
                     f"state_service_004: No data found in Redis for key: {redis_key}, using default"
