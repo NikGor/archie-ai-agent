@@ -32,7 +32,7 @@ async def chat_endpoint(request: ChatRequest) -> ChatMessage:
     except HTTPException:
         raise
     except ValidationError as e:
-        logger.exception(f"endpoints_error_002: \033[31mValidation error\033[0m")
+        logger.exception("endpoints_error_002: \033[31mValidation error\033[0m")
         return ChatMessage(
             message_id=generate_message_id(),
             role="assistant",
@@ -75,7 +75,7 @@ async def ws_chat(websocket: WebSocket):
     except WebSocketDisconnect:
         logger.info("ws_chat_004: Client disconnected")
     except ValidationError as e:
-        logger.exception(f"ws_chat_error_002: \033[31mValidation error\033[0m")
+        logger.exception("ws_chat_error_002: \033[31mValidation error\033[0m")
         await websocket.send_json({"type": "error", "message": f"Validation error: {e!s}"})
     except Exception as e:
         logger.exception(f"ws_chat_error_001: \033[31m{e!s}\033[0m")
