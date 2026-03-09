@@ -1,12 +1,13 @@
 """Factory for managing and executing tools."""
 
+import importlib
 import inspect
 import logging
-import importlib
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 from ..config import TOOLS_CONFIG
 from ..utils.provider_utils import get_provider_for_model
-from ..utils.tools_utils import openai_parse, gemini_parse, oss_parse
+from ..utils.tools_utils import gemini_parse, openai_parse, oss_parse
 
 
 logger = logging.getLogger(__name__)
