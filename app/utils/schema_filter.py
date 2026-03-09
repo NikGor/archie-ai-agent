@@ -2,14 +2,12 @@
 
 import logging
 from functools import lru_cache
-from typing import Literal, Optional, Union
-
-from pydantic import BaseModel, Field, create_model
-
+from typing import Literal, Union
 from archie_shared.ui.models import Image, QuickActionButtons, Table, TextAnswer
-
-from .intent_config import ITEM_TYPE_TO_CONTENT_CLASS, resolve_ui_types
+from pydantic import BaseModel, Field, create_model
 from ..models.output_models import SGROutput
+from .intent_config import ITEM_TYPE_TO_CONTENT_CLASS, resolve_ui_types
+
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +35,7 @@ def build_filtered_ui_response(intents: tuple[str, ...]) -> type[BaseModel]:
     )
 
     # --- FilteredCardGrid ---
-    if len(card_types) == 1:
-        CardUnion = card_types[0]
-    else:
-        CardUnion = Union[tuple(card_types)]
+    CardUnion = card_types[0] if len(card_types) == 1 else Union[tuple(card_types)]  # noqa: UP007
 
     FilteredCardGrid = create_model(
         "FilteredCardGrid",
@@ -49,7 +44,7 @@ def build_filtered_ui_response(intents: tuple[str, ...]) -> type[BaseModel]:
             Field(description="Grid layout choice"),
         ),
         cards=(
-            list[CardUnion],
+            list[CardUnion],  # type: ignore[valid-type]
             Field(description="List of cards to display in the grid."),
         ),
     )
@@ -64,10 +59,10 @@ def build_filtered_ui_response(intents: tuple[str, ...]) -> type[BaseModel]:
     if len(content_classes) == 1:
         ContentUnion = content_classes[0]
     else:
-        ContentUnion = Union[tuple(content_classes)]
+        ContentUnion = Union[tuple(content_classes)]  # noqa: UP007
 
     # --- Item type Literal ---
-    ItemTypeLiteral = Literal[tuple(item_types)]
+    ItemTypeLiteral = Literal[tuple(item_types)]  # type: ignore[valid-type]
 
     # --- FilteredAdvancedAnswerItem ---
     FilteredAdvancedAnswerItem = create_model(
@@ -76,11 +71,11 @@ def build_filtered_ui_response(intents: tuple[str, ...]) -> type[BaseModel]:
         type=(ItemTypeLiteral, Field(description="UI component type.")),
         content=(ContentUnion, Field(description="Component content payload.")),
         layout_hint=(
-            Optional[Literal["full_width", "half_width", "inline", "emphasis"]],
+            Literal["full_width", "half_width", "inline", "emphasis"] | None,
             Field(default="full_width", description="Visual layout hint."),
         ),
         spacing=(
-            Optional[Literal["tight", "normal", "loose"]],
+            Literal["tight", "normal", "loose"] | None,
             Field(default="normal", description="Vertical spacing."),
         ),
     )
@@ -88,10 +83,10 @@ def build_filtered_ui_response(intents: tuple[str, ...]) -> type[BaseModel]:
     # --- FilteredUIAnswer ---
     FilteredUIAnswer = create_model(
         "FilteredUIAnswer",
-        intro_text=(Optional[TextAnswer], Field(default=None, description="Introductory paragraph")),
-        items=(list[FilteredAdvancedAnswerItem], Field(description="List of items in the UI answer")),
+        intro_text=(TextAnswer | None, Field(default=None, description="Introductory paragraph")),
+        items=(list[FilteredAdvancedAnswerItem], Field(description="List of items in the UI answer")),  # type: ignore[valid-type]
         quick_action_buttons=(
-            Optional[QuickActionButtons],
+            QuickActionButtons | None,
             Field(default=None, description="Quick action buttons for the UI"),
         ),
     )
