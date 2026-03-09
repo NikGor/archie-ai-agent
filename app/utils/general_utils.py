@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 logger = logging.getLogger(__name__)
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 def generate_id_with_timestamp(prefix: str) -> str:
     """Generate an ID with the pattern: prefix-YYYYMMDDHHMMSS-uuid"""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     timestamp = now.strftime("%Y%m%d%H%M%S")
     unique_id = str(uuid.uuid4())[:8]
     generated_id = f"{prefix}-{timestamp}-{unique_id}"
