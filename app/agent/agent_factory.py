@@ -1,16 +1,13 @@
 import json
 import logging
 import time
-from collections.abc import Callable, Awaitable
-
+from collections.abc import Awaitable, Callable
 from archie_shared.chat.models import LllmTrace, PipelineTrace
-
 from ..backend.gemini_client import GeminiClient
 from ..backend.openai_client import OpenAIClient
 from ..backend.openrouter_client import OpenRouterClient
 from ..backend.state_service import StateService
 from ..config import MAX_COMMAND_ITERATIONS
-from ..utils.provider_utils import get_provider_for_model
 from ..models.orchestration_sgr import DecisionResponse
 from ..models.output_models import AgentResponse
 from ..models.state_models import UserState
@@ -19,6 +16,7 @@ from ..models.ws_models import StatusUpdate
 from ..tools.create_output_tool import create_output
 from ..tools.tool_factory import ToolFactory
 from ..utils.llm_parser import parse_llm_response
+from ..utils.provider_utils import get_provider_for_model
 from ..utils.tool_executor import execute_tool_calls
 from ..utils.trace_utils import StepTimer, accumulate_llm_traces, make_step_trace
 from .prompt_builder import PromptBuilder
@@ -43,7 +41,7 @@ class AgentFactory:
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.tool_factory = tool_factory or ToolFactory(demo_mode=demo_mode)
         self.state_service = state_service or StateService()
-        self.clients = {
+        self.clients: dict[str, OpenAIClient | OpenRouterClient | GeminiClient] = {
             "openai": self.openai_client,
             "openrouter": self.openrouter_client,
             "gemini": self.gemini_client,  # Fallback
@@ -121,7 +119,7 @@ class AgentFactory:
 
         return parsed.parsed_content, parsed.llm_trace
 
-    async def arun(
+    async def arun(  # noqa: PLR0912
         self,
         messages: list[dict[str, str]],
         command_model: str = "gpt-4.1",
