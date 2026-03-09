@@ -1,7 +1,8 @@
 import logging
-from typing import Any, Callable
-from pydantic import BaseModel
+from collections.abc import Callable
+from typing import Any
 from archie_shared.chat.models import InputTokensDetails, LllmTrace, OutputTokensDetails
+from pydantic import BaseModel
 from app.utils.tools_utils import openai_responses_parse
 
 
