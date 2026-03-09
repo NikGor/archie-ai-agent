@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 import logging
-
 from dotenv import load_dotenv
+
 
 load_dotenv()
 
-import uvicorn
-from fastapi import FastAPI
-
-from app.endpoints import router
+import uvicorn  # noqa: E402
+from fastapi import FastAPI  # noqa: E402
+from app.endpoints import router  # noqa: E402
 
 
 logging.basicConfig(
