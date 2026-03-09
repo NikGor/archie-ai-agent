@@ -4,10 +4,10 @@ import datetime
 import logging
 import os
 from typing import Any
-
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+
 
 logger = logging.getLogger(__name__)
 
