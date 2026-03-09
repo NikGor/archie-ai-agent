@@ -4,14 +4,12 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
-import json
 import logging
 import os
 from typing import Any
-
-from pydantic import BaseModel
 from google import genai
 from google.genai import types
+from pydantic import BaseModel
 
 
 logger = logging.getLogger(__name__)
@@ -53,7 +51,7 @@ class GeminiClient:
         messages: list[dict[str, Any]],
         model: str,
         response_format: type[BaseModel],
-        previous_response_id: str | None = None,
+        previous_response_id: str | None = None,  # noqa: ARG002
     ) -> Any:
         """Create a completion using Gemini API with structured outputs."""
         msg_breakdown = {}
