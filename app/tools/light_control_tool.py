@@ -2,12 +2,10 @@ import json
 import logging
 import os
 from enum import Enum
+from typing import Any, Literal
 import redis
 from openai import OpenAI
 from pydantic import BaseModel, Field
-
-
-from typing import Literal
 
 
 logger = logging.getLogger(__name__)
@@ -100,6 +98,8 @@ Generate 2 follow-up action buttons.
             response_format=QuickActionsResponse,
         )
         result = response.choices[0].message.parsed
+        if result is None:
+            raise ValueError("light_control_tool_error_004: No parsed response from LLM")
         logger.info(
             f"light_control_tool_005: Generated buttons: \033[35m{result.button_1.text}\033[0m, \033[35m{result.button_2.text}\033[0m"
         )
@@ -124,16 +124,16 @@ Generate 2 follow-up action buttons.
         ]
 
 
-async def light_control_tool(
+async def light_control_tool(  # noqa: PLR0912
     user_input: str,
     device_name: LightDeviceName,
-    is_on: bool | None = None,
-    brightness: int | None = None,
-    color_temp: int | None = None,
+    is_on: bool | str | None = None,
+    brightness: int | str | None = None,
+    color_temp: int | str | None = None,
     rgb_color: str | None = None,
     user_name: str = "Niko",
     demo_mode: bool = False,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """
     Control smart home lights. Use this tool to turn lights on/off, adjust brightness, change color temperature or RGB color.
     IMPORTANT: Users don't know numeric values (brightness percentages, Kelvin temperatures, etc.).
