@@ -2,11 +2,10 @@
 
 import logging
 import os
-from typing import Any, Callable
-
+from collections.abc import Callable
+from typing import Any
 from openai import OpenAI
 from pydantic import BaseModel
-
 from app.utils.openai_utils import build_openai_args
 
 
