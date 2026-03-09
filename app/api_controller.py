@@ -19,15 +19,17 @@ async def handle_chat(
 ) -> ChatMessage:
     """Handle chat request by processing through AI agent only."""
     logger.info("=== STEP 3: AI Processing ===")
+    no_image = bool(user_request.no_image)
     logger.info(
         f"api_controller_001: Processing request with conversation: \033[36m{user_request.conversation_id or 'NONE'}\033[0m, "
         f"Input len: \033[33m{len(user_request.input)}\033[0m, "
-        f"demo_mode: \033[35m{user_request.demo_mode}\033[0m"
+        f"demo_mode: \033[35m{user_request.demo_mode}\033[0m, "
+        f"no_image: \033[35m{no_image}\033[0m"
     )
     current_messages = [{"role": "user", "content": user_request.input}]
     command_model = user_request.command_model or "gpt-4.1"
     final_output_model = user_request.final_output_model or "gpt-4.1"
-    agent_factory = AgentFactory(demo_mode=user_request.demo_mode)
+    agent_factory = AgentFactory(demo_mode=user_request.demo_mode, no_image=no_image)
     agent_response = await agent_factory.arun(
         messages=current_messages,
         command_model=command_model,
@@ -36,6 +38,7 @@ async def handle_chat(
         previous_response_id=user_request.previous_message_id,
         chat_history=user_request.chat_history,
         user_name=user_request.user_name,
+        no_image=no_image,
         on_status=on_status,
     )
 
