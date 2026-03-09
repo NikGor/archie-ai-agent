@@ -5,10 +5,8 @@ import logging
 import os
 from datetime import datetime
 from typing import Any
-
 import redis
 import redis.asyncio as aioredis
-
 from ..config import DEFAULT_STATE_CONFIG
 from ..models.state_models import UserState
 
