@@ -1,18 +1,18 @@
 import logging
-from typing import Any
-
 from pydantic import ValidationError
-from archie_shared.chat.models import Content
-
 from ..agent.prompt_builder import PromptBuilder
 from ..backend.gemini_client import GeminiClient
 from ..backend.openai_client import OpenAIClient
 from ..backend.openrouter_client import OpenRouterClient
-from ..models.output_models import AgentResponse, UIResponse, get_response_model_for_format
-from ..utils.schema_filter import build_filtered_ui_response
+from ..models.output_models import (
+    AgentResponse,
+    UIResponse,
+    get_response_model_for_format,
+)
 from ..models.tool_models import ToolResult
-from ..utils.llm_parser import parse_llm_response, build_content_from_parsed
+from ..utils.llm_parser import build_content_from_parsed, parse_llm_response
 from ..utils.provider_utils import get_provider_for_model
+from ..utils.schema_filter import build_filtered_ui_response
 
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ _openai_client = OpenAIClient()
 _openrouter_client = OpenRouterClient()
 _gemini_client = GeminiClient()
 
-_clients = {
+_clients: dict[str, OpenAIClient | OpenRouterClient | GeminiClient] = {
     "openai": _openai_client,
     "openrouter": _openrouter_client,
     "gemini": _gemini_client,
@@ -81,9 +81,9 @@ async def create_output(
     tools_context = ""
     if tool_results:
         tools_context = "\n\nTool Results:\n"
-        for result in tool_results:
-            tool_name = result.tool_name
-            tool_output = result.output
+        for tool_result in tool_results:
+            tool_name = tool_result.tool_name
+            tool_output = tool_result.output
             tools_context += f"- {tool_name}: {tool_output}\n"
         logger.info(
             f"create_output_003: Added \033[33m{len(tool_results)}\033[0m tool results to context"
