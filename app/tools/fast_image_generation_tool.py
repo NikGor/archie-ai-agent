@@ -1,12 +1,11 @@
 import base64
 import logging
 import os
-from typing import Any, Literal
 from io import BytesIO
-
+from typing import Any, Literal
 from google import genai
 from google.genai import types
-from PIL import Image
+
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +83,11 @@ async def fast_image_generation_tool(
         images_data = []
         for idx, generated_image in enumerate(response.generated_images):
             try:
+                if generated_image.image is None:
+                    continue
                 image_obj = generated_image.image._pil_image
+                if image_obj is None:
+                    continue
                 img_byte_arr = BytesIO()
                 image_obj.save(img_byte_arr, format="JPEG", quality=95)
                 img_byte_arr.seek(0)
