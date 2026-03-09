@@ -1,13 +1,13 @@
 import json
 import logging
 from typing import Any
-from pydantic import BaseModel
 from archie_shared.chat.models import (
     Content,
     InputTokensDetails,
     LllmTrace,
     OutputTokensDetails,
 )
+from pydantic import BaseModel
 from ..config import MODEL_TOKEN_PRICES
 
 
@@ -41,7 +41,7 @@ class ParsedLLMResponse:
 
     def __init__(
         self,
-        parsed_content: BaseModel,
+        parsed_content: Any,
         llm_trace: LllmTrace,
         response_id: str | None = None,
         has_function_call: bool = False,
@@ -58,7 +58,7 @@ class ParsedLLMResponse:
 
 def parse_openai_response(
     raw_response: Any,
-    expected_type: type[BaseModel],
+    expected_type: type[BaseModel],  # noqa: ARG001
 ) -> ParsedLLMResponse:
     """
     Parse OpenAI response into unified structure.
@@ -136,7 +136,7 @@ def parse_openai_response(
     )
 
 
-def parse_gemini_response(
+def parse_gemini_response(  # noqa: PLR0912
     raw_response: Any,
     expected_type: type[BaseModel],
 ) -> ParsedLLMResponse:
@@ -219,34 +219,33 @@ def parse_gemini_response(
     function_arguments = None
     parsed_content = None
 
-    if has_function_call:
+    if has_function_call and part is not None:
         function_name = part.function_call.name
         function_arguments = dict(part.function_call.args)
         logger.info(
             f"llm_parser_005: Function call detected: \033[36m{function_name}\033[0m"
         )
-    else:
-        if hasattr(raw_response, "parsed") and raw_response.parsed:
-            raw_parsed = raw_response.parsed
-            if isinstance(raw_parsed, dict):
-                parsed_content = expected_type.model_validate(raw_parsed)
-                logger.info(
-                    f"llm_parser_006: Converted dict to Pydantic: \033[36m{type(parsed_content).__name__}\033[0m"
-                )
-            else:
-                parsed_content = raw_parsed
-                logger.info(
-                    f"llm_parser_006b: Using pre-parsed content: \033[36m{type(parsed_content).__name__}\033[0m"
-                )
-        elif hasattr(part, "text") and part.text:
-            parsed_content = expected_type.model_validate_json(part.text)
+    elif hasattr(raw_response, "parsed") and raw_response.parsed:
+        raw_parsed = raw_response.parsed
+        if isinstance(raw_parsed, dict):
+            parsed_content = expected_type.model_validate(raw_parsed)
             logger.info(
-                f"llm_parser_007: Parsed content from text: \033[36m{type(parsed_content).__name__}\033[0m"
+                f"llm_parser_006: Converted dict to Pydantic: \033[36m{type(parsed_content).__name__}\033[0m"
             )
         else:
-            logger.warning(
-                "llm_parser_warning_001: No text or parsed content in Gemini response"
+            parsed_content = raw_parsed
+            logger.info(
+                f"llm_parser_006b: Using pre-parsed content: \033[36m{type(parsed_content).__name__}\033[0m"
             )
+    elif part is not None and hasattr(part, "text") and part.text:
+        parsed_content = expected_type.model_validate_json(part.text)
+        logger.info(
+            f"llm_parser_007: Parsed content from text: \033[36m{type(parsed_content).__name__}\033[0m"
+        )
+    else:
+        logger.warning(
+            "llm_parser_warning_001: No text or parsed content in Gemini response"
+        )
 
     return ParsedLLMResponse(
         parsed_content=parsed_content,
@@ -374,8 +373,8 @@ def parse_llm_response(
         raise ValueError(f"Unsupported provider: {provider}")
 
 
-def build_content_from_parsed(
-    parsed_content: BaseModel,
+def build_content_from_parsed(  # noqa: PLR0911
+    parsed_content: Any,
     response_format: str,
 ) -> Content:
     """
