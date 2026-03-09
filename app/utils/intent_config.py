@@ -1,7 +1,6 @@
 """Intent registry for dynamic UI schema filtering in Stage 3 (ui_answer)."""
 
 from typing import Literal
-
 from archie_shared.ui.models import (
     ArticleCard,
     Card,
@@ -19,6 +18,7 @@ from archie_shared.ui.models import (
     ShoppingListCard,
     WeatherCard,
 )
+
 
 IntentType = Literal[
     "get_weather",
