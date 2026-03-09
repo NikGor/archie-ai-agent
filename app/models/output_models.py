@@ -1,20 +1,20 @@
 """Models for final response generation phase (Stage 2)."""
 
-from typing import Union
-from pydantic import BaseModel, Field
-from archie_shared.chat.models import LllmTrace, PipelineTrace, Content
+from typing import TypeAlias
+from archie_shared.chat.models import Content, LllmTrace, PipelineTrace
 from archie_shared.ui.models import (
+    ClimateWidget,
+    Dashboard,
+    DocumentsWidget,
+    FootballWidget,
     Level2Answer,
     Level3Answer,
-    UIAnswer,
-    Dashboard,
-    Widget,
     LightWidget,
-    ClimateWidget,
-    FootballWidget,
     MusicWidget,
-    DocumentsWidget,
+    UIAnswer,
+    Widget,
 )
+from pydantic import BaseModel, Field
 
 
 class FactCheck(BaseModel):
@@ -109,9 +109,7 @@ class DashboardResponse(BaseModel):
     sgr: SGROutput = Field(description="Output reasoning trace")
 
 
-WidgetType = Union[
-    Widget, LightWidget, ClimateWidget, FootballWidget, MusicWidget, DocumentsWidget
-]
+WidgetType: TypeAlias = Widget | LightWidget | ClimateWidget | FootballWidget | MusicWidget | DocumentsWidget
 
 
 class WidgetResponse(BaseModel):
