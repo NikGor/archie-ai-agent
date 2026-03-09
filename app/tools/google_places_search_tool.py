@@ -1,8 +1,8 @@
 import logging
 import os
 from typing import Any
-
 import httpx
+
 
 logger = logging.getLogger(__name__)
 
@@ -24,15 +24,15 @@ PLACES_FIELD_MASK = (
 )
 
 
-async def google_places_search_tool(
+async def google_places_search_tool(  # noqa: PLR0912
     query: str,
-    max_results: int = 10,
-    min_rating: float | None = None,
+    max_results: int | str = 10,
+    min_rating: float | str | None = None,
     price_levels: list[str] | None = None,
-    open_now: bool | None = None,
-    location_lat: float | None = None,
-    location_lng: float | None = None,
-    radius_meters: float = 5000.0,
+    open_now: bool | str | None = None,
+    location_lat: float | str | None = None,
+    location_lng: float | str | None = None,
+    radius_meters: float | str = 5000.0,
     sort_by: str = "relevance",
 ) -> dict[str, Any]:
     """
