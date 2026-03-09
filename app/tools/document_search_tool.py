@@ -19,6 +19,7 @@ import os
 from typing import Any
 from openai import AsyncOpenAI
 
+
 logger = logging.getLogger(__name__)
 
 VECTOR_STORE_ID = os.getenv("OPENAI_VECTOR_STORE_ID")
