@@ -1,7 +1,6 @@
 """Pydantic models for tool execution results."""
 
 from typing import Any
-
 from pydantic import BaseModel, Field
 
 
