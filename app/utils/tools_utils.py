@@ -1,6 +1,7 @@
 import inspect
 import logging
-from typing import Any, Callable, get_type_hints, get_origin, get_args, Literal
+from collections.abc import Callable
+from typing import Any, Literal, get_args, get_origin, get_type_hints
 import docstring_parser
 
 
@@ -19,7 +20,7 @@ def _get_literal_values(t: type) -> list[str] | None:
     return None
 
 
-def _map_type(t: type) -> str:
+def _map_type(t: type) -> str:  # noqa: PLR0911
     """
     Map Python type to JSON schema type.
 
@@ -135,7 +136,7 @@ def gemini_parse(func: Callable) -> dict[str, Any]:
         prop = {"type": _map_type(hint), "description": param.description or ""}
 
         if "allowed values:" in (param.description or "").lower():
-            allowed = param.description.lower().split("allowed values:")[1].strip()
+            allowed = (param.description or "").lower().split("allowed values:")[1].strip()
             prop["enum"] = [v.strip() for v in allowed.split(",")]
 
         if "date" in (param.description or "").lower():
