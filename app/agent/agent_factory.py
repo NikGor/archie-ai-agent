@@ -34,12 +34,13 @@ class AgentFactory:
         tool_factory: ToolFactory | None = None,
         state_service: StateService | None = None,
         demo_mode: bool = False,
+        no_image: bool = False,
     ):
         self.openai_client = OpenAIClient()
         self.openrouter_client = OpenRouterClient()
         self.gemini_client = GeminiClient()  # Fallback
         self.prompt_builder = prompt_builder or PromptBuilder()
-        self.tool_factory = tool_factory or ToolFactory(demo_mode=demo_mode)
+        self.tool_factory = tool_factory or ToolFactory(demo_mode=demo_mode, no_image=no_image)
         self.state_service = state_service or StateService()
         self.clients: dict[str, OpenAIClient | OpenRouterClient | GeminiClient] = {
             "openai": self.openai_client,
@@ -47,7 +48,7 @@ class AgentFactory:
             "gemini": self.gemini_client,  # Fallback
         }
         logger.info(
-            f"agent_factory_001: Initialized AgentFactory, demo_mode: \033[35m{demo_mode}\033[0m"
+            f"agent_factory_001: Initialized AgentFactory, demo_mode: \033[35m{demo_mode}\033[0m, no_image: \033[35m{no_image}\033[0m"
         )
 
     async def _make_command_call(
@@ -128,6 +129,7 @@ class AgentFactory:
         previous_response_id: str | None = None,
         chat_history: str | None = None,
         user_name: str | None = None,
+        no_image: bool = False,
         on_status: StatusCallback = None,
     ) -> AgentResponse:
         """
@@ -181,6 +183,7 @@ class AgentFactory:
                         previous_response_id if output_provider == "openai" else None
                     ),
                     chat_history=chat_history if output_provider != "openai" else None,
+                    no_image=no_image,
                 )
             total_ms = int((time.monotonic() - arun_start) * 1000)
             final_response.pipeline_trace = PipelineTrace(
@@ -322,6 +325,7 @@ class AgentFactory:
                 ),
                 chat_history=chat_history if output_provider != "openai" else None,
                 intents=ui_intents,
+                no_image=no_image,
             )
         if on_status:
             await on_status(
