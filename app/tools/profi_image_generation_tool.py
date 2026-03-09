@@ -1,13 +1,12 @@
 import base64
 import logging
 import os
-import mimetypes
-from typing import Any, Literal
 from io import BytesIO
-
+from typing import Any, Literal
 from google import genai
 from google.genai import types
 from PIL import Image
+
 
 logger = logging.getLogger(__name__)
 
