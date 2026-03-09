@@ -2,6 +2,7 @@ import logging
 from typing import Any
 from app.tools.google_search_tool import google_search_tool
 
+
 logger = logging.getLogger(__name__)
 
 QUERY_TEMPLATES = {
