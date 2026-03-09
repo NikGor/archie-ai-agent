@@ -1,6 +1,5 @@
-from typing import List, Literal
+from typing import Literal
 from pydantic import BaseModel, Field
-
 from ..utils.intent_config import IntentType
 
 
@@ -30,10 +29,10 @@ class Parameter(BaseModel):
 
 class ToolCallRequest(BaseModel):
     tool_name: ToolName = Field(description="Name of the tool to call")
-    arguments: List[Parameter] = Field(
+    arguments: list[Parameter] = Field(
         description="Arguments to pass to the tool with their values, which can be found from context",
     )
-    missing_parameters: List[str] = Field(
+    missing_parameters: list[str] = Field(
         description="Parameters that still need to be requested from user",
     )
     is_confirmed: bool = Field(
@@ -47,13 +46,13 @@ class SGROrchestration(BaseModel):
     """SGR trace for orchestration and decision-making phase"""
 
     action: ActionType
-    tool_calls: List[ToolCallRequest] = Field(
+    tool_calls: list[ToolCallRequest] = Field(
         description="Tools to execute (can be parallel)",
     )
     reasoning: str = Field(
         description="Step-by-step reasoning for this orchestration decision"
     )
-    intents: List[IntentType] = Field(
+    intents: list[IntentType] = Field(
         default_factory=list,
         description=(
             "UI intents for response_format=ui_answer. "
