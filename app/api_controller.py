@@ -1,7 +1,7 @@
 """API controller for handling chat requests."""
 
 import logging
-from collections.abc import Callable, Awaitable
+from collections.abc import Awaitable, Callable
 from archie_shared.chat.models import ChatMessage, ChatRequest
 from .agent.agent_factory import AgentFactory
 from .models.ws_models import StatusUpdate
