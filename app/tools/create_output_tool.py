@@ -29,6 +29,16 @@ _clients: dict[str, OpenAIClient | OpenRouterClient | GeminiClient] = {
 }
 
 
+def _clear_card_image_prompts(ui_response: UIResponse) -> None:
+    """Clear image_prompt on all Card objects inside CardGrid items."""
+    for item in ui_response.ui_answer.items:
+        if item.type == "card_grid":
+            for card in item.content.cards:  # type: ignore[union-attr]
+                if hasattr(card, "image_prompt"):
+                    setattr(card, "image_prompt", None)
+    logger.info("create_output_008: no_image=True — cleared image_prompt on all cards")
+
+
 async def create_output(
     user_input: str,
     command_summary: str,
@@ -39,6 +49,7 @@ async def create_output(
     previous_response_id: str | None = None,
     chat_history: str | None = None,
     intents: list[str] | None = None,
+    no_image: bool = False,
 ) -> AgentResponse:
     """
     Create final formatted output response.
@@ -123,9 +134,9 @@ Create a complete, well-formatted response in the specified format."""
 
     if response_format == "ui_answer":
         # intents=[] → base models only (Card, TextAnswer, Table, Image). No fallback to full schema.
-        response_model = build_filtered_ui_response(tuple(sorted(intents)))
+        response_model = build_filtered_ui_response(tuple(sorted(intents)), no_image=no_image)
         logger.info(
-            f"create_output_004b: Using filtered UIResponse for intents: \033[35m{intents}\033[0m"
+            f"create_output_004b: Using filtered UIResponse for intents: \033[35m{intents}\033[0m, no_image: \033[35m{no_image}\033[0m"
         )
     else:
         response_model = get_response_model_for_format(response_format)
@@ -155,6 +166,8 @@ Create a complete, well-formatted response in the specified format."""
         except ValidationError as e:
             logger.error(f"create_output_007: UIResponse coercion failed: {e}")
             raise
+        if no_image:
+            _clear_card_image_prompts(parsed_content)
 
     content = build_content_from_parsed(
         parsed_content=parsed_content,
