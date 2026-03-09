@@ -1,10 +1,9 @@
 """Google Calendar events management tool."""
 
 import logging
-import os
 from typing import Any
-
 from app.backend.google_calendar_client import GoogleCalendarClient
+
 
 logger = logging.getLogger(__name__)
 
