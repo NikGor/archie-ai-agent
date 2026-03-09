@@ -1,6 +1,7 @@
 import logging
 from typing import Any
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -12,7 +13,7 @@ async def task_tool(
     due_date: str | None = None,
     priority: str | None = None,
     status: str | None = None,
-    demo_mode: bool = False,
+    demo_mode: bool = False,  # noqa: ARG001
 ) -> dict[str, Any]:
     """
     Manages tasks and to-do lists with backend integration.
