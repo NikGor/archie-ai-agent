@@ -1,6 +1,7 @@
 """Climate control tool for smart home integration."""
 
 import logging
+from typing import Any
 
 
 logger = logging.getLogger(__name__)
@@ -12,7 +13,7 @@ async def climate_control_tool(
     temperature: float | None = None,
     mode: str | None = None,
     demo_mode: bool = False,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """
     Control climate devices in the home.
 
