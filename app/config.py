@@ -135,4 +135,8 @@ TOOLS_CONFIG = {
     "knowledge": {
         "document_search_tool": "app.tools.document_search_tool",
     },
+    "image": {
+        "fast_image_generation_tool": "app.tools.fast_image_generation_tool",
+        "profi_image_generation_tool": "app.tools.profi_image_generation_tool",
+    },
 }
