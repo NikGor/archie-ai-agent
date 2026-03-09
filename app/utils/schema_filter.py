@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=64)
-def build_filtered_ui_response(intents: tuple[str, ...]) -> type[BaseModel]:
+def build_filtered_ui_response(intents: tuple[str, ...], no_image: bool = False) -> type[BaseModel]:
     """
     Build a filtered UIResponse Pydantic model for the given set of intents.
 
@@ -28,6 +28,9 @@ def build_filtered_ui_response(intents: tuple[str, ...]) -> type[BaseModel]:
         but with a restricted schema.
     """
     card_types, item_types = resolve_ui_types(intents)
+    if no_image:
+        item_types = [it for it in item_types if it != "image"]
+        logger.debug("schema_filter_001b: no_image=True — excluded 'image' from item_types")
 
     logger.debug(
         f"schema_filter_001: Building filtered model for intents={intents}, "
@@ -51,7 +54,9 @@ def build_filtered_ui_response(intents: tuple[str, ...]) -> type[BaseModel]:
 
     # --- Content union for FilteredAdvancedAnswerItem ---
     # Base content classes + card_grid (uses FilteredCardGrid) + intent-specific
-    content_classes: list[type] = [TextAnswer, FilteredCardGrid, Table, Image]
+    content_classes: list[type] = [TextAnswer, FilteredCardGrid, Table]
+    if not no_image:
+        content_classes.append(Image)
     for it in item_types:
         if it in ITEM_TYPE_TO_CONTENT_CLASS and ITEM_TYPE_TO_CONTENT_CLASS[it] not in content_classes:
             content_classes.append(ITEM_TYPE_TO_CONTENT_CLASS[it])
