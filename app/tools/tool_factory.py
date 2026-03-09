@@ -16,13 +16,14 @@ logger = logging.getLogger(__name__)
 class ToolFactory:
     """Factory for registering and executing agent tools."""
 
-    def __init__(self, demo_mode: bool = False):
+    def __init__(self, demo_mode: bool = False, no_image: bool = False):
         self.tools: dict[str, Callable] = {}
         self.tools_config = TOOLS_CONFIG
         self.demo_mode = demo_mode
+        self.no_image = no_image
         logger.info(
             f"tool_factory_001: Initialized with \033[33m{len(self.tools_config)}\033[0m tool groups, "
-            f"demo_mode: \033[35m{demo_mode}\033[0m"
+            f"demo_mode: \033[35m{demo_mode}\033[0m, no_image: \033[35m{no_image}\033[0m"
         )
 
     def _load_tool_function(self, module_path: str) -> Callable | None:
@@ -57,6 +58,9 @@ class ToolFactory:
 
         # Default: all groups including smarthome
         all_groups = list(self.tools_config.keys())
+        if self.no_image:
+            all_groups = [g for g in all_groups if g != "image"]
+            logger.info("tool_factory_003b: no_image=True — excluded 'image' group")
         logger.info(
             f"tool_factory_004: Response format \033[36m{response_format}\033[0m -> using groups: \033[33m{all_groups}\033[0m"
         )
