@@ -4,9 +4,10 @@ import logging
 import os
 from collections.abc import Callable
 from typing import Any
-from openai import OpenAI
+from openai import APIConnectionError, InternalServerError, OpenAI, RateLimitError
 from pydantic import BaseModel
 from app.utils.openai_utils import build_openai_args
+from app.utils.retry_utils import call_with_retry
 
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,11 @@ class OpenAIClient:
                     f"openai_client_003: Using previous response ID: \033[36m{previous_response_id}\033[0m"
                 )
 
-            response = self.client.responses.parse(**openai_args, timeout=60)
+            response = await call_with_retry(
+                lambda: self.client.responses.parse(**openai_args, timeout=60),
+                retryable_exceptions=(RateLimitError, APIConnectionError, InternalServerError),
+                context="openai_client",
+            )
             self._log_usage(response)
             return response
         except Exception as e:
