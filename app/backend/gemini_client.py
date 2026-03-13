@@ -8,8 +8,10 @@ import logging
 import os
 from typing import Any
 from google import genai
+from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable
 from google.genai import types
 from pydantic import BaseModel
+from app.utils.retry_utils import call_with_retry
 
 
 logger = logging.getLogger(__name__)
@@ -108,10 +110,14 @@ class GeminiClient:
 
             # Generate response
             logger.info("gemini_client_003: Calling generate_content")
-            response = self.client.models.generate_content(
-                model=model,
-                contents=contents,
-                config=generate_content_config,
+            response = await call_with_retry(
+                lambda: self.client.models.generate_content(
+                    model=model,
+                    contents=contents,
+                    config=generate_content_config,
+                ),
+                retryable_exceptions=(ResourceExhausted, ServiceUnavailable),
+                context="gemini_client",
             )
 
             self._log_usage(response, model)
