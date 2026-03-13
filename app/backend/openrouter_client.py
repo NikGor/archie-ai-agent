@@ -3,8 +3,9 @@
 import logging
 import os
 from typing import Any
-from openai import OpenAI
+from openai import APIConnectionError, InternalServerError, OpenAI, RateLimitError
 from pydantic import BaseModel
+from app.utils.retry_utils import call_with_retry
 
 
 logger = logging.getLogger(__name__)
@@ -96,7 +97,11 @@ class OpenRouterClient:
                 create_kwargs["tools"] = [
                     {"type": "function", "function": tool} for tool in tools
                 ]
-            response = self.client.chat.completions.create(**create_kwargs)
+            response = await call_with_retry(
+                lambda: self.client.chat.completions.create(**create_kwargs),
+                retryable_exceptions=(RateLimitError, APIConnectionError, InternalServerError),
+                context="openrouter_client",
+            )
             self._log_usage(response)
             return response
         except Exception as e:
