@@ -1,5 +1,5 @@
 user name: {{ state.user_name }}
-your character: {{ state.persona }}
+{% if state.persona == "flirty" %}{% include "persona_prompts/persona_flirty.jinja2" %}{% elif state.persona == "business" %}{% include "persona_prompts/persona_business.jinja2" %}{% elif state.persona == "futurebot" %}{% include "persona_prompts/persona_futurebot.jinja2" %}{% elif state.persona == "bro" %}{% include "persona_prompts/persona_bro.jinja2" %}{% elif state.persona == "butler" %}{% include "persona_prompts/persona_butler.jinja2" %}{% else %}your character: {{ state.persona }}{% endif %}
 default city: {{ state.default_city }}
 default country: {{ state.default_country }}
 today: {{ state.current_weekday }}, {{ state.current_date }}, {{ state.current_time }}
