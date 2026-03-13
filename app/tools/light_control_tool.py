@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-from enum import Enum
 from typing import Any, Literal
 import redis
 from openai import OpenAI
@@ -9,6 +8,14 @@ from pydantic import BaseModel, Field
 
 
 logger = logging.getLogger(__name__)
+
+LIGHT_DEVICES_REDIS_KEY = "smarthome:light:devices"
+
+_DEFAULT_DEVICES: dict[str, str] = {
+    "floor_lamp_living_room": "light_001",
+    "ceiling_light_kitchen": "light_002",
+    "bedroom_light": "light_003",
+}
 
 redis_host = os.getenv("REDIS_HOST", "localhost")
 redis_port = int(os.getenv("REDIS_PORT", "6379"))
@@ -22,19 +29,27 @@ redis_client = redis.Redis(
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-class LightDevice(str, Enum):
-    """Light device mapping: name -> device_id."""
+def _load_devices_from_redis() -> dict[str, str]:
+    """Load device name→id mapping from Redis. Falls back to defaults if unavailable."""
+    try:
+        data = redis_client.get(LIGHT_DEVICES_REDIS_KEY)
+        if data:
+            devices = json.loads(data)
+            if isinstance(devices, dict) and devices:
+                logger.info(
+                    f"light_control_tool_init: Loaded \033[33m{len(devices)}\033[0m devices from Redis"
+                )
+                return devices
+    except Exception as e:
+        logger.warning(
+            f"light_control_tool_init_warn: Could not load devices from Redis, using defaults: \033[33m{e}\033[0m"
+        )
+    logger.info("light_control_tool_init: Using default device list")
+    return _DEFAULT_DEVICES.copy()
 
-    floor_lamp_living_room = "light_001"
-    ceiling_light_kitchen = "light_002"
-    bedroom_light = "light_003"
 
-
-LightDeviceName = Literal[
-    "floor_lamp_living_room",
-    "ceiling_light_kitchen",
-    "bedroom_light",
-]
+_devices = _load_devices_from_redis()
+LightDeviceName = Literal[tuple(_devices.keys())]
 
 
 class AssistantButton(BaseModel):
@@ -142,7 +157,7 @@ async def light_control_tool(  # noqa: PLR0912
 
     Args:
         user_input: Original user request in natural language
-        device_name: Smart light device name - 'floor_lamp_living_room', 'ceiling_light_kitchen', 'bedroom_light'
+        device_name: Smart light device name. Available devices are loaded dynamically from Redis.
         is_on: True to turn on, False to turn off. Set based on user intent ('turn on'/'turn off')
         brightness: 0-100 percent. Interpret naturally: 'brighter'=+20, 'dim'=-20, 'max'=100, 'min'=10
         color_temp: Color warmth in Kelvin. 2700=warm, 4000=neutral, 6500=cold. 'warmer'=-500K, 'colder'=+500K
@@ -152,7 +167,12 @@ async def light_control_tool(  # noqa: PLR0912
     Returns:
         dict[str, str]: Status and updated device state
     """
-    device_id = LightDevice[device_name].value
+    device_id = _devices.get(device_name)
+    if not device_id:
+        return {
+            "status": "error",
+            "message": f"Unknown device: {device_name}",
+        }
     if isinstance(is_on, str):
         is_on = is_on.lower() == "true"
     if isinstance(brightness, str):
