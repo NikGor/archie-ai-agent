@@ -4,8 +4,10 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
+import asyncio
 import logging
 import os
+from collections.abc import AsyncIterator
 from typing import Any
 from google import genai
 from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable
@@ -125,4 +127,67 @@ class GeminiClient:
 
         except Exception as e:
             logger.error(f"gemini_client_error_001: \033[31m{e!s}\033[0m")
+            raise
+
+    async def create_completion_stream(
+        self,
+        messages: list[dict[str, Any]],
+        model: str,
+        response_format: type[BaseModel] | None = None,  # noqa: ARG002
+        previous_response_id: str | None = None,  # noqa: ARG002
+    ) -> AsyncIterator[str]:
+        """
+        Stream completion using Gemini API via asyncio.to_thread.
+
+        Runs the sync generate_content_stream iterator in a thread and yields
+        text chunks as they are collected. response_format is not applied to
+        the stream config (raw JSON is assembled and parsed by the caller).
+        """
+        # Build contents (same logic as create_completion)
+        system_instruction = None
+        if messages and messages[0]["role"] == "system":
+            system_instruction = [types.Part.from_text(text=messages[0]["content"])]
+            messages = messages[1:]
+
+        contents = []
+        for msg in messages:
+            if msg["role"] == "user":
+                contents.append(
+                    types.Content(
+                        role="user",
+                        parts=[types.Part.from_text(text=msg["content"])],
+                    )
+                )
+            elif msg["role"] == "assistant":
+                contents.append(
+                    types.Content(
+                        role="model",
+                        parts=[types.Part.from_text(text=msg["content"])],
+                    )
+                )
+
+        generate_content_config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+            system_instruction=system_instruction,  # type: ignore[arg-type]
+        )
+
+        logger.info(f"gemini_client_006: Starting stream for \033[36m{model}\033[0m")
+
+        def _collect_stream() -> list[str]:
+            chunks = []
+            for chunk in self.client.models.generate_content_stream(
+                model=model,
+                contents=contents,
+                config=generate_content_config,
+            ):
+                if chunk.text:
+                    chunks.append(chunk.text)
+            return chunks
+
+        try:
+            chunks = await asyncio.to_thread(_collect_stream)
+            for chunk in chunks:
+                yield chunk
+        except Exception as e:
+            logger.error(f"gemini_client_error_002: Stream error: \033[31m{e!s}\033[0m")
             raise
