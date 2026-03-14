@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 from pydantic import ValidationError
 from ..agent.prompt_builder import PromptBuilder
 from ..backend.gemini_client import GeminiClient
@@ -7,17 +8,21 @@ from ..backend.openrouter_client import OpenRouterClient
 from ..models.output_models import (
     AgentResponse,
     PlainResponse,
+    SGROutput,
     UIResponse,
     get_response_model_for_format,
 )
 from ..models.tool_models import ToolResult
-from ..models.ws_models import StreamCallback
+from ..models.ws_models import StreamCallback, StreamEventCallback
 from ..utils.llm_parser import build_content_from_parsed, parse_llm_response
 from ..utils.provider_utils import get_provider_for_model
 from ..utils.schema_filter import build_filtered_ui_response
-from ..utils.stream_utils import JsonTextExtractor
+from ..utils.stream_utils import JsonReasoningExtractor, JsonTextExtractor
 
 _STREAMABLE_FORMATS = frozenset({"plain", "voice"})
+_UI_STREAMABLE_FORMATS = frozenset(
+    {"ui_answer", "dashboard", "widget", "level2_answer", "level3_answer"}
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +60,7 @@ async def create_output(
     intents: list[str] | None = None,
     no_image: bool = False,
     on_stream: StreamCallback = None,
+    on_stream_event: StreamEventCallback = None,
 ) -> AgentResponse:
     """
     Create final formatted output response.
@@ -71,7 +77,8 @@ async def create_output(
         state: User state context
         previous_response_id: Previous response ID for OpenAI conversation threading
         chat_history: Chat history text for non-OpenAI providers
-        on_stream: Optional callback for streaming text tokens (plain/voice + OpenRouter only)
+        on_stream: Callback for streaming text tokens (plain/voice + OpenRouter only)
+        on_stream_event: Callback for stream_placeholder/stream_reasoning events (UI + OpenRouter)
 
     Returns:
         AgentResponse: Final formatted response with SGROutput trace
@@ -193,6 +200,59 @@ Create a complete, well-formatted response in the specified format."""
             f"create_output_006: UI reasoning: \033[35m{result.sgr.ui_reasoning}\033[0m"
         )
         return result
+
+    # ── Streaming path: OpenRouter + UI formats + on_stream_event callback ──────
+    if (
+        provider == "openrouter"
+        and response_format in _UI_STREAMABLE_FORMATS
+        and on_stream_event
+    ):
+        assert isinstance(client, OpenRouterClient)
+        await on_stream_event("stream_placeholder", None)
+        r_extractor = JsonReasoningExtractor()
+        json_parts_ui: list[str] = []
+        async for token in client.create_completion_stream(
+            messages=messages,
+            model=model,
+            response_format=response_model,
+        ):
+            json_parts_ui.append(token)
+            reasoning_chunk = r_extractor.feed(token)
+            if reasoning_chunk:
+                await on_stream_event("stream_reasoning", reasoning_chunk)
+
+        full_json_ui = "".join(json_parts_ui)
+        parsed_any: Any = response_model.model_validate_json(full_json_ui)
+
+        # Coerce dynamic filtered model back to UIResponse for ui_answer
+        if response_format == "ui_answer":
+            try:
+                parsed_any = UIResponse.model_validate(parsed_any.model_dump())
+            except ValidationError as e:
+                logger.error(f"create_output_007: UIResponse coercion failed: {e}")
+                raise
+            if no_image:
+                _clear_card_image_prompts(parsed_any)
+
+        content_ui = build_content_from_parsed(
+            parsed_content=parsed_any,
+            response_format=response_format,
+        )
+        sgr_ui: SGROutput = parsed_any.sgr
+        result_ui = AgentResponse(
+            content=content_ui,
+            sgr=sgr_ui,
+            llm_trace=None,
+            response_id=None,
+        )
+        content_text_ui = str(result_ui.content) if result_ui.content else ""
+        logger.info(
+            f"create_output_005: UI streamed response length: \033[33m{len(content_text_ui)}\033[0m"
+        )
+        logger.info(
+            f"create_output_006: UI reasoning: \033[35m{result_ui.sgr.ui_reasoning}\033[0m"
+        )
+        return result_ui
 
     # ── Blocking path ──────────────────────────────────────────────────────────
     raw_response = await client.create_completion(
