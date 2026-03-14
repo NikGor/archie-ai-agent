@@ -4,7 +4,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from archie_shared.chat.models import ChatMessage, ChatRequest
 from .agent.agent_factory import AgentFactory
-from .models.ws_models import StatusUpdate, StreamCallback
+from .models.ws_models import StatusUpdate, StreamCallback, StreamEventCallback
 from .utils.general_utils import generate_message_id
 
 
@@ -17,6 +17,7 @@ async def handle_chat(
     user_request: ChatRequest,
     on_status: StatusCallback = None,
     on_stream: StreamCallback = None,
+    on_stream_event: StreamEventCallback = None,
 ) -> ChatMessage:
     """Handle chat request by processing through AI agent only."""
     logger.info("=== STEP 3: AI Processing ===")
@@ -42,6 +43,7 @@ async def handle_chat(
         no_image=no_image,
         on_status=on_status,
         on_stream=on_stream,
+        on_stream_event=on_stream_event,
     )
 
     # Create response message

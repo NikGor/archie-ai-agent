@@ -12,7 +12,7 @@ from ..models.orchestration_sgr import DecisionResponse
 from ..models.output_models import AgentResponse
 from ..models.state_models import UserState
 from ..models.tool_models import ToolResult
-from ..models.ws_models import StatusUpdate, StreamCallback
+from ..models.ws_models import StatusUpdate, StreamCallback, StreamEventCallback
 from ..tools.create_output_tool import create_output
 from ..tools.tool_factory import ToolFactory
 from ..utils.llm_parser import parse_llm_response
@@ -134,6 +134,7 @@ class AgentFactory:
         no_image: bool = False,
         on_status: StatusCallback = None,
         on_stream: StreamCallback = None,
+        on_stream_event: StreamEventCallback = None,
     ) -> AgentResponse:
         """
         Main entry point: Create an agent response through 3-stage flow.
@@ -188,6 +189,7 @@ class AgentFactory:
                     chat_history=chat_history if output_provider != "openai" else None,
                     no_image=no_image,
                     on_stream=on_stream,
+                    on_stream_event=on_stream_event,
                 )
             total_ms = int((time.monotonic() - arun_start) * 1000)
             final_response.pipeline_trace = PipelineTrace(
@@ -348,6 +350,7 @@ class AgentFactory:
                 intents=ui_intents,
                 no_image=no_image,
                 on_stream=on_stream,
+                on_stream_event=on_stream_event,
             )
         if on_status:
             await on_status(
