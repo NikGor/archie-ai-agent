@@ -25,7 +25,7 @@ def build_openai_args(
     if response_format:
         args["text_format"] = response_format
 
-    if previous_response_id:
+    if previous_response_id and previous_response_id.startswith("resp_"):
         args["previous_response_id"] = previous_response_id
 
     if tools:
