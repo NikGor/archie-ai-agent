@@ -17,7 +17,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 logger.info("=== STEP 1: App Init ===")
-app = FastAPI()
+app = FastAPI(
+    title="Archie AI Agent",
+    description="3-stage orchestration pipeline with Schema-Guided Reasoning (SGR)",
+    version="1.0.0",
+)
 app.include_router(router)
 logger.info("main_001: FastAPI ready")
 
