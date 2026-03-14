@@ -64,7 +64,13 @@ async def ws_chat(websocket: WebSocket):
         async def send_status(status: StatusUpdate):
             await websocket.send_json({"type": "status", **status.model_dump()})
 
-        result = await handle_chat(request, on_status=send_status)
+        async def send_stream(text: str) -> None:
+            await websocket.send_json({"type": "stream_text", "text": text})
+
+        result = await handle_chat(
+            request, on_status=send_status, on_stream=send_stream
+        )
+        await websocket.send_json({"type": "stream_complete"})
         await websocket.send_json(
             {
                 "type": "final",
@@ -76,7 +82,9 @@ async def ws_chat(websocket: WebSocket):
         logger.info("ws_chat_004: Client disconnected")
     except ValidationError as e:
         logger.exception("ws_chat_error_002: \033[31mValidation error\033[0m")
-        await websocket.send_json({"type": "error", "message": f"Validation error: {e!s}"})
+        await websocket.send_json(
+            {"type": "error", "message": f"Validation error: {e!s}"}
+        )
     except Exception as e:
         logger.exception(f"ws_chat_error_001: \033[31m{e!s}\033[0m")
         await websocket.send_json({"type": "error", "message": str(e)})
