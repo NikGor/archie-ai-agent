@@ -14,7 +14,11 @@ from ..models.output_models import (
 )
 from ..models.tool_models import ToolResult
 from ..models.ws_models import StreamCallback, StreamEventCallback
-from ..utils.llm_parser import build_content_from_parsed, parse_llm_response
+from ..utils.llm_parser import (
+    build_content_from_parsed,
+    parse_assembled_stream,
+    parse_llm_response,
+)
 from ..utils.provider_utils import get_provider_for_model
 from ..utils.schema_filter import build_filtered_ui_response
 from ..utils.stream_utils import JsonReasoningExtractor, JsonTextExtractor
@@ -161,19 +165,19 @@ Create a complete, well-formatted response in the specified format."""
             f"create_output_004b: Using response model: \033[36m{response_model.__name__}\033[0m"
         )
 
-    # ── Streaming path: OpenRouter + plain/voice + on_stream callback ──────────
+    # ── Streaming path: plain/voice + on_stream callback ──────────────────────
     if (
-        provider == "openrouter"
+        hasattr(client, "create_completion_stream")
         and response_format in _STREAMABLE_FORMATS
         and on_stream
     ):
-        assert isinstance(client, OpenRouterClient)
         extractor = JsonTextExtractor()
         json_parts: list[str] = []
         async for token in client.create_completion_stream(
             messages=messages,
             model=model,
             response_format=response_model,
+            previous_response_id=previous_response_id,
         ):
             json_parts.append(token)
             text_chunk = extractor.feed(token)
@@ -181,7 +185,8 @@ Create a complete, well-formatted response in the specified format."""
                 await on_stream(text_chunk)
 
         full_json = "".join(json_parts)
-        parsed_obj = PlainResponse.model_validate_json(full_json)
+        parsed_stream = parse_assembled_stream(full_json, model, PlainResponse)
+        parsed_obj = parsed_stream.parsed_content
         content = build_content_from_parsed(
             parsed_content=parsed_obj,
             response_format=response_format,
@@ -189,7 +194,7 @@ Create a complete, well-formatted response in the specified format."""
         result = AgentResponse(
             content=content,
             sgr=parsed_obj.sgr,
-            llm_trace=None,
+            llm_trace=parsed_stream.llm_trace,
             response_id=None,
         )
         content_text = str(result.content) if result.content else ""
@@ -201,13 +206,12 @@ Create a complete, well-formatted response in the specified format."""
         )
         return result
 
-    # ── Streaming path: OpenRouter + UI formats + on_stream_event callback ──────
+    # ── Streaming path: UI formats + on_stream_event callback ─────────────────
     if (
-        provider == "openrouter"
+        hasattr(client, "create_completion_stream")
         and response_format in _UI_STREAMABLE_FORMATS
         and on_stream_event
     ):
-        assert isinstance(client, OpenRouterClient)
         await on_stream_event("stream_placeholder", None)
         r_extractor = JsonReasoningExtractor()
         json_parts_ui: list[str] = []
@@ -215,6 +219,7 @@ Create a complete, well-formatted response in the specified format."""
             messages=messages,
             model=model,
             response_format=response_model,
+            previous_response_id=previous_response_id,
         ):
             json_parts_ui.append(token)
             reasoning_chunk = r_extractor.feed(token)
@@ -222,7 +227,8 @@ Create a complete, well-formatted response in the specified format."""
                 await on_stream_event("stream_reasoning", reasoning_chunk)
 
         full_json_ui = "".join(json_parts_ui)
-        parsed_any: Any = response_model.model_validate_json(full_json_ui)
+        parsed_stream_ui = parse_assembled_stream(full_json_ui, model, response_model)
+        parsed_any: Any = parsed_stream_ui.parsed_content
 
         # Coerce dynamic filtered model back to UIResponse for ui_answer
         if response_format == "ui_answer":
@@ -242,7 +248,7 @@ Create a complete, well-formatted response in the specified format."""
         result_ui = AgentResponse(
             content=content_ui,
             sgr=sgr_ui,
-            llm_trace=None,
+            llm_trace=parsed_stream_ui.llm_trace,
             response_id=None,
         )
         content_text_ui = str(result_ui.content) if result_ui.content else ""
