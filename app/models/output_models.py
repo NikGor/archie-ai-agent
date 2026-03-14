@@ -64,6 +64,10 @@ class AgentResponse(BaseModel):
         default=None,
         description="OpenAI response ID for conversation continuity (filled by parser)",
     )
+    ttft_ms: int | None = Field(
+        default=None,
+        description="Time to first token in milliseconds (streaming mode only, filled by create_output)",
+    )
     pipeline_trace: PipelineTrace | None = Field(
         default=None,
         description="Per-stage timing and LLM cost trace for the full arun() call",
