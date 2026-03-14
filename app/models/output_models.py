@@ -31,6 +31,11 @@ class FactCheck(BaseModel):
 class SGROutput(BaseModel):
     """SGR trace for final response generation phase"""
 
+    # reasoning is first so the LLM generates it before the main content,
+    # enabling streaming of the reasoning to the frontend.
+    reasoning: str = Field(
+        description="Step-by-step reasoning for constructing this final response"
+    )
     fact_checks: list[FactCheck] = Field(
         description="List of factual statements verified during response generation"
     )
@@ -40,9 +45,6 @@ class SGROutput(BaseModel):
     orchestration_summary: str | None = Field(
         default=None,
         description="Brief summary of tools called and orchestration decisions made",
-    )
-    reasoning: str = Field(
-        description="Step-by-step reasoning for constructing this final response"
     )
 
 
@@ -70,53 +72,63 @@ class AgentResponse(BaseModel):
 
 # Format-specific response models for LLM calls
 # These are lightweight models sent to LLM instead of full Content schema
+#
+# IMPORTANT: sgr is always the FIRST field so the LLM generates reasoning
+# before the main content payload — enables reasoning streaming to the frontend.
 
 
 class PlainResponse(BaseModel):
     """LLM response model for plain text format"""
 
-    text: str = Field(description="Plain text response without formatting")
     sgr: SGROutput = Field(description="Output reasoning trace")
+    text: str = Field(description="Plain text response without formatting")
 
 
 class Level2Response(BaseModel):
     """LLM response model for level2_answer format"""
 
-    level2_answer: Level2Answer = Field(description="Text with quick action buttons")
     sgr: SGROutput = Field(description="Output reasoning trace")
+    level2_answer: Level2Answer = Field(description="Text with quick action buttons")
 
 
 class Level3Response(BaseModel):
     """LLM response model for level3_answer format"""
 
+    sgr: SGROutput = Field(description="Output reasoning trace")
     level3_answer: Level3Answer = Field(
         description="Text with widgets and quick actions"
     )
-    sgr: SGROutput = Field(description="Output reasoning trace")
 
 
 class UIResponse(BaseModel):
     """LLM response model for ui_answer format"""
 
-    ui_answer: UIAnswer = Field(description="Full UI elements content")
     sgr: SGROutput = Field(description="Output reasoning trace")
+    ui_answer: UIAnswer = Field(description="Full UI elements content")
 
 
 class DashboardResponse(BaseModel):
     """LLM response model for dashboard format"""
 
-    dashboard: Dashboard = Field(description="Dashboard with tiles and quick actions")
     sgr: SGROutput = Field(description="Output reasoning trace")
+    dashboard: Dashboard = Field(description="Dashboard with tiles and quick actions")
 
 
-WidgetType: TypeAlias = Widget | LightWidget | ClimateWidget | FootballWidget | MusicWidget | DocumentsWidget
+WidgetType: TypeAlias = (
+    Widget
+    | LightWidget
+    | ClimateWidget
+    | FootballWidget
+    | MusicWidget
+    | DocumentsWidget
+)
 
 
 class WidgetResponse(BaseModel):
     """LLM response model for widget format"""
 
-    widget: WidgetType = Field(description="Standalone widget content")
     sgr: SGROutput = Field(description="Output reasoning trace")
+    widget: WidgetType = Field(description="Standalone widget content")
 
 
 # Mapping from response_format to LLM response model
