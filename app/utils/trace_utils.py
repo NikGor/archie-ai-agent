@@ -38,6 +38,10 @@ def accumulate_llm_traces(traces: list[LllmTrace]) -> LllmTrace | None:
     )
 
 
-def make_step_trace(duration_ms: int, llm_trace: LllmTrace | None = None) -> StepTrace:
+def make_step_trace(
+    duration_ms: int,
+    llm_trace: LllmTrace | None = None,
+    ttft_ms: int | None = None,
+) -> StepTrace:
     """Build a StepTrace from a duration measurement and optional LLM trace."""
-    return StepTrace(duration_ms=duration_ms, llm_trace=llm_trace)
+    return StepTrace(duration_ms=duration_ms, ttft_ms=ttft_ms, llm_trace=llm_trace)
