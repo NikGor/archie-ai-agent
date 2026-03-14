@@ -1,6 +1,6 @@
 """WebSocket models for status updates."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class StatusUpdate(BaseModel):
@@ -9,3 +9,7 @@ class StatusUpdate(BaseModel):
     step: str
     status: str
     message: str
+    detail: str | None = Field(
+        default=None,
+        description="Human-readable detail of the action, e.g. 'Ищу в Google: лучшие рестораны'",
+    )
