@@ -67,8 +67,17 @@ async def ws_chat(websocket: WebSocket):
         async def send_stream(text: str) -> None:
             await websocket.send_json({"type": "stream_text", "text": text})
 
+        async def send_stream_event(event_type: str, text: str | None = None) -> None:
+            payload: dict = {"type": event_type}
+            if text is not None:
+                payload["text"] = text
+            await websocket.send_json(payload)
+
         result = await handle_chat(
-            request, on_status=send_status, on_stream=send_stream
+            request,
+            on_status=send_status,
+            on_stream=send_stream,
+            on_stream_event=send_stream_event,
         )
         await websocket.send_json({"type": "stream_complete"})
         await websocket.send_json(
