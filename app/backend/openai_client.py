@@ -2,10 +2,18 @@
 
 import logging
 import os
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from typing import Any
-from openai import APIConnectionError, InternalServerError, OpenAI, RateLimitError
+
+from openai import (
+    APIConnectionError,
+    AsyncOpenAI,
+    InternalServerError,
+    OpenAI,
+    RateLimitError,
+)
 from pydantic import BaseModel
+
 from app.utils.openai_utils import build_openai_args
 from app.utils.retry_utils import call_with_retry
 
@@ -19,6 +27,7 @@ class OpenAIClient:
     def __init__(self):
         self.api_key = os.getenv("OPENAI_API_KEY")
         self.client = OpenAI(api_key=self.api_key)
+        self.async_client = AsyncOpenAI(api_key=self.api_key)
         logger.info("openai_client_001: Initialized OpenAI client")
 
     def _log_usage(self, response: Any) -> None:
@@ -70,11 +79,48 @@ class OpenAIClient:
 
             response = await call_with_retry(
                 lambda: self.client.responses.parse(**openai_args, timeout=60),
-                retryable_exceptions=(RateLimitError, APIConnectionError, InternalServerError),
+                retryable_exceptions=(
+                    RateLimitError,
+                    APIConnectionError,
+                    InternalServerError,
+                ),
                 context="openai_client",
             )
             self._log_usage(response)
             return response
         except Exception as e:
             logger.error(f"openai_client_error_001: \033[31m{e!s}\033[0m")
+            raise
+
+    async def create_completion_stream(
+        self,
+        messages: list[dict[str, Any]],
+        model: str,
+        response_format: type[BaseModel] | None = None,
+        previous_response_id: str | None = None,
+    ) -> AsyncIterator[str]:
+        """
+        Stream completion tokens using OpenAI Responses API (responses.stream()).
+
+        Yields raw JSON token strings as they arrive. The caller is responsible
+        for reassembling and parsing the full response.
+
+        Note: previous_response_id is passed through for conversation caching.
+        """
+        args = build_openai_args(
+            model=model,
+            messages=messages,
+            response_format=response_format,
+            previous_response_id=previous_response_id,
+        )
+        logger.info(f"openai_client_006: Starting stream for \033[36m{model}\033[0m")
+        try:
+            async with self.async_client.responses.stream(**args) as stream:
+                async for event in stream:
+                    if event.type == "response.output_text.delta" and getattr(
+                        event, "delta", None
+                    ):
+                        yield event.delta
+        except Exception as e:
+            logger.error(f"openai_client_error_002: Stream error: \033[31m{e!s}\033[0m")
             raise
