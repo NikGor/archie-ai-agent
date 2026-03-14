@@ -12,7 +12,7 @@ from ..models.orchestration_sgr import DecisionResponse
 from ..models.output_models import AgentResponse
 from ..models.state_models import UserState
 from ..models.tool_models import ToolResult
-from ..models.ws_models import StatusUpdate
+from ..models.ws_models import StatusUpdate, StreamCallback
 from ..tools.create_output_tool import create_output
 from ..tools.tool_factory import ToolFactory
 from ..utils.llm_parser import parse_llm_response
@@ -40,7 +40,9 @@ class AgentFactory:
         self.openrouter_client = OpenRouterClient()
         self.gemini_client = GeminiClient()  # Fallback
         self.prompt_builder = prompt_builder or PromptBuilder()
-        self.tool_factory = tool_factory or ToolFactory(demo_mode=demo_mode, no_image=no_image)
+        self.tool_factory = tool_factory or ToolFactory(
+            demo_mode=demo_mode, no_image=no_image
+        )
         self.state_service = state_service or StateService()
         self.clients: dict[str, OpenAIClient | OpenRouterClient | GeminiClient] = {
             "openai": self.openai_client,
@@ -131,6 +133,7 @@ class AgentFactory:
         user_name: str | None = None,
         no_image: bool = False,
         on_status: StatusCallback = None,
+        on_stream: StreamCallback = None,
     ) -> AgentResponse:
         """
         Main entry point: Create an agent response through 3-stage flow.
@@ -184,6 +187,7 @@ class AgentFactory:
                     ),
                     chat_history=chat_history if output_provider != "openai" else None,
                     no_image=no_image,
+                    on_stream=on_stream,
                 )
             total_ms = int((time.monotonic() - arun_start) * 1000)
             final_response.pipeline_trace = PipelineTrace(
@@ -217,7 +221,11 @@ class AgentFactory:
                         step="command",
                         status="started",
                         message=f"Analyzing request (iteration {iteration})",
-                        detail="Анализирую запрос" if iteration == 1 else f"Уточняю результаты (итерация {iteration})",
+                        detail=(
+                            "Анализирую запрос"
+                            if iteration == 1
+                            else f"Уточняю результаты (итерация {iteration})"
+                        ),
                     )
                 )
 
@@ -237,8 +245,14 @@ class AgentFactory:
             if s1_llm_trace:
                 stage1_llm_traces.append(s1_llm_trace)
             if on_status:
-                tool_names = [tc.tool_name for tc in decision.sgr.tool_calls] if decision.sgr.tool_calls else []
-                detail_msg = ", ".join(tool_names) if tool_names else decision.sgr.action.type
+                tool_names = (
+                    [tc.tool_name for tc in decision.sgr.tool_calls]
+                    if decision.sgr.tool_calls
+                    else []
+                )
+                detail_msg = (
+                    ", ".join(tool_names) if tool_names else decision.sgr.action.type
+                )
                 await on_status(
                     StatusUpdate(
                         step="command",
@@ -302,7 +316,9 @@ class AgentFactory:
             ]
         )
         command_summary += f"\n\nTotal tools executed: {len(tool_results)}"
-        ui_intents: list[str] = [str(i) for i in decision.sgr.intents] if decision else []
+        ui_intents: list[str] = (
+            [str(i) for i in decision.sgr.intents] if decision else []
+        )
         logger.info(
             f"agent_factory_007: Creating final output, intents: \033[35m{ui_intents}\033[0m"
         )
@@ -331,6 +347,7 @@ class AgentFactory:
                 chat_history=chat_history if output_provider != "openai" else None,
                 intents=ui_intents,
                 no_image=no_image,
+                on_stream=on_stream,
             )
         if on_status:
             await on_status(
