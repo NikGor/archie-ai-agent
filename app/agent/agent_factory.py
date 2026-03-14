@@ -194,12 +194,15 @@ class AgentFactory:
             total_ms = int((time.monotonic() - arun_start) * 1000)
             final_response.pipeline_trace = PipelineTrace(
                 stage3=make_step_trace(
-                    stage3_timer.duration_ms, final_response.llm_trace
+                    stage3_timer.duration_ms,
+                    final_response.llm_trace,
+                    ttft_ms=final_response.ttft_ms,
                 ),
                 total_ms=total_ms,
             )
             logger.info(
                 f"agent_factory_010: Pipeline trace (direct): stage3=\033[33m{stage3_timer.duration_ms}\033[0mms, "
+                f"ttft=\033[33m{final_response.ttft_ms}\033[0mms, "
                 f"total=\033[33m{total_ms}\033[0mms"
             )
             logger.info("=== AgentFactory: Response Created ===")
@@ -370,13 +373,18 @@ class AgentFactory:
                 stage1_duration_ms, accumulate_llm_traces(stage1_llm_traces)
             ),
             stage2=stage2_trace,
-            stage3=make_step_trace(stage3_timer.duration_ms, final_response.llm_trace),
+            stage3=make_step_trace(
+                stage3_timer.duration_ms,
+                final_response.llm_trace,
+                ttft_ms=final_response.ttft_ms,
+            ),
             total_ms=total_ms,
         )
         logger.info(
             f"agent_factory_010: Pipeline trace: stage1=\033[33m{stage1_duration_ms}\033[0mms, "
             f"stage2=\033[33m{stage2_duration_ms}\033[0mms, "
             f"stage3=\033[33m{stage3_timer.duration_ms}\033[0mms, "
+            f"ttft=\033[33m{final_response.ttft_ms}\033[0mms, "
             f"total=\033[33m{total_ms}\033[0mms"
         )
         logger.info("=== AgentFactory: Response Created ===")
