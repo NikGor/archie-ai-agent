@@ -1,7 +1,7 @@
-"""Unit tests for app/utils/stream_utils.py — JsonTextExtractor state machine."""
+"""Unit tests for app/utils/stream_utils.py — JsonTextExtractor and JsonReasoningExtractor."""
 
 import pytest
-from app.utils.stream_utils import JsonTextExtractor
+from app.utils.stream_utils import JsonReasoningExtractor, JsonTextExtractor
 
 
 # ---------------------------------------------------------------------------
@@ -117,3 +117,114 @@ def test_is_done_false_before_text_field():
 def test_no_text_field_returns_empty():
     json_str = '{"sgr": {"reasoning": "no text here"}, "other": "value"}'
     assert _extract(json_str) == ""
+
+
+# ===========================================================================
+# JsonReasoningExtractor tests
+# ===========================================================================
+
+
+def _extract_reasoning(json_str: str, chunk_size: int = 1) -> str:
+    """Feed json_str to a fresh JsonReasoningExtractor chunk_size chars at a time."""
+    extractor = JsonReasoningExtractor()
+    result = []
+    for i in range(0, len(json_str), chunk_size):
+        chunk = json_str[i : i + chunk_size]
+        result.append(extractor.feed(chunk))
+    return "".join(result)
+
+
+# ---------------------------------------------------------------------------
+# Basic extraction
+# ---------------------------------------------------------------------------
+
+
+def test_reasoning_sgr_first():
+    """sgr (with reasoning) comes before main content."""
+    json_str = '{"sgr": {"reasoning": "step by step", "ui_reasoning": "use cards"}, "ui_answer": {}}'
+    assert _extract_reasoning(json_str) == "step by step"
+
+
+def test_reasoning_sgr_second():
+    """sgr comes after main content."""
+    json_str = '{"ui_answer": {"items": []}, "sgr": {"reasoning": "because", "ui_reasoning": "cards"}}'
+    assert _extract_reasoning(json_str) == "because"
+
+
+def test_reasoning_key_before_other_sgr_fields():
+    """reasoning is first field inside sgr object."""
+    json_str = '{"sgr": {"reasoning": "first!", "fact_checks": [], "ui_reasoning": "ok"}}'
+    assert _extract_reasoning(json_str) == "first!"
+
+
+def test_reasoning_key_after_other_sgr_fields():
+    """reasoning is last field inside sgr object."""
+    json_str = '{"sgr": {"fact_checks": [], "ui_reasoning": "ok", "reasoning": "last"}}'
+    assert _extract_reasoning(json_str) == "last"
+
+
+def test_reasoning_empty_string():
+    json_str = '{"sgr": {"reasoning": "", "ui_reasoning": "x"}}'
+    assert _extract_reasoning(json_str) == ""
+
+
+def test_reasoning_with_escape_sequences():
+    json_str = r'{"sgr": {"reasoning": "step 1\nstep 2", "ui_reasoning": "x"}}'
+    assert _extract_reasoning(json_str) == "step 1\nstep 2"
+
+
+def test_reasoning_with_escaped_quote():
+    json_str = r'{"sgr": {"reasoning": "say \"hi\"", "ui_reasoning": "x"}}'
+    assert _extract_reasoning(json_str) == 'say "hi"'
+
+
+# ---------------------------------------------------------------------------
+# Chunk size resilience
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("chunk_size", [1, 2, 3, 7, 13, 50, 1000])
+def test_reasoning_various_chunk_sizes(chunk_size: int):
+    json_str = '{"sgr": {"reasoning": "reasoning text here", "ui_reasoning": "x"}, "ui_answer": {}}'
+    assert _extract_reasoning(json_str, chunk_size) == "reasoning text here"
+
+
+# ---------------------------------------------------------------------------
+# Nested objects don't confuse the extractor
+# ---------------------------------------------------------------------------
+
+
+def test_reasoning_key_in_nested_does_not_leak():
+    """reasoning key deep inside ui_answer should not be extracted."""
+    json_str = (
+        '{"sgr": {"reasoning": "correct", "ui_reasoning": "x"}, '
+        '"ui_answer": {"items": [{"reasoning": "wrong"}]}}'
+    )
+    assert _extract_reasoning(json_str) == "correct"
+
+
+# ---------------------------------------------------------------------------
+# is_done property
+# ---------------------------------------------------------------------------
+
+
+def test_reasoning_is_done_after_extraction():
+    extractor = JsonReasoningExtractor()
+    extractor.feed('{"sgr": {"reasoning": "done", "ui_reasoning": "x"}}')
+    assert extractor.is_done
+
+
+def test_reasoning_is_done_false_before_sgr():
+    extractor = JsonReasoningExtractor()
+    extractor.feed('{"ui_answer": {')
+    assert not extractor.is_done
+
+
+# ---------------------------------------------------------------------------
+# No reasoning field
+# ---------------------------------------------------------------------------
+
+
+def test_no_reasoning_returns_empty():
+    json_str = '{"sgr": {"ui_reasoning": "only this"}, "ui_answer": {}}'
+    assert _extract_reasoning(json_str) == ""
