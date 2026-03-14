@@ -75,7 +75,7 @@ class AgentFactory:
         tools = self.tool_factory.get_tool_schemas(model, response_format)
         tools_list = "\n".join(
             [
-                f"- {t['name']}: {t['description']}\n  Parameters: {json.dumps(t.get('parameters', {}), ensure_ascii=False)}"
+                f"- {t['name']}: {t.get('description', '')}\n  Parameters: {json.dumps(t.get('parameters', {}), ensure_ascii=False)}"
                 for t in tools
             ]
         )
