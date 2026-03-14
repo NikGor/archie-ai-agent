@@ -8,6 +8,14 @@ import docstring_parser
 logger = logging.getLogger(__name__)
 
 
+def _full_description(doc: docstring_parser.Docstring) -> str:
+    """Return combined short + long description from a parsed docstring."""
+    parts = [doc.short_description or ""]
+    if doc.long_description:
+        parts.append(doc.long_description)
+    return " ".join(p for p in parts if p)
+
+
 def _get_literal_values(t: type) -> list[str] | None:
     """Extract literal values if type is Literal."""
     origin = get_origin(t)
@@ -102,7 +110,7 @@ def openai_parse(func: Callable) -> dict[str, Any]:
 
     return {
         "name": func.__name__,
-        "description": doc.short_description or "",
+        "description": _full_description(doc),
         "parameters": {
             "type": "object",
             "properties": properties,
@@ -148,7 +156,7 @@ def gemini_parse(func: Callable) -> dict[str, Any]:
 
     return {
         "name": func.__name__,
-        "description": doc.short_description or "",
+        "description": _full_description(doc),
         "parameters": {
             "type": "object",
             "properties": properties,
@@ -182,6 +190,7 @@ def oss_parse(func: Callable) -> dict[str, Any]:
 
     return {
         "name": func.__name__,
+        "description": _full_description(doc),
         "parameters": {"type": "object", "properties": properties},
     }
 
@@ -218,7 +227,7 @@ def openai_responses_parse(func: Callable) -> dict[str, Any]:
     return {
         "type": "function",
         "name": func.__name__,
-        "description": doc.short_description or "",
+        "description": _full_description(doc),
         "parameters": {
             "type": "object",
             "properties": properties,
