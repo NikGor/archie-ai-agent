@@ -217,6 +217,7 @@ class AgentFactory:
                         step="command",
                         status="started",
                         message=f"Analyzing request (iteration {iteration})",
+                        detail="Анализирую запрос" if iteration == 1 else f"Уточняю результаты (итерация {iteration})",
                     )
                 )
 
@@ -236,11 +237,14 @@ class AgentFactory:
             if s1_llm_trace:
                 stage1_llm_traces.append(s1_llm_trace)
             if on_status:
+                tool_names = [tc.tool_name for tc in decision.sgr.tool_calls] if decision.sgr.tool_calls else []
+                detail_msg = ", ".join(tool_names) if tool_names else decision.sgr.action.type
                 await on_status(
                     StatusUpdate(
                         step="command",
                         status="completed",
                         message=f"Action: {decision.sgr.action.type}",
+                        detail=detail_msg,
                     )
                 )
             logger.info(
@@ -308,6 +312,7 @@ class AgentFactory:
                     step="output",
                     status="started",
                     message=f"Generating {response_format} response with {final_output_model}",
+                    detail="Формирую ответ",
                 )
             )
 
@@ -333,6 +338,7 @@ class AgentFactory:
                     step="output",
                     status="completed",
                     message="Response ready",
+                    detail="Ответ готов",
                 )
             )
         total_ms = int((time.monotonic() - arun_start) * 1000)
