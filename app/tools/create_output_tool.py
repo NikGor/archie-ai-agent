@@ -6,14 +6,18 @@ from ..backend.openai_client import OpenAIClient
 from ..backend.openrouter_client import OpenRouterClient
 from ..models.output_models import (
     AgentResponse,
+    PlainResponse,
     UIResponse,
     get_response_model_for_format,
 )
 from ..models.tool_models import ToolResult
+from ..models.ws_models import StreamCallback
 from ..utils.llm_parser import build_content_from_parsed, parse_llm_response
 from ..utils.provider_utils import get_provider_for_model
 from ..utils.schema_filter import build_filtered_ui_response
+from ..utils.stream_utils import JsonTextExtractor
 
+_STREAMABLE_FORMATS = frozenset({"plain", "voice"})
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +54,7 @@ async def create_output(
     chat_history: str | None = None,
     intents: list[str] | None = None,
     no_image: bool = False,
+    on_stream: StreamCallback = None,
 ) -> AgentResponse:
     """
     Create final formatted output response.
@@ -66,6 +71,7 @@ async def create_output(
         state: User state context
         previous_response_id: Previous response ID for OpenAI conversation threading
         chat_history: Chat history text for non-OpenAI providers
+        on_stream: Optional callback for streaming text tokens (plain/voice + OpenRouter only)
 
     Returns:
         AgentResponse: Final formatted response with SGROutput trace
@@ -86,7 +92,9 @@ async def create_output(
     if intents is None:
         intents = []
 
-    format_instructions = prompt_builder.build_format_instructions(response_format, intents=intents)
+    format_instructions = prompt_builder.build_format_instructions(
+        response_format, intents=intents
+    )
     assistant_context = prompt_builder.build_assistant_prompt(state, response_format)
 
     tools_context = ""
@@ -134,7 +142,9 @@ Create a complete, well-formatted response in the specified format."""
 
     if response_format == "ui_answer":
         # intents=[] → base models only (Card, TextAnswer, Table, Image). No fallback to full schema.
-        response_model = build_filtered_ui_response(tuple(sorted(intents)), no_image=no_image)
+        response_model = build_filtered_ui_response(
+            tuple(sorted(intents)), no_image=no_image
+        )
         logger.info(
             f"create_output_004b: Using filtered UIResponse for intents: \033[35m{intents}\033[0m, no_image: \033[35m{no_image}\033[0m"
         )
@@ -144,6 +154,47 @@ Create a complete, well-formatted response in the specified format."""
             f"create_output_004b: Using response model: \033[36m{response_model.__name__}\033[0m"
         )
 
+    # ── Streaming path: OpenRouter + plain/voice + on_stream callback ──────────
+    if (
+        provider == "openrouter"
+        and response_format in _STREAMABLE_FORMATS
+        and on_stream
+    ):
+        assert isinstance(client, OpenRouterClient)
+        extractor = JsonTextExtractor()
+        json_parts: list[str] = []
+        async for token in client.create_completion_stream(
+            messages=messages,
+            model=model,
+            response_format=response_model,
+        ):
+            json_parts.append(token)
+            text_chunk = extractor.feed(token)
+            if text_chunk:
+                await on_stream(text_chunk)
+
+        full_json = "".join(json_parts)
+        parsed_obj = PlainResponse.model_validate_json(full_json)
+        content = build_content_from_parsed(
+            parsed_content=parsed_obj,
+            response_format=response_format,
+        )
+        result = AgentResponse(
+            content=content,
+            sgr=parsed_obj.sgr,
+            llm_trace=None,
+            response_id=None,
+        )
+        content_text = str(result.content) if result.content else ""
+        logger.info(
+            f"create_output_005: Streamed response length: \033[33m{len(content_text)}\033[0m"
+        )
+        logger.info(
+            f"create_output_006: UI reasoning: \033[35m{result.sgr.ui_reasoning}\033[0m"
+        )
+        return result
+
+    # ── Blocking path ──────────────────────────────────────────────────────────
     raw_response = await client.create_completion(
         messages=messages,
         model=model,
