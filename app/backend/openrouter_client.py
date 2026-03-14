@@ -2,9 +2,18 @@
 
 import logging
 import os
+from collections.abc import AsyncIterator
 from typing import Any
-from openai import APIConnectionError, InternalServerError, OpenAI, RateLimitError
+
+from openai import (
+    APIConnectionError,
+    AsyncOpenAI,
+    InternalServerError,
+    OpenAI,
+    RateLimitError,
+)
 from pydantic import BaseModel
+
 from app.utils.retry_utils import call_with_retry
 
 
@@ -19,6 +28,10 @@ class OpenRouterClient:
     def __init__(self):
         self.api_key = os.getenv("OPENROUTER_API_KEY")
         self.client = OpenAI(
+            api_key=self.api_key,
+            base_url=OPENROUTER_BASE_URL,
+        )
+        self.async_client = AsyncOpenAI(
             api_key=self.api_key,
             base_url=OPENROUTER_BASE_URL,
         )
@@ -42,6 +55,43 @@ class OpenRouterClient:
             )
         except Exception as e:
             logger.warning(f"openrouter_client_warning_001: Could not log usage: {e}")
+
+    def _build_create_kwargs(
+        self,
+        messages: list[dict[str, Any]],
+        model: str,
+        response_format: type[BaseModel] | None = None,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Build kwargs dict for chat.completions.create calls."""
+        create_kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+        }
+        if response_format:
+            schema = response_format.model_json_schema()
+            if "properties" in schema:
+                schema["properties"].pop("llm_trace", None)
+                schema["properties"].pop("response_id", None)
+                if "required" in schema:
+                    schema["required"] = [
+                        field
+                        for field in schema["required"]
+                        if field not in ["llm_trace", "response_id"]
+                    ]
+            create_kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": response_format.__name__,
+                    "schema": schema,
+                    "strict": True,
+                },
+            }
+        if tools:
+            create_kwargs["tools"] = [
+                {"type": "function", "function": tool} for tool in tools
+            ]
+        return create_kwargs
 
     async def create_completion(
         self,
@@ -70,40 +120,48 @@ class OpenRouterClient:
                 "openrouter_client_003: previous_response_id ignored (not supported by OpenRouter)"
             )
         try:
-            create_kwargs: dict[str, Any] = {
-                "model": model,
-                "messages": messages,
-            }
-            if response_format:
-                schema = response_format.model_json_schema()
-                if "properties" in schema:
-                    schema["properties"].pop("llm_trace", None)
-                    schema["properties"].pop("response_id", None)
-                    if "required" in schema:
-                        schema["required"] = [
-                            field
-                            for field in schema["required"]
-                            if field not in ["llm_trace", "response_id"]
-                        ]
-                create_kwargs["response_format"] = {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": response_format.__name__,
-                        "schema": schema,
-                        "strict": True,
-                    },
-                }
-            if tools:
-                create_kwargs["tools"] = [
-                    {"type": "function", "function": tool} for tool in tools
-                ]
+            create_kwargs = self._build_create_kwargs(
+                messages, model, response_format, tools
+            )
             response = await call_with_retry(
                 lambda: self.client.chat.completions.create(**create_kwargs),
-                retryable_exceptions=(RateLimitError, APIConnectionError, InternalServerError),
+                retryable_exceptions=(
+                    RateLimitError,
+                    APIConnectionError,
+                    InternalServerError,
+                ),
                 context="openrouter_client",
             )
             self._log_usage(response)
             return response
         except Exception as e:
             logger.error(f"openrouter_client_error_001: \033[31m{e!s}\033[0m")
+            raise
+
+    async def create_completion_stream(
+        self,
+        messages: list[dict[str, Any]],
+        model: str,
+        response_format: type[BaseModel] | None = None,
+    ) -> AsyncIterator[str]:
+        """
+        Stream completion tokens from OpenRouter API.
+
+        Yields raw token strings as they arrive. The caller is responsible
+        for reassembling and parsing the full structured response.
+        """
+        create_kwargs = self._build_create_kwargs(messages, model, response_format)
+        create_kwargs["stream"] = True
+        logger.info(
+            f"openrouter_client_006: Starting stream for \033[36m{model}\033[0m"
+        )
+        try:
+            stream = await self.async_client.chat.completions.create(**create_kwargs)
+            async for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+        except Exception as e:
+            logger.error(
+                f"openrouter_client_error_002: Stream error: \033[31m{e!s}\033[0m"
+            )
             raise
