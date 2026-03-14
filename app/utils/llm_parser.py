@@ -373,6 +373,47 @@ def parse_llm_response(
         raise ValueError(f"Unsupported provider: {provider}")
 
 
+def parse_assembled_stream(
+    full_json: str,
+    model: str,
+    expected_type: type[BaseModel],
+) -> ParsedLLMResponse:
+    """
+    Parse a fully assembled streaming response (no token counts available).
+
+    Used when a response was built by concatenating streaming chunks.
+    Sets model in llm_trace but token counts are 0.
+
+    Args:
+        full_json: Complete JSON string assembled from streamed tokens
+        model: Model name (for llm_trace)
+        expected_type: Expected Pydantic model type
+
+    Returns:
+        ParsedLLMResponse with parsed content and minimal llm_trace
+    """
+    logger.info(
+        f"llm_parser_011: Parsing assembled stream, model: \033[36m{model}\033[0m"
+    )
+    parsed_content = _parse_content_without_excluded_fields(full_json, expected_type)
+    logger.info(
+        f"llm_parser_012: Parsed stream content type: \033[36m{type(parsed_content).__name__}\033[0m"
+    )
+    llm_trace = LllmTrace(
+        model=model,
+        input_tokens=0,
+        input_tokens_details=InputTokensDetails(cached_tokens=0),
+        output_tokens=0,
+        output_tokens_details=OutputTokensDetails(reasoning_tokens=0),
+        total_tokens=0,
+        total_cost=0.0,
+    )
+    return ParsedLLMResponse(
+        parsed_content=parsed_content,
+        llm_trace=llm_trace,
+    )
+
+
 def build_content_from_parsed(  # noqa: PLR0911
     parsed_content: Any,
     response_format: str,
