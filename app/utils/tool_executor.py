@@ -6,6 +6,7 @@ from ..models.orchestration_sgr import Parameter, ToolCallRequest
 from ..models.tool_models import ToolResult
 from ..models.ws_models import StatusUpdate
 from ..tools.tool_factory import ToolFactory
+from .status_messages import get_tool_detail
 
 
 logger = logging.getLogger(__name__)
@@ -25,17 +26,19 @@ async def execute_tool_call(
     logger.info(
         f"tool_executor_001: Executing tool: \033[36m{tool_call.tool_name}\033[0m"
     )
+    if tool_factory is None:
+        tool_factory = ToolFactory()
+    arguments_dict = convert_parameters_to_dict(tool_call.arguments)
+    detail = get_tool_detail(tool_call.tool_name, arguments_dict)
     if on_status:
         await on_status(
             StatusUpdate(
                 step="tools",
                 status="started",
-                message=f"Calling {tool_call.tool_name}",
+                message=detail or f"Calling {tool_call.tool_name}",
+                detail=detail,
             )
         )
-    if tool_factory is None:
-        tool_factory = ToolFactory()
-    arguments_dict = convert_parameters_to_dict(tool_call.arguments)
     logger.info(f"tool_executor_002: Arguments: \033[33m{arguments_dict}\033[0m")
     try:
         result = await tool_factory.execute_tool(
@@ -50,7 +53,8 @@ async def execute_tool_call(
                 StatusUpdate(
                     step="tools",
                     status="completed",
-                    message=f"{tool_call.tool_name} completed",
+                    message=detail or f"{tool_call.tool_name} completed",
+                    detail=detail,
                 )
             )
         return ToolResult(
@@ -68,6 +72,7 @@ async def execute_tool_call(
                     step="tools",
                     status="failed",
                     message=f"{tool_call.tool_name} failed: {e!s}",
+                    detail=detail,
                 )
             )
         return ToolResult(
