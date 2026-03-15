@@ -228,3 +228,163 @@ def test_reasoning_is_done_false_before_sgr():
 def test_no_reasoning_returns_empty():
     json_str = '{"sgr": {"ui_reasoning": "only this"}, "ui_answer": {}}'
     assert _extract_reasoning(json_str) == ""
+
+
+# ===========================================================================
+# JsonLevel2TextExtractor tests
+# ===========================================================================
+
+
+def _extract_l2(json_str: str, chunk_size: int = 1) -> str:
+    """Feed json_str to a fresh JsonLevel2TextExtractor chunk_size chars at a time."""
+    from app.utils.stream_utils import JsonLevel2TextExtractor
+
+    extractor = JsonLevel2TextExtractor()
+    result = []
+    for i in range(0, len(json_str), chunk_size):
+        chunk = json_str[i : i + chunk_size]
+        result.append(extractor.feed(chunk))
+    return "".join(result)
+
+
+def _l2_json(text: str, text_type: str = "markdown") -> str:
+    """Build a minimal Level2Response JSON string."""
+    return (
+        f'{{"sgr": {{"reasoning": "r", "ui_reasoning": "u", "fact_checks": [], "orchestration_summary": null}}, '
+        f'"level2_answer": {{"text": {{"type": "{text_type}", "text": "{text}"}}, '
+        f'"quick_action_buttons": {{"buttons": []}}}}}}'
+    )
+
+
+# ---------------------------------------------------------------------------
+# Basic extraction
+# ---------------------------------------------------------------------------
+
+
+def test_l2_basic_extraction():
+    assert _extract_l2(_l2_json("hello world")) == "hello world"
+
+
+def test_l2_sgr_first():
+    """sgr comes before level2_answer (typical ordering)."""
+    assert _extract_l2(_l2_json("sgr is first")) == "sgr is first"
+
+
+def test_l2_level2_first():
+    """level2_answer before sgr."""
+    json_str = (
+        '{"level2_answer": {"text": {"type": "plain", "text": "content first"}, '
+        '"quick_action_buttons": {"buttons": []}}, "sgr": {"reasoning": "r"}}'
+    )
+    assert _extract_l2(json_str) == "content first"
+
+
+def test_l2_text_key_after_type():
+    """type field comes before text inside TextAnswer — type value must be skipped."""
+    json_str = (
+        '{"sgr": {}, "level2_answer": {"text": {"type": "markdown", "text": "actual"}, '
+        '"quick_action_buttons": {}}}'
+    )
+    assert _extract_l2(json_str) == "actual"
+
+
+def test_l2_quick_actions_before_text():
+    """quick_action_buttons field appears before text in level2_answer."""
+    json_str = (
+        '{"sgr": {}, "level2_answer": {"quick_action_buttons": {"buttons": []}, '
+        '"text": {"type": "plain", "text": "after buttons"}}}'
+    )
+    assert _extract_l2(json_str) == "after buttons"
+
+
+def test_l2_empty_text():
+    assert _extract_l2(_l2_json("")) == ""
+
+
+def test_l2_spaces_and_punctuation():
+    assert _extract_l2(_l2_json("Hi! How are you?")) == "Hi! How are you?"
+
+
+# ---------------------------------------------------------------------------
+# Escape sequences
+# ---------------------------------------------------------------------------
+
+
+def test_l2_escaped_newline():
+    json_str = _l2_json(r"line1\nline2")
+    assert _extract_l2(json_str) == "line1\nline2"
+
+
+def test_l2_escaped_quote():
+    json_str = '{"sgr": {}, "level2_answer": {"text": {"type": "plain", "text": "say \\"hi\\""}, "quick_action_buttons": {}}}'
+    assert _extract_l2(json_str) == 'say "hi"'
+
+
+def test_l2_escaped_backslash():
+    json_str = '{"sgr": {}, "level2_answer": {"text": {"type": "plain", "text": "path\\\\to\\\\file"}, "quick_action_buttons": {}}}'
+    assert _extract_l2(json_str) == "path\\to\\file"
+
+
+# ---------------------------------------------------------------------------
+# Chunk size resilience
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("chunk_size", [1, 2, 3, 7, 13, 50, 1000])
+def test_l2_various_chunk_sizes(chunk_size: int):
+    json_str = _l2_json("streaming level2 works")
+    assert _extract_l2(json_str, chunk_size) == "streaming level2 works"
+
+
+# ---------------------------------------------------------------------------
+# Nested keys inside sgr / quick_action_buttons must not leak
+# ---------------------------------------------------------------------------
+
+
+def test_l2_text_key_inside_sgr_ignored():
+    """A 'text' key inside sgr should not be extracted."""
+    json_str = (
+        '{"sgr": {"reasoning": "r", "text": "wrong"}, '
+        '"level2_answer": {"text": {"type": "plain", "text": "correct"}, "quick_action_buttons": {}}}'
+    )
+    assert _extract_l2(json_str) == "correct"
+
+
+def test_l2_text_key_inside_buttons_ignored():
+    """A 'text' key inside quick_action_buttons should not be extracted."""
+    json_str = (
+        '{"sgr": {}, "level2_answer": {"text": {"type": "plain", "text": "right"}, '
+        '"quick_action_buttons": {"buttons": [{"text": "Click me"}]}}}'
+    )
+    assert _extract_l2(json_str) == "right"
+
+
+# ---------------------------------------------------------------------------
+# is_done property
+# ---------------------------------------------------------------------------
+
+
+def test_l2_is_done_after_extraction():
+    from app.utils.stream_utils import JsonLevel2TextExtractor
+
+    extractor = JsonLevel2TextExtractor()
+    extractor.feed(_l2_json("done"))
+    assert extractor.is_done
+
+
+def test_l2_is_done_false_before_level2():
+    from app.utils.stream_utils import JsonLevel2TextExtractor
+
+    extractor = JsonLevel2TextExtractor()
+    extractor.feed('{"sgr": {')
+    assert not extractor.is_done
+
+
+# ---------------------------------------------------------------------------
+# No level2_answer field
+# ---------------------------------------------------------------------------
+
+
+def test_l2_no_level2_field_returns_empty():
+    json_str = '{"sgr": {"reasoning": "nothing here"}, "other": "value"}'
+    assert _extract_l2(json_str) == ""
