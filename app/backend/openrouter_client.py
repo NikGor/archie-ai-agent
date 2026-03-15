@@ -142,6 +142,7 @@ class OpenRouterClient:
         model: str,
         response_format: type[BaseModel] | None = None,
         previous_response_id: str | None = None,  # noqa: ARG002
+        response_id_out: list[str] | None = None,  # noqa: ARG002
     ) -> AsyncIterator[str]:
         """
         Stream completion tokens from OpenRouter API.
