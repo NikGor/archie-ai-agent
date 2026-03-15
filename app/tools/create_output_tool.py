@@ -1,5 +1,6 @@
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 from pydantic import ValidationError
 from ..agent.prompt_builder import PromptBuilder
@@ -60,7 +61,43 @@ def _clear_card_image_prompts(ui_response: UIResponse) -> None:
     logger.info("create_output_008: no_image=True — cleared image_prompt on all cards")
 
 
-async def create_output(
+async def _stream_and_collect(
+    client: OpenAIClient | OpenRouterClient | GeminiClient,
+    messages: list[dict],
+    model: str,
+    response_model: type,
+    previous_response_id: str | None,
+    extractor: JsonTextExtractor | JsonLevel2TextExtractor | JsonReasoningExtractor,
+    on_chunk: Callable[[str], Awaitable[None]] | None = None,
+    response_id_out: list[str] | None = None,
+    max_output_tokens: int | None = None,
+) -> tuple[str, int | None]:
+    """Stream LLM response, collect JSON, return (full_json, ttft_ms)."""
+    json_parts: list[str] = []
+    stream_start = time.monotonic()
+    ttft_ms: int | None = None
+    kwargs: dict[str, Any] = {}
+    if response_id_out is not None:
+        kwargs["response_id_out"] = response_id_out
+    if max_output_tokens is not None:
+        kwargs["max_output_tokens"] = max_output_tokens
+    async for token in client.create_completion_stream(
+        messages=messages,
+        model=model,
+        response_format=response_model,
+        previous_response_id=previous_response_id,
+        **kwargs,
+    ):
+        if ttft_ms is None:
+            ttft_ms = int((time.monotonic() - stream_start) * 1000)
+        json_parts.append(token)
+        chunk = extractor.feed(token)
+        if chunk and on_chunk:
+            await on_chunk(chunk)
+    return "".join(json_parts), ttft_ms
+
+
+async def create_output(  # noqa: PLR0912
     user_input: str,
     command_summary: str,
     tool_results: list[ToolResult] | None = None,
@@ -179,26 +216,17 @@ Create a complete, well-formatted response in the specified format."""
         and response_format in _STREAMABLE_FORMATS
         and on_stream
     ):
-        extractor = JsonTextExtractor()
-        json_parts: list[str] = []
-        stream_start = time.monotonic()
-        ttft_ms: int | None = None
         response_id_out: list[str] = []
-        async for token in client.create_completion_stream(
+        full_json, ttft_ms = await _stream_and_collect(
+            client=client,
             messages=messages,
             model=model,
-            response_format=response_model,
+            response_model=response_model,
             previous_response_id=previous_response_id,
+            extractor=JsonTextExtractor(),
+            on_chunk=on_stream,
             response_id_out=response_id_out,
-        ):
-            if ttft_ms is None:
-                ttft_ms = int((time.monotonic() - stream_start) * 1000)
-            json_parts.append(token)
-            text_chunk = extractor.feed(token)
-            if text_chunk:
-                await on_stream(text_chunk)
-
-        full_json = "".join(json_parts)
+        )
         parsed_stream = parse_assembled_stream(full_json, model, PlainResponse)
         parsed_obj = parsed_stream.parsed_content
         content = build_content_from_parsed(
@@ -227,24 +255,19 @@ Create a complete, well-formatted response in the specified format."""
         and response_format in _LEVEL2_STREAMABLE_FORMATS
         and on_stream_event
     ):
-        l2_extractor = JsonLevel2TextExtractor()
-        json_parts_l2: list[str] = []
-        stream_start_l2 = time.monotonic()
-        ttft_ms_l2: int | None = None
-        async for token in client.create_completion_stream(
+
+        async def _on_chunk_l2(chunk: str) -> None:
+            await on_stream_event("stream_delta", chunk)  # type: ignore[misc]
+
+        full_json_l2, ttft_ms_l2 = await _stream_and_collect(
+            client=client,
             messages=messages,
             model=model,
-            response_format=response_model,
+            response_model=response_model,
             previous_response_id=previous_response_id,
-        ):
-            if ttft_ms_l2 is None:
-                ttft_ms_l2 = int((time.monotonic() - stream_start_l2) * 1000)
-            json_parts_l2.append(token)
-            text_chunk = l2_extractor.feed(token)
-            if text_chunk:
-                await on_stream_event("stream_delta", text_chunk)
-
-        full_json_l2 = "".join(json_parts_l2)
+            extractor=JsonLevel2TextExtractor(),
+            on_chunk=_on_chunk_l2,
+        )
         parsed_l2 = parse_assembled_stream(full_json_l2, model, Level2Response)
         parsed_content_l2 = parsed_l2.parsed_content
         content_l2 = build_content_from_parsed(
@@ -274,27 +297,22 @@ Create a complete, well-formatted response in the specified format."""
         and on_stream_event
     ):
         await on_stream_event("stream_placeholder", None)
-        r_extractor = JsonReasoningExtractor()
-        json_parts_ui: list[str] = []
-        stream_start_ui = time.monotonic()
-        ttft_ms_ui: int | None = None
+
+        async def _on_chunk_ui(chunk: str) -> None:
+            await on_stream_event("stream_reasoning", chunk)  # type: ignore[misc]
+
         response_id_out_ui: list[str] = []
-        async for token in client.create_completion_stream(
+        full_json_ui, ttft_ms_ui = await _stream_and_collect(
+            client=client,
             messages=messages,
             model=model,
-            response_format=response_model,
+            response_model=response_model,
             previous_response_id=previous_response_id,
+            extractor=JsonReasoningExtractor(),
+            on_chunk=_on_chunk_ui,
             response_id_out=response_id_out_ui,
             max_output_tokens=16000,
-        ):
-            if ttft_ms_ui is None:
-                ttft_ms_ui = int((time.monotonic() - stream_start_ui) * 1000)
-            json_parts_ui.append(token)
-            reasoning_chunk = r_extractor.feed(token)
-            if reasoning_chunk:
-                await on_stream_event("stream_reasoning", reasoning_chunk)
-
-        full_json_ui = "".join(json_parts_ui)
+        )
         parsed_stream_ui = parse_assembled_stream(full_json_ui, model, response_model)
         parsed_any: Any = parsed_stream_ui.parsed_content
 
