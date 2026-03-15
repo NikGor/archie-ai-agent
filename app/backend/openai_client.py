@@ -98,6 +98,7 @@ class OpenAIClient:
         model: str,
         response_format: type[BaseModel] | None = None,
         previous_response_id: str | None = None,
+        response_id_out: list[str] | None = None,
     ) -> AsyncIterator[str]:
         """
         Stream completion tokens using OpenAI Responses API (responses.stream()).
@@ -106,6 +107,8 @@ class OpenAIClient:
         for reassembling and parsing the full response.
 
         Note: previous_response_id is passed through for conversation caching.
+        If response_id_out is provided (a mutable list), the OpenAI response ID
+        (resp_...) will be appended to it from the response.created event.
         """
         args = build_openai_args(
             model=model,
@@ -117,7 +120,11 @@ class OpenAIClient:
         try:
             async with self.async_client.responses.stream(**args) as stream:
                 async for event in stream:
-                    if event.type == "response.output_text.delta" and getattr(
+                    if event.type == "response.created" and response_id_out is not None:
+                        resp_id = getattr(event.response, "id", None)
+                        if resp_id:
+                            response_id_out.append(resp_id)
+                    elif event.type == "response.output_text.delta" and getattr(
                         event, "delta", None
                     ):
                         yield event.delta

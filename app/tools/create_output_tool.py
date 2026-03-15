@@ -176,11 +176,13 @@ Create a complete, well-formatted response in the specified format."""
         json_parts: list[str] = []
         stream_start = time.monotonic()
         ttft_ms: int | None = None
+        response_id_out: list[str] = []
         async for token in client.create_completion_stream(
             messages=messages,
             model=model,
             response_format=response_model,
             previous_response_id=previous_response_id,
+            response_id_out=response_id_out,
         ):
             if ttft_ms is None:
                 ttft_ms = int((time.monotonic() - stream_start) * 1000)
@@ -200,7 +202,7 @@ Create a complete, well-formatted response in the specified format."""
             content=content,
             sgr=parsed_obj.sgr,
             llm_trace=parsed_stream.llm_trace,
-            response_id=None,
+            response_id=response_id_out[0] if response_id_out else None,
             ttft_ms=ttft_ms,
         )
         content_text = str(result.content) if result.content else ""
@@ -223,11 +225,13 @@ Create a complete, well-formatted response in the specified format."""
         json_parts_ui: list[str] = []
         stream_start_ui = time.monotonic()
         ttft_ms_ui: int | None = None
+        response_id_out_ui: list[str] = []
         async for token in client.create_completion_stream(
             messages=messages,
             model=model,
             response_format=response_model,
             previous_response_id=previous_response_id,
+            response_id_out=response_id_out_ui,
         ):
             if ttft_ms_ui is None:
                 ttft_ms_ui = int((time.monotonic() - stream_start_ui) * 1000)
@@ -259,7 +263,7 @@ Create a complete, well-formatted response in the specified format."""
             content=content_ui,
             sgr=sgr_ui,
             llm_trace=parsed_stream_ui.llm_trace,
-            response_id=None,
+            response_id=response_id_out_ui[0] if response_id_out_ui else None,
             ttft_ms=ttft_ms_ui,
         )
         content_text_ui = str(result_ui.content) if result_ui.content else ""
