@@ -141,7 +141,7 @@ Generate 2 follow-up action buttons.
         ]
 
 
-async def light_control_tool(  # noqa: PLR0912
+async def light_control_tool(  # noqa: PLR0911, PLR0912
     user_input: str,
     device_name: LightDeviceName,
     is_on: bool | str | None = None,
