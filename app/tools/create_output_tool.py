@@ -132,8 +132,7 @@ async def create_output(
 {assistant_context}
 {tools_context}
 
-Create a complete, well-formatted response in the specified format.
-LANGUAGE RULE: Respond strictly in {state.get('language', 'en')}. Do not switch to any other language."""
+Create a complete, well-formatted response in the specified format."""
 
     messages = [
         {"role": "system", "content": system_prompt_content},
