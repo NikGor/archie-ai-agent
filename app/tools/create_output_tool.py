@@ -1,6 +1,6 @@
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 from pydantic import ValidationError
 from ..agent.prompt_builder import PromptBuilder
@@ -28,6 +28,7 @@ from ..utils.stream_utils import (
     JsonLevel2TextExtractor,
     JsonReasoningExtractor,
     JsonTextExtractor,
+    JsonUIIntroTextExtractor,
 )
 
 
@@ -71,6 +72,7 @@ async def _stream_and_collect(
     on_chunk: Callable[[str], Awaitable[None]] | None = None,
     response_id_out: list[str] | None = None,
     max_output_tokens: int | None = None,
+    extra_extractors: Sequence[tuple[Any, Callable[[str], Awaitable[None]]]] | None = None,
 ) -> tuple[str, int | None]:
     """Stream LLM response, collect JSON, return (full_json, ttft_ms)."""
     json_parts: list[str] = []
@@ -94,6 +96,11 @@ async def _stream_and_collect(
         chunk = extractor.feed(token)
         if chunk and on_chunk:
             await on_chunk(chunk)
+        if extra_extractors:
+            for ext, cb in extra_extractors:
+                extra_chunk = ext.feed(token)
+                if extra_chunk:
+                    await cb(extra_chunk)
     return "".join(json_parts), ttft_ms
 
 
@@ -301,6 +308,15 @@ Create a complete, well-formatted response in the specified format."""
         async def _on_chunk_ui(chunk: str) -> None:
             await on_stream_event("stream_reasoning", chunk)  # type: ignore[misc]
 
+        extra_extractors_ui = None
+        if response_format == "ui_answer":
+            _intro_extractor = JsonUIIntroTextExtractor()
+
+            async def _on_chunk_intro(chunk: str) -> None:
+                await on_stream_event("stream_delta", chunk)  # type: ignore[misc]
+
+            extra_extractors_ui = [(_intro_extractor, _on_chunk_intro)]
+
         response_id_out_ui: list[str] = []
         full_json_ui, ttft_ms_ui = await _stream_and_collect(
             client=client,
@@ -312,6 +328,7 @@ Create a complete, well-formatted response in the specified format."""
             on_chunk=_on_chunk_ui,
             response_id_out=response_id_out_ui,
             max_output_tokens=16000,
+            extra_extractors=extra_extractors_ui,
         )
         parsed_stream_ui = parse_assembled_stream(full_json_ui, model, response_model)
         parsed_any: Any = parsed_stream_ui.parsed_content
