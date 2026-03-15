@@ -4,7 +4,6 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from typing import Any
-
 from openai import (
     APIConnectionError,
     AsyncOpenAI,
@@ -13,7 +12,6 @@ from openai import (
     RateLimitError,
 )
 from pydantic import BaseModel
-
 from app.utils.retry_utils import call_with_retry
 
 
