@@ -4,16 +4,16 @@ from enum import Enum, auto
 
 
 class _L2State(Enum):
-    SCANNING_D1 = auto()     # depth 1, looking for "level2_answer" key
-    FOUND_L2_KEY = auto()    # found it, waiting for ':'
-    EXPECT_L2_OBJ = auto()   # found ':', waiting for '{'
-    IN_L2 = auto()           # depth 2, looking for "text" key (TextAnswer object)
+    SCANNING_D1 = auto()  # depth 1, looking for "level2_answer" key
+    FOUND_L2_KEY = auto()  # found it, waiting for ':'
+    EXPECT_L2_OBJ = auto()  # found ':', waiting for '{'
+    IN_L2 = auto()  # depth 2, looking for "text" key (TextAnswer object)
     FOUND_TEXT_KEY = auto()  # found "text" at d2, waiting for ':'
-    EXPECT_TEXT_OBJ = auto() # found ':', waiting for '{'
-    IN_TEXT_OBJ = auto()     # depth 3, looking for "text" key (the string value)
-    FOUND_STR_KEY = auto()   # found "text" at d3, waiting for ':'
-    EXPECT_VALUE = auto()    # found ':', waiting for '"'
-    IN_VALUE = auto()        # streaming chars
+    EXPECT_TEXT_OBJ = auto()  # found ':', waiting for '{'
+    IN_TEXT_OBJ = auto()  # depth 3, looking for "text" key (the string value)
+    FOUND_STR_KEY = auto()  # found "text" at d3, waiting for ':'
+    EXPECT_VALUE = auto()  # found ':', waiting for '"'
+    IN_VALUE = auto()  # streaming chars
     DONE = auto()
 
 
@@ -94,7 +94,7 @@ class JsonTextExtractor:
                 out.append(result)
         return "".join(out)
 
-    def _step(self, ch: str) -> str:  # noqa: PLR0912
+    def _step(self, ch: str) -> str:  # noqa: PLR0912, PLR0911
         if self._state == _State.DONE:
             return ""
 
@@ -218,17 +218,16 @@ class JsonReasoningExtractor:
             self._esc = False
             if self._state == _RState.IN_VALUE:
                 return _ESCAPE_MAP.get(ch, ch)
-            if self._in_string:
-                if (
-                    self._depth == 1
-                    and self._next_is_key_d1
-                    or (
-                        self._depth == 2
-                        and self._next_is_key_d2
-                        and self._state == _RState.IN_SGR
-                    )
-                ):
-                    self._char_buf.append(ch)
+            if self._in_string and (
+                self._depth == 1
+                and self._next_is_key_d1
+                or (
+                    self._depth == 2
+                    and self._next_is_key_d2
+                    and self._state == _RState.IN_SGR
+                )
+            ):
+                self._char_buf.append(ch)
             return ""
 
         # ── Escape character ───────────────────────────────────────────────────
@@ -369,13 +368,21 @@ class JsonLevel2TextExtractor:
             self._esc = False
             if self._state == _L2State.IN_VALUE:
                 return _ESCAPE_MAP.get(ch, ch)
-            if self._in_string:
-                if self._depth == 1 and self._next_is_key_d1:
-                    self._char_buf.append(ch)
-                elif self._depth == 2 and self._next_is_key_d2 and self._state == _L2State.IN_L2:
-                    self._char_buf.append(ch)
-                elif self._depth == 3 and self._next_is_key_d3 and self._state == _L2State.IN_TEXT_OBJ:
-                    self._char_buf.append(ch)
+            if self._in_string and (
+                self._depth == 1
+                and self._next_is_key_d1
+                or (
+                    self._depth == 2
+                    and self._next_is_key_d2
+                    and self._state == _L2State.IN_L2
+                )
+                or (
+                    self._depth == 3
+                    and self._next_is_key_d3
+                    and self._state == _L2State.IN_TEXT_OBJ
+                )
+            ):
+                self._char_buf.append(ch)
             return ""
 
         # ── Escape character ───────────────────────────────────────────────────
@@ -400,25 +407,41 @@ class JsonLevel2TextExtractor:
                     if key == "level2_answer" and self._state == _L2State.SCANNING_D1:
                         self._state = _L2State.FOUND_L2_KEY
                     self._next_is_key_d1 = False
-                elif self._depth == 2 and self._next_is_key_d2 and self._state == _L2State.IN_L2:
+                elif (
+                    self._depth == 2
+                    and self._next_is_key_d2
+                    and self._state == _L2State.IN_L2
+                ):
                     key = "".join(self._char_buf)
                     self._char_buf.clear()
                     if key == "text":
                         self._state = _L2State.FOUND_TEXT_KEY
                     self._next_is_key_d2 = False
-                elif self._depth == 3 and self._next_is_key_d3 and self._state == _L2State.IN_TEXT_OBJ:
+                elif (
+                    self._depth == 3
+                    and self._next_is_key_d3
+                    and self._state == _L2State.IN_TEXT_OBJ
+                ):
                     key = "".join(self._char_buf)
                     self._char_buf.clear()
                     if key == "text":
                         self._state = _L2State.FOUND_STR_KEY
                     self._next_is_key_d3 = False
-            else:
-                if self._depth == 1 and self._next_is_key_d1:
-                    self._char_buf.append(ch)
-                elif self._depth == 2 and self._next_is_key_d2 and self._state == _L2State.IN_L2:
-                    self._char_buf.append(ch)
-                elif self._depth == 3 and self._next_is_key_d3 and self._state == _L2State.IN_TEXT_OBJ:
-                    self._char_buf.append(ch)
+            elif (
+                self._depth == 1
+                and self._next_is_key_d1
+                or (
+                    self._depth == 2
+                    and self._next_is_key_d2
+                    and self._state == _L2State.IN_L2
+                )
+                or (
+                    self._depth == 3
+                    and self._next_is_key_d3
+                    and self._state == _L2State.IN_TEXT_OBJ
+                )
+            ):
+                self._char_buf.append(ch)
             return ""
 
         # ── Outside strings ────────────────────────────────────────────────────
