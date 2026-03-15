@@ -24,7 +24,7 @@ from ..utils.provider_utils import get_provider_for_model
 from ..utils.schema_filter import build_filtered_ui_response
 from ..utils.stream_utils import JsonReasoningExtractor, JsonTextExtractor
 
-_STREAMABLE_FORMATS = frozenset({"plain", "voice"})
+_STREAMABLE_FORMATS = frozenset({"plain", "voice", "formatted_text"})
 _UI_STREAMABLE_FORMATS = frozenset(
     {"ui_answer", "dashboard", "widget", "level2_answer", "level3_answer"}
 )
@@ -132,7 +132,8 @@ async def create_output(
 {assistant_context}
 {tools_context}
 
-Create a complete, well-formatted response in the specified format."""
+Create a complete, well-formatted response in the specified format.
+LANGUAGE RULE: Respond strictly in {state.get('language', 'en')}. Do not switch to any other language."""
 
     messages = [
         {"role": "system", "content": system_prompt_content},

@@ -139,6 +139,7 @@ class WidgetResponse(BaseModel):
 FORMAT_TO_MODEL: dict[str, type[BaseModel]] = {
     "plain": PlainResponse,
     "voice": PlainResponse,
+    "formatted_text": PlainResponse,
     "level2_answer": Level2Response,
     "level3_answer": Level3Response,
     "ui_answer": UIResponse,
