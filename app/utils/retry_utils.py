@@ -39,4 +39,6 @@ async def call_with_retry(
                 f"({type(e).__name__}: {e}), retrying in {wait}s"
             )
             await asyncio.sleep(wait)
-    raise RuntimeError(f"retry_utils: unreachable, context={context}")  # pragma: no cover
+    raise RuntimeError(
+        f"retry_utils: unreachable, context={context}"
+    )  # pragma: no cover
