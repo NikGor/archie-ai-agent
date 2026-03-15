@@ -97,6 +97,7 @@ class OpenAIClient:
         response_format: type[BaseModel] | None = None,
         previous_response_id: str | None = None,
         response_id_out: list[str] | None = None,
+        max_output_tokens: int | None = None,
     ) -> AsyncIterator[str]:
         """
         Stream completion tokens using OpenAI Responses API (responses.stream()).
@@ -113,6 +114,7 @@ class OpenAIClient:
             messages=messages,
             response_format=response_format,
             previous_response_id=previous_response_id,
+            max_output_tokens=max_output_tokens,
         )
         logger.info(f"openai_client_006: Starting stream for \033[36m{model}\033[0m")
         try:

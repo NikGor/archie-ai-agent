@@ -15,12 +15,16 @@ def build_openai_args(
     response_format: type[BaseModel] | None = None,
     previous_response_id: str | None = None,
     tools: list[Callable[..., Any]] | None = None,
+    max_output_tokens: int | None = None,
 ) -> dict[str, Any]:
     """Build arguments for OpenAI client.responses.parse()."""
     args: dict[str, Any] = {
         "model": model,
         "input": messages,
     }
+
+    if max_output_tokens is not None:
+        args["max_output_tokens"] = max_output_tokens
 
     if response_format:
         args["text_format"] = response_format

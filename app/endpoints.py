@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from archie_shared.chat.models import ChatMessage, ChatRequest, Content
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -98,4 +99,5 @@ async def ws_chat(websocket: WebSocket):
         logger.exception(f"ws_chat_error_001: \033[31m{e!s}\033[0m")
         await websocket.send_json({"type": "error", "message": str(e)})
     finally:
-        await websocket.close()
+        with contextlib.suppress(RuntimeError):
+            await websocket.close()
