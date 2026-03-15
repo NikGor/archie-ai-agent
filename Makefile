@@ -101,9 +101,14 @@ api-test:
 		2>/dev/null | python -m json.tool || echo "❌ API test failed - make sure server is running"
 
 # Code formatting and linting commands
+fmt:
+	@poetry run black .
+	@poetry run ruff check --fix --exit-zero .
+
 format:
-	@echo "🎨 Formatting code with black..."
+	@echo "🎨 Formatting code..."
 	poetry run black .
+	poetry run ruff check .
 	@echo "✅ Code formatting completed!"
 
 black:
