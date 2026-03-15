@@ -17,6 +17,21 @@ class _L2State(Enum):
     DONE = auto()
 
 
+class _UIState(Enum):
+    SCANNING_D1 = auto()  # depth 1, looking for "ui_answer" key
+    FOUND_UI_KEY = auto()  # found it, waiting for ':'
+    EXPECT_UI_OBJ = auto()  # found ':', waiting for '{'
+    IN_UI = auto()  # depth 2, looking for "intro_text" key
+    FOUND_INTRO_KEY = auto()  # found "intro_text", waiting for ':'
+    EXPECT_INTRO_OBJ = auto()  # found ':', waiting for '{' or 'n' (null)
+    IN_NULL = auto()  # consuming "null" literal — intro_text is null
+    IN_INTRO = auto()  # depth 3, looking for "text" key (the string value)
+    FOUND_STR_KEY = auto()  # found "text" at d3, waiting for ':'
+    EXPECT_VALUE = auto()  # found ':', waiting for '"'
+    IN_VALUE = auto()  # streaming chars
+    DONE = auto()
+
+
 class _State(Enum):
     SCANNING = auto()  # scanning JSON, looking for "text" key at depth 1
     AFTER_TEXT_KEY = auto()  # found "text" key, waiting for ':'
@@ -490,6 +505,204 @@ class JsonLevel2TextExtractor:
             elif self._depth == 2 and self._state == _L2State.IN_L2:
                 self._next_is_key_d2 = True
             elif self._depth == 3 and self._state == _L2State.IN_TEXT_OBJ:
+                self._next_is_key_d3 = True
+            return ""
+
+        return ""
+
+
+class JsonUIIntroTextExtractor:
+    """
+    State machine that extracts ``ui_answer.intro_text.text`` from a streaming
+    JSON UIResponse, emitting its characters as they arrive.
+
+    Input JSON structure::
+
+        {"sgr": {...}, "ui_answer": {"intro_text": {"type": "markdown", "text": "..."}, ...}}
+
+    Handles ``intro_text: null`` gracefully — no characters are emitted.
+
+    Usage::
+
+        extractor = JsonUIIntroTextExtractor()
+        async for token in stream:
+            chunk = extractor.feed(token)
+            if chunk:
+                await on_stream_event("stream_delta", chunk)
+    """
+
+    _NULL_TAIL = "ull"  # remaining chars after 'n' in "null"
+
+    def __init__(self) -> None:
+        self._state = _UIState.SCANNING_D1
+        self._depth = 0
+        self._in_string = False
+        self._esc = False
+        self._char_buf: list[str] = []
+        self._null_pos = 0  # position within "ull" when consuming null
+        self._next_is_key_d1 = True
+        self._next_is_key_d2 = True
+        self._next_is_key_d3 = True
+
+    @property
+    def is_done(self) -> bool:
+        """True once ``ui_answer.intro_text.text`` has been fully extracted (or skipped)."""
+        return self._state == _UIState.DONE
+
+    def feed(self, chunk: str) -> str:
+        """Process a chunk, return any text characters to emit."""
+        out: list[str] = []
+        for ch in chunk:
+            result = self._step(ch)
+            if result:
+                out.append(result)
+        return "".join(out)
+
+    def _step(self, ch: str) -> str:  # noqa: PLR0912, PLR0911
+        if self._state == _UIState.DONE:
+            return ""
+
+        # ── Consuming "null" literal for intro_text: null ─────────────────────
+        if self._state == _UIState.IN_NULL:
+            if ch == self._NULL_TAIL[self._null_pos]:
+                self._null_pos += 1
+                if self._null_pos == len(self._NULL_TAIL):
+                    self._state = _UIState.DONE
+            return ""
+
+        # ── Handle pending escape ──────────────────────────────────────────────
+        if self._esc:
+            self._esc = False
+            if self._state == _UIState.IN_VALUE:
+                return _ESCAPE_MAP.get(ch, ch)
+            if self._in_string and (
+                self._depth == 1
+                and self._next_is_key_d1
+                or (
+                    self._depth == 2
+                    and self._next_is_key_d2
+                    and self._state == _UIState.IN_UI
+                )
+                or (
+                    self._depth == 3
+                    and self._next_is_key_d3
+                    and self._state == _UIState.IN_INTRO
+                )
+            ):
+                self._char_buf.append(ch)
+            return ""
+
+        # ── Escape character ───────────────────────────────────────────────────
+        if ch == "\\" and (self._in_string or self._state == _UIState.IN_VALUE):
+            self._esc = True
+            return ""
+
+        # ── Inside text value — emit char or close ─────────────────────────────
+        if self._state == _UIState.IN_VALUE:
+            if ch == '"':
+                self._state = _UIState.DONE
+                return ""
+            return ch
+
+        # ── Inside a regular JSON string ───────────────────────────────────────
+        if self._in_string:
+            if ch == '"':
+                self._in_string = False
+                if self._depth == 1 and self._next_is_key_d1:
+                    key = "".join(self._char_buf)
+                    self._char_buf.clear()
+                    if key == "ui_answer" and self._state == _UIState.SCANNING_D1:
+                        self._state = _UIState.FOUND_UI_KEY
+                    self._next_is_key_d1 = False
+                elif (
+                    self._depth == 2
+                    and self._next_is_key_d2
+                    and self._state == _UIState.IN_UI
+                ):
+                    key = "".join(self._char_buf)
+                    self._char_buf.clear()
+                    if key == "intro_text":
+                        self._state = _UIState.FOUND_INTRO_KEY
+                    self._next_is_key_d2 = False
+                elif (
+                    self._depth == 3
+                    and self._next_is_key_d3
+                    and self._state == _UIState.IN_INTRO
+                ):
+                    key = "".join(self._char_buf)
+                    self._char_buf.clear()
+                    if key == "text":
+                        self._state = _UIState.FOUND_STR_KEY
+                    self._next_is_key_d3 = False
+            elif (
+                self._depth == 1
+                and self._next_is_key_d1
+                or (
+                    self._depth == 2
+                    and self._next_is_key_d2
+                    and self._state == _UIState.IN_UI
+                )
+                or (
+                    self._depth == 3
+                    and self._next_is_key_d3
+                    and self._state == _UIState.IN_INTRO
+                )
+            ):
+                self._char_buf.append(ch)
+            return ""
+
+        # ── Outside strings ────────────────────────────────────────────────────
+        if ch == '"':
+            if self._state == _UIState.EXPECT_VALUE:
+                self._state = _UIState.IN_VALUE
+            else:
+                self._in_string = True
+                self._char_buf.clear()
+            return ""
+
+        if ch == "n" and self._state == _UIState.EXPECT_INTRO_OBJ:
+            # intro_text: null — skip streaming, go to DONE after consuming "ull"
+            self._state = _UIState.IN_NULL
+            self._null_pos = 0
+            return ""
+
+        if ch == "{":
+            self._depth += 1
+            if self._depth == 1:
+                self._next_is_key_d1 = True
+            elif self._depth == 2 and self._state == _UIState.EXPECT_UI_OBJ:
+                self._state = _UIState.IN_UI
+                self._next_is_key_d2 = True
+            elif self._depth == 3 and self._state == _UIState.EXPECT_INTRO_OBJ:
+                self._state = _UIState.IN_INTRO
+                self._next_is_key_d3 = True
+            return ""
+
+        if ch == "}":
+            self._depth -= 1
+            return ""
+
+        if ch == ":":
+            if self._state == _UIState.FOUND_UI_KEY:
+                self._state = _UIState.EXPECT_UI_OBJ
+            elif self._state == _UIState.FOUND_INTRO_KEY:
+                self._state = _UIState.EXPECT_INTRO_OBJ
+            elif self._state == _UIState.FOUND_STR_KEY:
+                self._state = _UIState.EXPECT_VALUE
+            elif self._depth == 1:
+                self._next_is_key_d1 = False
+            elif self._depth == 2 and self._state == _UIState.IN_UI:
+                self._next_is_key_d2 = False
+            elif self._depth == 3 and self._state == _UIState.IN_INTRO:
+                self._next_is_key_d3 = False
+            return ""
+
+        if ch == ",":
+            if self._depth == 1:
+                self._next_is_key_d1 = True
+            elif self._depth == 2 and self._state == _UIState.IN_UI:
+                self._next_is_key_d2 = True
+            elif self._depth == 3 and self._state == _UIState.IN_INTRO:
                 self._next_is_key_d3 = True
             return ""
 
