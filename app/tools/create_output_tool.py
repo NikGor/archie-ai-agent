@@ -24,6 +24,7 @@ from ..utils.provider_utils import get_provider_for_model
 from ..utils.schema_filter import build_filtered_ui_response
 from ..utils.stream_utils import JsonReasoningExtractor, JsonTextExtractor
 
+
 _STREAMABLE_FORMATS = frozenset({"plain", "voice", "formatted_text"})
 _UI_STREAMABLE_FORMATS = frozenset(
     {"ui_answer", "dashboard", "widget", "level2_answer", "level3_answer"}
@@ -49,7 +50,7 @@ def _clear_card_image_prompts(ui_response: UIResponse) -> None:
         if item.type == "card_grid":
             for card in item.content.cards:  # type: ignore[union-attr]
                 if hasattr(card, "image_prompt"):
-                    setattr(card, "image_prompt", None)
+                    card.image_prompt = None
     logger.info("create_output_008: no_image=True — cleared image_prompt on all cards")
 
 
