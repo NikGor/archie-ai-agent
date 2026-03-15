@@ -8,6 +8,7 @@ from ..backend.openai_client import OpenAIClient
 from ..backend.openrouter_client import OpenRouterClient
 from ..models.output_models import (
     AgentResponse,
+    Level2Response,
     PlainResponse,
     SGROutput,
     UIResponse,
@@ -22,12 +23,13 @@ from ..utils.llm_parser import (
 )
 from ..utils.provider_utils import get_provider_for_model
 from ..utils.schema_filter import build_filtered_ui_response
-from ..utils.stream_utils import JsonReasoningExtractor, JsonTextExtractor
+from ..utils.stream_utils import JsonLevel2TextExtractor, JsonReasoningExtractor, JsonTextExtractor
 
 
 _STREAMABLE_FORMATS = frozenset({"plain", "voice", "formatted_text"})
+_LEVEL2_STREAMABLE_FORMATS = frozenset({"level2_answer"})
 _UI_STREAMABLE_FORMATS = frozenset(
-    {"ui_answer", "dashboard", "widget", "level2_answer", "level3_answer"}
+    {"ui_answer", "dashboard", "widget", "level3_answer"}
 )
 
 logger = logging.getLogger(__name__)
@@ -214,6 +216,52 @@ Create a complete, well-formatted response in the specified format."""
             f"create_output_006: UI reasoning: \033[35m{result.sgr.ui_reasoning}\033[0m"
         )
         return result
+
+    # ── Streaming path: level2_answer text tokens ──────────────────────────────
+    if (
+        hasattr(client, "create_completion_stream")
+        and response_format in _LEVEL2_STREAMABLE_FORMATS
+        and on_stream_event
+    ):
+        l2_extractor = JsonLevel2TextExtractor()
+        json_parts_l2: list[str] = []
+        stream_start_l2 = time.monotonic()
+        ttft_ms_l2: int | None = None
+        async for token in client.create_completion_stream(
+            messages=messages,
+            model=model,
+            response_format=response_model,
+            previous_response_id=previous_response_id,
+        ):
+            if ttft_ms_l2 is None:
+                ttft_ms_l2 = int((time.monotonic() - stream_start_l2) * 1000)
+            json_parts_l2.append(token)
+            text_chunk = l2_extractor.feed(token)
+            if text_chunk:
+                await on_stream_event("stream_delta", text_chunk)
+
+        full_json_l2 = "".join(json_parts_l2)
+        parsed_l2 = parse_assembled_stream(full_json_l2, model, Level2Response)
+        parsed_content_l2 = parsed_l2.parsed_content
+        content_l2 = build_content_from_parsed(
+            parsed_content=parsed_content_l2,
+            response_format=response_format,
+        )
+        result_l2 = AgentResponse(
+            content=content_l2,
+            sgr=parsed_content_l2.sgr,
+            llm_trace=parsed_l2.llm_trace,
+            response_id=None,
+            ttft_ms=ttft_ms_l2,
+        )
+        content_text_l2 = str(result_l2.content) if result_l2.content else ""
+        logger.info(
+            f"create_output_005: Level2 streamed response length: \033[33m{len(content_text_l2)}\033[0m"
+        )
+        logger.info(
+            f"create_output_006: UI reasoning: \033[35m{result_l2.sgr.ui_reasoning}\033[0m"
+        )
+        return result_l2
 
     # ── Streaming path: UI formats + on_stream_event callback ─────────────────
     if (
