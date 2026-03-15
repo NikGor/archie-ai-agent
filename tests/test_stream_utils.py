@@ -1,7 +1,7 @@
 """Unit tests for app/utils/stream_utils.py — JsonTextExtractor and JsonReasoningExtractor."""
 
 import pytest
-from app.utils.stream_utils import JsonReasoningExtractor, JsonTextExtractor
+from app.utils.stream_utils import JsonReasoningExtractor, JsonTextExtractor, JsonUIIntroTextExtractor
 
 
 # ---------------------------------------------------------------------------
@@ -388,3 +388,183 @@ def test_l2_is_done_false_before_level2():
 def test_l2_no_level2_field_returns_empty():
     json_str = '{"sgr": {"reasoning": "nothing here"}, "other": "value"}'
     assert _extract_l2(json_str) == ""
+
+
+# ===========================================================================
+# JsonUIIntroTextExtractor tests
+# ===========================================================================
+
+
+def _extract_ui(json_str: str, chunk_size: int = 1) -> str:
+    """Feed json_str to a fresh JsonUIIntroTextExtractor chunk_size chars at a time."""
+    extractor = JsonUIIntroTextExtractor()
+    result = []
+    for i in range(0, len(json_str), chunk_size):
+        chunk = json_str[i : i + chunk_size]
+        result.append(extractor.feed(chunk))
+    return "".join(result)
+
+
+def _ui_json(intro_text: str | None, text_type: str = "markdown") -> str:
+    """Build a minimal UIResponse JSON string."""
+    if intro_text is None:
+        intro_val = "null"
+    else:
+        intro_val = f'{{"type": "{text_type}", "text": "{intro_text}"}}'
+    return (
+        f'{{"sgr": {{"reasoning": "r", "ui_reasoning": "u", "fact_checks": [], "orchestration_summary": null}}, '
+        f'"ui_answer": {{"intro_text": {intro_val}, "items": [], "quick_action_buttons": {{"buttons": []}}}}}}'
+    )
+
+
+# ---------------------------------------------------------------------------
+# Basic extraction
+# ---------------------------------------------------------------------------
+
+
+def test_ui_basic_extraction():
+    assert _extract_ui(_ui_json("hello world")) == "hello world"
+
+
+def test_ui_sgr_first():
+    """sgr comes before ui_answer (typical ordering)."""
+    assert _extract_ui(_ui_json("sgr is first")) == "sgr is first"
+
+
+def test_ui_answer_first():
+    """ui_answer before sgr."""
+    json_str = (
+        '{"ui_answer": {"intro_text": {"type": "plain", "text": "content first"}, '
+        '"items": [], "quick_action_buttons": {}}, "sgr": {"reasoning": "r"}}'
+    )
+    assert _extract_ui(json_str) == "content first"
+
+
+def test_ui_text_key_after_type():
+    """type field comes before text inside intro_text — type value must be skipped."""
+    json_str = (
+        '{"sgr": {}, "ui_answer": {"intro_text": {"type": "markdown", "text": "actual"}, '
+        '"items": [], "quick_action_buttons": {}}}'
+    )
+    assert _extract_ui(json_str) == "actual"
+
+
+def test_ui_items_before_intro_text():
+    """items field appears before intro_text in ui_answer."""
+    json_str = (
+        '{"sgr": {}, "ui_answer": {"items": [], '
+        '"intro_text": {"type": "plain", "text": "after items"}, "quick_action_buttons": {}}}'
+    )
+    assert _extract_ui(json_str) == "after items"
+
+
+def test_ui_empty_intro_text():
+    assert _extract_ui(_ui_json("")) == ""
+
+
+def test_ui_spaces_and_punctuation():
+    assert _extract_ui(_ui_json("Hi! How are you?")) == "Hi! How are you?"
+
+
+# ---------------------------------------------------------------------------
+# intro_text: null edge case
+# ---------------------------------------------------------------------------
+
+
+def test_ui_intro_text_null_returns_empty():
+    """When intro_text is null, no characters should be emitted."""
+    assert _extract_ui(_ui_json(None)) == ""
+
+
+def test_ui_intro_text_null_is_done():
+    """Extractor should be done after consuming null."""
+    extractor = JsonUIIntroTextExtractor()
+    extractor.feed(_ui_json(None))
+    assert extractor.is_done
+
+
+# ---------------------------------------------------------------------------
+# Escape sequences
+# ---------------------------------------------------------------------------
+
+
+def test_ui_escaped_newline():
+    json_str = _ui_json(r"line1\nline2")
+    assert _extract_ui(json_str) == "line1\nline2"
+
+
+def test_ui_escaped_quote():
+    json_str = '{"sgr": {}, "ui_answer": {"intro_text": {"type": "plain", "text": "say \\"hi\\""}, "items": [], "quick_action_buttons": {}}}'
+    assert _extract_ui(json_str) == 'say "hi"'
+
+
+def test_ui_escaped_backslash():
+    json_str = '{"sgr": {}, "ui_answer": {"intro_text": {"type": "plain", "text": "path\\\\to\\\\file"}, "items": [], "quick_action_buttons": {}}}'
+    assert _extract_ui(json_str) == "path\\to\\file"
+
+
+# ---------------------------------------------------------------------------
+# Chunk size resilience
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("chunk_size", [1, 2, 3, 7, 13, 50, 1000])
+def test_ui_various_chunk_sizes(chunk_size: int):
+    json_str = _ui_json("streaming ui_answer works")
+    assert _extract_ui(json_str, chunk_size) == "streaming ui_answer works"
+
+
+# ---------------------------------------------------------------------------
+# Nested keys must not leak
+# ---------------------------------------------------------------------------
+
+
+def test_ui_text_key_inside_sgr_ignored():
+    """A 'text' key inside sgr should not be extracted."""
+    json_str = (
+        '{"sgr": {"reasoning": "r", "text": "wrong"}, '
+        '"ui_answer": {"intro_text": {"type": "plain", "text": "correct"}, '
+        '"items": [], "quick_action_buttons": {}}}'
+    )
+    assert _extract_ui(json_str) == "correct"
+
+
+def test_ui_text_key_inside_items_ignored():
+    """A 'text' key inside items should not be extracted."""
+    json_str = (
+        '{"sgr": {}, "ui_answer": {"intro_text": {"type": "plain", "text": "right"}, '
+        '"items": [{"text": "wrong item text"}], "quick_action_buttons": {}}}'
+    )
+    assert _extract_ui(json_str) == "right"
+
+
+# ---------------------------------------------------------------------------
+# is_done property
+# ---------------------------------------------------------------------------
+
+
+def test_ui_is_done_after_extraction():
+    extractor = JsonUIIntroTextExtractor()
+    extractor.feed(_ui_json("done"))
+    assert extractor.is_done
+
+
+def test_ui_is_done_false_before_ui_answer():
+    extractor = JsonUIIntroTextExtractor()
+    extractor.feed('{"sgr": {')
+    assert not extractor.is_done
+
+
+# ---------------------------------------------------------------------------
+# No intro_text field / no ui_answer field
+# ---------------------------------------------------------------------------
+
+
+def test_ui_no_intro_text_field_returns_empty():
+    json_str = '{"sgr": {"reasoning": "r"}, "ui_answer": {"items": [], "quick_action_buttons": {}}}'
+    assert _extract_ui(json_str) == ""
+
+
+def test_ui_no_ui_answer_field_returns_empty():
+    json_str = '{"sgr": {"reasoning": "nothing here"}, "other": "value"}'
+    assert _extract_ui(json_str) == ""
