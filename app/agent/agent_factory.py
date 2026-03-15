@@ -198,6 +198,7 @@ class AgentFactory:
                     final_response.llm_trace,
                     ttft_ms=final_response.ttft_ms,
                 ),
+                ttft_ms=final_response.ttft_ms,
                 total_ms=total_ms,
             )
             logger.info(
@@ -383,6 +384,7 @@ class AgentFactory:
                 final_response.llm_trace,
                 ttft_ms=final_response.ttft_ms,
             ),
+            ttft_ms=pipeline_ttft_ms,
             total_ms=total_ms,
         )
         logger.info(
