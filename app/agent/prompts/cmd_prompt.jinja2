@@ -8,7 +8,7 @@ You are analyzing user input to make routing and tool execution decisions.
 - Weekday: {{ state.current_weekday }}
 - Timezone: {{ state.user_timezone }}
 - Location: {{ state.default_city }}, {{ state.default_country }}
-- Language: {{ state.language }}
+- Language: {{ state.language }} (always respond in the same language the user writes in, not in button/tool language)
 - Measurement Units: {{ state.measurement_units }}
 - Currency: {{ state.currency }}
 
