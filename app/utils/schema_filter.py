@@ -44,7 +44,7 @@ def build_filtered_ui_response(
     # --- FilteredCardGrid ---
     CardUnion = (
         card_types[0] if len(card_types) == 1 else Union[tuple(card_types)]
-    )  # noqa: UP007
+    )
 
     FilteredCardGrid = create_model(
         "FilteredCardGrid",
