@@ -1,8 +1,8 @@
 """WebSocket models for status updates and streaming."""
 
 from collections.abc import Awaitable, Callable
-
 from pydantic import BaseModel, Field
+
 
 # Callback called with each streaming text chunk (plain/voice formats)
 StreamCallback = Callable[[str], Awaitable[None]] | None
