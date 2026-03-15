@@ -18,7 +18,7 @@ def _google_places_detail(args: dict[str, Any]) -> str:
     return f"Google Places: {query}" if query else ""
 
 
-def _events_detail(args: dict[str, Any]) -> str:
+def _events_detail(args: dict[str, Any]) -> str:  # noqa: PLR0911
     action = args.get("action", "")
     title = args.get("title", "")
     if action == "create" and title:
