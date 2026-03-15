@@ -135,6 +135,7 @@ class GeminiClient:
         model: str,
         response_format: type[BaseModel] | None = None,  # noqa: ARG002
         previous_response_id: str | None = None,  # noqa: ARG002
+        response_id_out: list[str] | None = None,  # noqa: ARG002
     ) -> AsyncIterator[str]:
         """
         Stream completion using Gemini API via asyncio.to_thread.
@@ -168,7 +169,7 @@ class GeminiClient:
 
         generate_content_config = types.GenerateContentConfig(
             response_mime_type="application/json",
-            system_instruction=system_instruction,  # type: ignore[arg-type]
+            system_instruction=system_instruction,
         )
 
         logger.info(f"gemini_client_006: Starting stream for \033[36m{model}\033[0m")
