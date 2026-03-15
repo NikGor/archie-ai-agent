@@ -1,11 +1,9 @@
 """Auto-generated WebSocket protocol documentation endpoint."""
 
 import json
-
 from archie_shared.chat.models import ChatMessage, ChatRequest
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
-
 from .models.ws_models import StatusUpdate
 
 
@@ -66,7 +64,7 @@ def _render_fields(schema: dict) -> str:
         badge = (
             '<span class="badge req">required</span>'
             if req
-            else f'<span class="badge opt">optional</span>'
+            else '<span class="badge opt">optional</span>'
         )
         default_cell = f"<code>{json.dumps(default)}</code>" if default != "—" else "—"
 
