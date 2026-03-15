@@ -205,9 +205,7 @@ class JsonReasoningExtractor:
             if self._state == _RState.IN_VALUE:
                 return _ESCAPE_MAP.get(ch, ch)
             if self._in_string:
-                if self._depth == 1 and self._next_is_key_d1:
-                    self._char_buf.append(ch)
-                elif (
+                if self._depth == 1 and self._next_is_key_d1 or (
                     self._depth == 2
                     and self._next_is_key_d2
                     and self._state == _RState.IN_SGR
@@ -247,15 +245,12 @@ class JsonReasoningExtractor:
                     if key == "reasoning":
                         self._state = _RState.FOUND_R_KEY
                     self._next_is_key_d2 = False
-            else:
-                if self._depth == 1 and self._next_is_key_d1:
-                    self._char_buf.append(ch)
-                elif (
-                    self._depth == 2
-                    and self._next_is_key_d2
-                    and self._state == _RState.IN_SGR
-                ):
-                    self._char_buf.append(ch)
+            elif self._depth == 1 and self._next_is_key_d1 or (
+                self._depth == 2
+                and self._next_is_key_d2
+                and self._state == _RState.IN_SGR
+            ):
+                self._char_buf.append(ch)
             return ""
 
         # ── Outside strings ────────────────────────────────────────────────────
