@@ -23,7 +23,11 @@ from ..utils.llm_parser import (
 )
 from ..utils.provider_utils import get_provider_for_model
 from ..utils.schema_filter import build_filtered_ui_response
-from ..utils.stream_utils import JsonLevel2TextExtractor, JsonReasoningExtractor, JsonTextExtractor
+from ..utils.stream_utils import (
+    JsonLevel2TextExtractor,
+    JsonReasoningExtractor,
+    JsonTextExtractor,
+)
 
 
 _STREAMABLE_FORMATS = frozenset({"plain", "voice", "formatted_text"})
@@ -281,6 +285,7 @@ Create a complete, well-formatted response in the specified format."""
             response_format=response_model,
             previous_response_id=previous_response_id,
             response_id_out=response_id_out_ui,
+            max_output_tokens=16000,
         ):
             if ttft_ms_ui is None:
                 ttft_ms_ui = int((time.monotonic() - stream_start_ui) * 1000)
