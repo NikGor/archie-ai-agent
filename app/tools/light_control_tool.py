@@ -114,7 +114,9 @@ Generate 2 follow-up action buttons.
         )
         result = response.choices[0].message.parsed
         if result is None:
-            raise ValueError("light_control_tool_error_004: No parsed response from LLM")
+            raise ValueError(
+                "light_control_tool_error_004: No parsed response from LLM"
+            )
         logger.info(
             f"light_control_tool_005: Generated buttons: \033[35m{result.button_1.text}\033[0m, \033[35m{result.button_2.text}\033[0m"
         )

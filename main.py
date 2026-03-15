@@ -8,6 +8,7 @@ load_dotenv()
 import uvicorn  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from app.endpoints import router  # noqa: E402
+from app.ws_docs import router as ws_docs_router  # noqa: E402
 
 
 logging.basicConfig(
@@ -23,6 +24,7 @@ app = FastAPI(
     version="1.0.0",
 )
 app.include_router(router)
+app.include_router(ws_docs_router)
 logger.info("main_001: FastAPI ready")
 
 if __name__ == "__main__":
