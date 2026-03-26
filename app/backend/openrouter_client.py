@@ -143,6 +143,7 @@ class OpenRouterClient:
         response_format: type[BaseModel] | None = None,
         previous_response_id: str | None = None,  # noqa: ARG002
         response_id_out: list[str] | None = None,  # noqa: ARG002
+        max_output_tokens: int | None = None,
     ) -> AsyncIterator[str]:
         """
         Stream completion tokens from OpenRouter API.
@@ -152,6 +153,8 @@ class OpenRouterClient:
         """
         create_kwargs = self._build_create_kwargs(messages, model, response_format)
         create_kwargs["stream"] = True
+        if max_output_tokens is not None:
+            create_kwargs["max_tokens"] = max_output_tokens
         logger.info(
             f"openrouter_client_006: Starting stream for \033[36m{model}\033[0m"
         )
