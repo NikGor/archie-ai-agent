@@ -23,43 +23,30 @@ DEFAULT_STATE_CONFIG = {
 
 MODEL_PROVIDERS = {
     "openai": [
-        "gpt-4o",
-        "gpt-4o-mini",
         "gpt-4.1",
         "gpt-4.1-mini",
         "gpt-4.1-nano",
-        "gpt-5",
-        "gpt-5-mini",
-        "gpt-5-nano",
-        "gpt-5-pro",
-        "gpt-5.1",
-        "o1",
-        "o1-pro",
-        "o3",
-        "o3-mini",
-        "o3-pro",
+        "gpt-5.4",
+        "gpt-5.4-pro",
+        "gpt-5.4-mini",
+        "gpt-5.4-nano",
     ],
     "openrouter": [
         # Google Gemini - schema too complex for AgentResponse (400 Bad Request)
         # Works for DecisionResponse (command stage), but not for final output
-        "google/gemini-2.5-pro",
-        "google/gemini-2.5-flash",
-        "google/gemini-2.5-flash-lite",
+        "google/gemini-3.1-pro-preview",
+        "google/gemini-3-flash-preview",
+        "google/gemini-3.1-flash-lite-preview",
         "google/gemini-3-pro-image-preview",
         # Anthropic Claude - doesn't support JSON schema via OpenRouter (returns <tool_call> tags)
+        "anthropic/claude-opus-4.6",
+        "anthropic/claude-sonnet-4.6",
         "anthropic/claude-opus-4.5",
         "anthropic/claude-sonnet-4.5",
-        "anthropic/claude-sonnet-4",
         "anthropic/claude-haiku-4.5",
         # xAI Grok - works well with structured outputs
-        "x-ai/grok-4",
-        "x-ai/grok-4-fast",
+        "x-ai/grok-4.20-beta",
         "x-ai/grok-4.1-fast",
-        # DeepSeek
-        "deepseek/deepseek-v3.2-exp",
-        # Meta Llama
-        "meta-llama/llama-4-maverick",
-        "meta-llama/llama-4-scout",
     ],
     # Fallback - direct Gemini API (commented out)
     # "gemini": [
@@ -74,44 +61,31 @@ MODEL_PROVIDERS = {
 }
 
 # Token prices in USD per 1M tokens: {"input": price, "output": price}
-# Sources: official provider pricing pages (2026-02)
+# Sources: official provider pricing pages (2026-03)
 # Models not listed return 0.0 from calculate_token_cost() in llm_parser.py
 MODEL_TOKEN_PRICES: dict[str, dict[str, float]] = {
     # OpenAI — platform.openai.com/docs/pricing
-    "gpt-4o": {"input": 2.50, "output": 10.00},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "gpt-4.1": {"input": 2.00, "output": 8.00},
     "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
     "gpt-4.1-nano": {"input": 0.10, "output": 0.40},
-    "gpt-5": {"input": 1.25, "output": 10.00},
-    "gpt-5-mini": {"input": 0.25, "output": 2.00},
-    "gpt-5-nano": {"input": 0.05, "output": 0.40},
-    "gpt-5-pro": {"input": 15.00, "output": 120.00},
-    "gpt-5.1": {"input": 1.25, "output": 10.00},
-    "o1": {"input": 15.00, "output": 60.00},
-    "o1-pro": {"input": 150.00, "output": 600.00},
-    "o3": {"input": 2.00, "output": 8.00},
-    "o3-mini": {"input": 1.10, "output": 4.40},
-    "o3-pro": {"input": 20.00, "output": 80.00},
-    # Google Gemini — ai.google.dev/gemini-api/docs/pricing
-    "google/gemini-2.5-pro": {"input": 1.25, "output": 10.00},
-    "google/gemini-2.5-flash": {"input": 0.30, "output": 2.50},
-    "google/gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40},
+    "gpt-5.4": {"input": 2.50, "output": 15.00},
+    "gpt-5.4-pro": {"input": 30.00, "output": 180.00},
+    "gpt-5.4-mini": {"input": 0.75, "output": 4.50},
+    "gpt-5.4-nano": {"input": 0.20, "output": 1.25},
+    # Google Gemini — openrouter.ai/google
+    "google/gemini-3.1-pro-preview": {"input": 2.00, "output": 12.00},
+    "google/gemini-3-flash-preview": {"input": 0.50, "output": 3.00},
+    "google/gemini-3.1-flash-lite-preview": {"input": 0.25, "output": 1.50},
     "google/gemini-3-pro-image-preview": {"input": 2.00, "output": 12.00},
-    # Anthropic Claude — platform.claude.com/docs/en/about-claude/pricing
+    # Anthropic Claude — openrouter.ai/anthropic
+    "anthropic/claude-opus-4.6": {"input": 5.00, "output": 25.00},
+    "anthropic/claude-sonnet-4.6": {"input": 3.00, "output": 15.00},
     "anthropic/claude-opus-4.5": {"input": 5.00, "output": 25.00},
     "anthropic/claude-sonnet-4.5": {"input": 3.00, "output": 15.00},
-    "anthropic/claude-sonnet-4": {"input": 3.00, "output": 15.00},
     "anthropic/claude-haiku-4.5": {"input": 1.00, "output": 5.00},
-    # xAI Grok — docs.x.ai/developers/models
-    "x-ai/grok-4": {"input": 3.00, "output": 15.00},
-    "x-ai/grok-4-fast": {"input": 0.20, "output": 0.50},
+    # xAI Grok — openrouter.ai/x-ai
+    "x-ai/grok-4.20-beta": {"input": 2.00, "output": 6.00},
     "x-ai/grok-4.1-fast": {"input": 0.20, "output": 0.50},
-    # DeepSeek — api-docs.deepseek.com (cache-miss input price)
-    "deepseek/deepseek-v3.2-exp": {"input": 0.28, "output": 0.42},
-    # Meta Llama — openrouter.ai model pages
-    "meta-llama/llama-4-maverick": {"input": 0.15, "output": 0.60},
-    "meta-llama/llama-4-scout": {"input": 0.08, "output": 0.30},
 }
 
 TOOLS_CONFIG = {
@@ -134,9 +108,5 @@ TOOLS_CONFIG = {
     },
     "knowledge": {
         "document_search_tool": "app.tools.document_search_tool",
-    },
-    "image": {
-        "fast_image_generation_tool": "app.tools.fast_image_generation_tool",
-        "profi_image_generation_tool": "app.tools.profi_image_generation_tool",
     },
 }
