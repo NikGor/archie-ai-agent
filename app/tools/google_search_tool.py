@@ -51,7 +51,7 @@ async def google_search_tool(query: str) -> dict[str, Any]:
 
         logger.info("google_search_002: Calling Gemini with Google Search grounding")
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents=query,
             config=config,
         )
