@@ -21,7 +21,7 @@ class StatusUpdate(BaseModel):
     message: str
     detail: str | None = Field(
         default=None,
-        description="Human-readable detail of the action, e.g. 'Ищу в Google: лучшие рестораны'",
+        description="Human-readable detail of the action, e.g. 'Google: best restaurants'",
     )
 
 

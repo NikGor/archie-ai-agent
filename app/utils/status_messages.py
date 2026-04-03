@@ -22,30 +22,30 @@ def _events_detail(args: dict[str, Any]) -> str:  # noqa: PLR0911
     action = args.get("action", "")
     title = args.get("title", "")
     if action == "create" and title:
-        return f"Создаю событие: {title}"
+        return f"Creating event: {title}"
     if action == "today":
-        return "Проверяю календарь на сегодня"
+        return "Checking today's calendar"
     if action == "upcoming":
-        return "Проверяю ближайшие события"
+        return "Checking upcoming events"
     if action == "list":
-        return "Загружаю список событий"
+        return "Loading events list"
     if action == "delete" and title:
-        return f"Удаляю событие: {title}"
+        return f"Deleting event: {title}"
     if action == "update" and title:
-        return f"Обновляю событие: {title}"
-    return f"Календарь: {action}" if action else ""
+        return f"Updating event: {title}"
+    return f"Calendar: {action}" if action else ""
 
 
 def _task_detail(args: dict[str, Any]) -> str:
     action = args.get("action", "")
     title = args.get("title", "")
     if action == "create" and title:
-        return f"Создаю задачу: {title}"
+        return f"Creating task: {title}"
     if action == "list":
-        return "Загружаю список задач"
+        return "Loading tasks list"
     if action == "complete" and title:
-        return f"Завершаю задачу: {title}"
-    return f"Задачи: {action}" if action else ""
+        return f"Completing task: {title}"
+    return f"Tasks: {action}" if action else ""
 
 
 def _notes_detail(args: dict[str, Any]) -> str:
@@ -53,62 +53,55 @@ def _notes_detail(args: dict[str, Any]) -> str:
     title = args.get("title", "")
     search_query = args.get("search_query", "")
     if action == "search" and search_query:
-        return f"Ищу в заметках: {search_query}"
+        return f"Searching notes: {search_query}"
     if action == "create" and title:
-        return f"Создаю заметку: {title}"
+        return f"Creating note: {title}"
     if action == "list":
-        return "Загружаю список заметок"
-    return f"Заметки: {action}" if action else ""
+        return "Loading notes list"
+    return f"Notes: {action}" if action else ""
 
 
 def _spotify_detail(args: dict[str, Any]) -> str:
     action = args.get("action", "")
     query = args.get("query", "")
     if action == "search" and query:
-        return f"Ищу в Spotify: {query}"
+        return f"Searching Spotify: {query}"
     if action == "play":
-        return f"Воспроизвожу: {query}" if query else "Воспроизведение"
+        return f"Playing: {query}" if query else "Playing"
     if action == "get_current":
-        return "Текущий трек"
+        return "Current track"
     return f"Spotify: {action}" if action else ""
 
 
 def _light_detail(args: dict[str, Any]) -> str:
     device = args.get("device_name", "")
-    return f"Управляю светом: {device}" if device else "Управляю светом"
+    return f"Controlling light: {device}" if device else "Controlling light"
 
 
 def _climate_detail(args: dict[str, Any]) -> str:
     action = args.get("action", "")
     temp = args.get("temperature", "")
     if action == "set_temperature" and temp:
-        return f"Устанавливаю температуру: {temp}°"
-    return f"Климат: {action}" if action else "Управляю климатом"
+        return f"Setting temperature: {temp}°"
+    return f"Climate: {action}" if action else "Controlling climate"
 
 
 def _football_detail(args: dict[str, Any]) -> str:
     action = args.get("action", "")
     team = args.get("team", "")
     if action == "live_scores":
-        return "Проверяю live-счёт" + (f": {team}" if team else "")
+        return "Checking live scores" + (f": {team}" if team else "")
     if action == "fixtures":
-        return "Расписание матчей" + (f": {team}" if team else "")
+        return "Match schedule" + (f": {team}" if team else "")
     if action == "standings":
         league = args.get("league", "")
-        return "Таблица" + (f": {league}" if league else "")
-    return f"Футбол: {action}" if action else ""
+        return "Standings" + (f": {league}" if league else "")
+    return f"Football: {action}" if action else ""
 
 
 def _document_search_detail(args: dict[str, Any]) -> str:
     query = args.get("query", "")
-    return f"Ищу в документах: {query}" if query else ""
-
-
-def _image_gen_detail(args: dict[str, Any]) -> str:
-    prompt = args.get("prompt", "")
-    if prompt and len(prompt) > 60:
-        prompt = prompt[:57] + "..."
-    return f"Генерирую изображение: {prompt}" if prompt else "Генерирую изображение"
+    return f"Searching documents: {query}" if query else ""
 
 
 _TOOL_DETAIL_MAP: dict[str, Any] = {
@@ -122,8 +115,6 @@ _TOOL_DETAIL_MAP: dict[str, Any] = {
     "climate_control_tool": _climate_detail,
     "football_tool": _football_detail,
     "document_search_tool": _document_search_detail,
-    "fast_image_generation_tool": _image_gen_detail,
-    "profi_image_generation_tool": _image_gen_detail,
 }
 
 

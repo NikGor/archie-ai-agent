@@ -240,9 +240,9 @@ class AgentFactory:
                 "started",
                 f"Analyzing request (iteration {iteration})",
                 detail=(
-                    "Анализирую запрос"
+                    "Analyzing request"
                     if iteration == 1
-                    else f"Уточняю результаты (итерация {iteration})"
+                    else f"Refining results (iteration {iteration})"
                 ),
             )
 
@@ -334,7 +334,7 @@ class AgentFactory:
             "output",
             "started",
             f"Generating {response_format} response with {final_output_model}",
-            detail="Формирую ответ",
+            detail="Generating response",
         )
 
         # STAGE 3: Final output generation
@@ -355,7 +355,7 @@ class AgentFactory:
                 on_stream=on_stream,
                 on_stream_event=on_stream_event,
             )
-        await notifier.emit("output", "completed", "Response ready", detail="Ответ готов")
+        await notifier.emit("output", "completed", "Response ready", detail="Response ready")
         total_ms = int((time.monotonic() - arun_start) * 1000)
         final_response.pipeline_trace = build_pipeline_trace(
             total_ms=total_ms,
