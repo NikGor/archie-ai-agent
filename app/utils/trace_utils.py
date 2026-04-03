@@ -1,7 +1,8 @@
 """Pipeline step timing utilities for agent tracing."""
 
 import time
-from archie_shared.chat.models import LllmTrace, StepTrace
+
+from archie_shared.chat.models import LllmTrace, PipelineTrace, StepTrace
 
 
 class StepTimer:
@@ -45,3 +46,45 @@ def make_step_trace(
 ) -> StepTrace:
     """Build a StepTrace from a duration measurement and optional LLM trace."""
     return StepTrace(duration_ms=duration_ms, ttft_ms=ttft_ms, llm_trace=llm_trace)
+
+
+def build_pipeline_trace(
+    *,
+    total_ms: int,
+    stage3_duration_ms: int,
+    stage3_llm_trace: LllmTrace | None = None,
+    stage3_ttft_ms: int | None = None,
+    stage1_duration_ms: int = 0,
+    stage1_llm_traces: list[LllmTrace] | None = None,
+    stage2_duration_ms: int = 0,
+) -> PipelineTrace:
+    """Build a complete PipelineTrace for both direct and 3-stage flows."""
+    create_output_trace = make_step_trace(
+        stage3_duration_ms, stage3_llm_trace, ttft_ms=stage3_ttft_ms
+    )
+
+    # Direct flow (dashboard/widget): no Stage 1 or 2
+    if not stage1_duration_ms and not stage2_duration_ms:
+        return PipelineTrace(
+            create_output=create_output_trace,
+            ttft_ms=stage3_ttft_ms,
+            total_ms=total_ms,
+        )
+
+    # Full 3-stage flow
+    command_call_trace = make_step_trace(
+        stage1_duration_ms, accumulate_llm_traces(stage1_llm_traces or [])
+    )
+    stage2_trace = make_step_trace(stage2_duration_ms) if stage2_duration_ms else None
+    pipeline_ttft_ms = (
+        (stage1_duration_ms + stage2_duration_ms + stage3_ttft_ms)
+        if stage3_ttft_ms is not None
+        else None
+    )
+    return PipelineTrace(
+        command_call=command_call_trace,
+        tool_execution=stage2_trace,
+        create_output=create_output_trace,
+        ttft_ms=pipeline_ttft_ms,
+        total_ms=total_ms,
+    )

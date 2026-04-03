@@ -1,17 +1,15 @@
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
 from typing import Any
+
 from ..models.orchestration_sgr import Parameter, ToolCallRequest
 from ..models.tool_models import ToolResult
-from ..models.ws_models import StatusUpdate
+from ..models.ws_models import StatusCallback, StatusNotifier
 from ..tools.tool_factory import ToolFactory
 from .status_messages import get_tool_detail
 
 
 logger = logging.getLogger(__name__)
-
-StatusCallback = Callable[[StatusUpdate], Awaitable[None]] | None
 
 
 def convert_parameters_to_dict(parameters: list[Parameter]) -> dict[str, Any]:
@@ -28,17 +26,15 @@ async def execute_tool_call(
     )
     if tool_factory is None:
         tool_factory = ToolFactory()
+    notifier = StatusNotifier(on_status)
     arguments_dict = convert_parameters_to_dict(tool_call.arguments)
     detail = get_tool_detail(tool_call.tool_name, arguments_dict)
-    if on_status:
-        await on_status(
-            StatusUpdate(
-                step="tools",
-                status="started",
-                message=detail or f"Calling {tool_call.tool_name}",
-                detail=detail,
-            )
-        )
+    await notifier.emit(
+        "tools",
+        "started",
+        detail or f"Calling {tool_call.tool_name}",
+        detail=detail,
+    )
     logger.info(f"tool_executor_002: Arguments: \033[33m{arguments_dict}\033[0m")
     try:
         result = await tool_factory.execute_tool(
@@ -48,15 +44,12 @@ async def execute_tool_call(
         logger.info(
             f"tool_executor_003: Tool \033[36m{tool_call.tool_name}\033[0m executed successfully"
         )
-        if on_status:
-            await on_status(
-                StatusUpdate(
-                    step="tools",
-                    status="completed",
-                    message=detail or f"{tool_call.tool_name} completed",
-                    detail=detail,
-                )
-            )
+        await notifier.emit(
+            "tools",
+            "completed",
+            detail or f"{tool_call.tool_name} completed",
+            detail=detail,
+        )
         return ToolResult(
             tool_name=tool_call.tool_name,
             success=True,
@@ -66,15 +59,12 @@ async def execute_tool_call(
         logger.error(
             f"tool_executor_error_001: Tool \033[31m{tool_call.tool_name}\033[0m failed: {e}"
         )
-        if on_status:
-            await on_status(
-                StatusUpdate(
-                    step="tools",
-                    status="failed",
-                    message=f"{tool_call.tool_name} failed: {e!s}",
-                    detail=detail,
-                )
-            )
+        await notifier.emit(
+            "tools",
+            "failed",
+            f"{tool_call.tool_name} failed: {e!s}",
+            detail=detail,
+        )
         return ToolResult(
             tool_name=tool_call.tool_name,
             success=False,

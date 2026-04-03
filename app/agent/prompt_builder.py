@@ -1,8 +1,13 @@
 """Prompt builder for constructing system and assistant prompts."""
 
+import json
 import logging
 import os
+from typing import Any
+
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+from ..models.tool_models import ToolResult
 
 
 logger = logging.getLogger(__name__)
@@ -22,6 +27,47 @@ class PromptBuilder:
         logger.info(
             f"prompt_builder_001: Initialized with templates: \033[36m{templates_dir}\033[0m"
         )
+
+    def build_command_messages(
+        self,
+        user_input: str,
+        state: dict,
+        tools: list[dict[str, Any]],
+        provider: str,
+        previous_results: list[ToolResult] | None = None,
+        chat_history: str | None = None,
+    ) -> list[dict[str, str]]:
+        """Build the full message list for Stage 1 command call."""
+        cmd_prompt_template = self.env.get_template("cmd_prompt.jinja2")
+        cmd_prompt = cmd_prompt_template.render(state=state)
+        tools_list = "\n".join(
+            [
+                f"- {t['name']}: {t.get('description', '')}\n  Parameters: {json.dumps(t.get('parameters', {}), ensure_ascii=False)}"
+                for t in tools
+            ]
+        )
+        system_message = f"{cmd_prompt}\n\nAvailable Tools:\n{tools_list}"
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": user_input},
+        ]
+        if chat_history and provider != "openai":
+            messages.insert(
+                1,
+                {"role": "system", "content": f"Chat History:\n{chat_history}"},
+            )
+            logger.info(
+                f"prompt_builder_010: Added chat_history to context (len: \033[33m{len(chat_history)}\033[0m)"
+            )
+        if previous_results:
+            results_context = "\n\nPrevious Tool Results:\n"
+            for result in previous_results:
+                results_context += f"- {result.tool_name}: {result.output}\n"
+            messages.append({"role": "assistant", "content": results_context})
+            logger.info(
+                f"prompt_builder_011: Added \033[33m{len(previous_results)}\033[0m previous results to context"
+            )
+        return messages
 
     def build_assistant_prompt(
         self,
