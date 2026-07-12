@@ -5,6 +5,10 @@ import os
 
 MAX_COMMAND_ITERATIONS = 3
 
+# gpt-4.1 supports up to 32768 output tokens; verbose UI answers (e.g. multi-month
+# weather breakdowns) can exceed the previous 16000 cap and get truncated mid-JSON.
+UI_STREAM_MAX_OUTPUT_TOKENS = 32000
+
 DEFAULT_STATE_CONFIG = {
     "persona": os.getenv("DEFAULT_PERSONA", "business"),
     "default_city": os.getenv("DEFAULT_CITY", "London"),

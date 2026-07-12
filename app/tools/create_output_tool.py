@@ -1,8 +1,11 @@
+import json
 import logging
+import re
 import time
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 from pydantic import ValidationError
+from .. import config
 from ..agent.prompt_builder import PromptBuilder
 from ..backend.gemini_client import GeminiClient
 from ..backend.openai_client import OpenAIClient
@@ -62,6 +65,74 @@ def _clear_card_image_prompts(ui_response: UIResponse) -> None:
     logger.info("create_output_008: no_image=True — cleared image_prompt on all cards")
 
 
+def _repair_json(raw: str) -> str | None:  # noqa: PLR0912
+    """Deterministic repair for LLM-emitted JSON: close unterminated strings/brackets,
+    strip trailing commas. Returns valid JSON string or None."""
+    candidate = raw.strip()
+    for strip_trailing_commas in (False, True):
+        text = candidate
+        if strip_trailing_commas:
+            text = re.sub(r",\s*([}\]])", r"\1", text)
+        closers: list[str] = []
+        in_str = False
+        escaped = False
+        mismatch = False
+        for ch in text:
+            if in_str:
+                if escaped:
+                    escaped = False
+                elif ch == "\\":
+                    escaped = True
+                elif ch == '"':
+                    in_str = False
+            elif ch == '"':
+                in_str = True
+            elif ch in "{[":
+                closers.append("}" if ch == "{" else "]")
+            elif ch in "}]":
+                if closers and closers[-1] == ch:
+                    closers.pop()
+                else:
+                    mismatch = True
+                    break
+        if mismatch:
+            continue
+        if in_str:
+            text += '"'
+        text += "".join(reversed(closers))
+        try:
+            json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        return text
+    return None
+
+
+def _sanitize_chart_items(ui_response: UIResponse) -> None:
+    """Validate chart_config JSON on chart items; repair when possible, drop otherwise."""
+    items = ui_response.ui_answer.items
+    for item in list(items):
+        if item.type != "chart":
+            continue
+        config = item.content.chart_config  # type: ignore[union-attr]
+        try:
+            json.loads(config)
+            continue
+        except (json.JSONDecodeError, TypeError):
+            pass
+        repaired = _repair_json(config)
+        if repaired is not None:
+            item.content.chart_config = repaired  # type: ignore[union-attr]
+            logger.warning(
+                "create_output_warning_001: repaired invalid chart_config JSON"
+            )
+        else:
+            items.remove(item)
+            logger.warning(
+                "create_output_warning_002: dropped chart item with unrepairable chart_config"
+            )
+
+
 async def _stream_and_collect(
     client: OpenAIClient | OpenRouterClient | GeminiClient,
     messages: list[dict],
@@ -72,7 +143,9 @@ async def _stream_and_collect(
     on_chunk: Callable[[str], Awaitable[None]] | None = None,
     response_id_out: list[str] | None = None,
     max_output_tokens: int | None = None,
-    extra_extractors: Sequence[tuple[Any, Callable[[str], Awaitable[None]]]] | None = None,
+    extra_extractors: (
+        Sequence[tuple[Any, Callable[[str], Awaitable[None]]]] | None
+    ) = None,
 ) -> tuple[str, int | None]:
     """Stream LLM response, collect JSON, return (full_json, ttft_ms)."""
     json_parts: list[str] = []
@@ -327,7 +400,7 @@ Create a complete, well-formatted response in the specified format."""
             extractor=JsonReasoningExtractor(),
             on_chunk=_on_chunk_ui,
             response_id_out=response_id_out_ui,
-            max_output_tokens=16000,
+            max_output_tokens=config.UI_STREAM_MAX_OUTPUT_TOKENS,
             extra_extractors=extra_extractors_ui,
         )
         parsed_stream_ui = parse_assembled_stream(full_json_ui, model, response_model)
@@ -340,6 +413,7 @@ Create a complete, well-formatted response in the specified format."""
             except ValidationError as e:
                 logger.error(f"create_output_007: UIResponse coercion failed: {e}")
                 raise
+            _sanitize_chart_items(parsed_any)
             if no_image:
                 _clear_card_image_prompts(parsed_any)
 
@@ -387,6 +461,7 @@ Create a complete, well-formatted response in the specified format."""
         except ValidationError as e:
             logger.error(f"create_output_007: UIResponse coercion failed: {e}")
             raise
+        _sanitize_chart_items(parsed_content)
         if no_image:
             _clear_card_image_prompts(parsed_content)
 

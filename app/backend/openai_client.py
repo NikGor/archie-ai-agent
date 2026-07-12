@@ -11,7 +11,7 @@ from openai import (
     OpenAI,
     RateLimitError,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from app.utils.openai_utils import build_openai_args
 from app.utils.retry_utils import call_with_retry
 
@@ -128,6 +128,15 @@ class OpenAIClient:
                         event, "delta", None
                     ):
                         yield event.delta
+        except ValidationError as e:
+            logger.error(
+                f"openai_client_error_003: Stream truncated before valid JSON "
+                f"(likely hit max_output_tokens={max_output_tokens}): \033[31m{e!s}\033[0m"
+            )
+            raise RuntimeError(
+                "LLM response was cut off before completing a valid answer "
+                "(output too long for the configured token limit)"
+            ) from e
         except Exception as e:
             logger.error(f"openai_client_error_002: Stream error: \033[31m{e!s}\033[0m")
             raise
