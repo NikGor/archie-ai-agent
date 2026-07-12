@@ -1,7 +1,7 @@
 import logging
-import os
 from typing import Any
 import httpx
+from app.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,7 @@ async def google_places_search_tool(  # noqa: PLR0912
         radius_meters = float(radius_meters)
 
     try:
-        api_key = os.getenv("GOOGLE_API_KEY")
+        api_key = settings.google_api_key
         if not api_key:
             logger.error(
                 "google_places_error_001: \033[31mGOOGLE_API_KEY not found\033[0m"

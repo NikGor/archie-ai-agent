@@ -6,13 +6,13 @@
 
 import asyncio
 import logging
-import os
 from collections.abc import AsyncIterator
 from typing import Any
 from google import genai
 from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable
 from google.genai import types
 from pydantic import BaseModel
+from app.config import settings
 from app.utils.retry_utils import call_with_retry
 
 
@@ -23,7 +23,7 @@ class GeminiClient:
     """Client for Google Gemini API interactions."""
 
     def __init__(self, api_key: str | None = None):
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        self.api_key = api_key or settings.gemini_api_key
         self.client = genai.Client(api_key=self.api_key)
         logger.info("gemini_client_001: Initialized Gemini client")
 

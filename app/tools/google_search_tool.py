@@ -1,8 +1,8 @@
 import logging
-import os
 from typing import Any
 from google import genai
 from google.genai import types
+from app.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ async def google_search_tool(query: str) -> dict[str, Any]:
     )
 
     try:
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = settings.gemini_api_key
         if not api_key:
             logger.error(
                 "google_search_error_001: \033[31mGEMINI_API_KEY not found\033[0m"

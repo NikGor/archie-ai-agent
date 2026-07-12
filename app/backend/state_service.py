@@ -2,12 +2,11 @@
 
 import json
 import logging
-import os
 from datetime import datetime
 from typing import Any
 import redis
 import redis.asyncio as aioredis
-from ..config import DEFAULT_STATE_CONFIG
+from ..config import DEFAULT_STATE_CONFIG, settings
 from ..models.state_models import UserState
 
 
@@ -20,9 +19,9 @@ class StateService:
     def __init__(self, user_name: str | None = None):
         self.user_name = user_name
 
-        redis_host = os.getenv("REDIS_HOST", "localhost")
-        redis_port = int(os.getenv("REDIS_PORT", "6379"))
-        redis_db = int(os.getenv("REDIS_DB", "0"))
+        redis_host = settings.redis_host
+        redis_port = settings.redis_port
+        redis_db = settings.redis_db
 
         self.redis_client = aioredis.Redis(
             host=redis_host,
