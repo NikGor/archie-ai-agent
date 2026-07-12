@@ -7,6 +7,7 @@ from typing import Any
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from app.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -26,9 +27,8 @@ class GoogleCalendarClient:
         credentials_file: str | None = None,
         timezone: str = DEFAULT_TIMEZONE,
     ):
-        self.credentials_file = credentials_file or os.getenv(
-            "GOOGLE_CALENDAR_CREDENTIALS_FILE",
-            "credentials.json",
+        self.credentials_file = (
+            credentials_file or settings.google_calendar_credentials_file
         )
         self.timezone = timezone
         self.service = self._authenticate()
