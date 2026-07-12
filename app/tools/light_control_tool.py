@@ -1,10 +1,10 @@
 import json
 import logging
-import os
 from typing import Any, Literal
 import redis
 from openai import OpenAI
 from pydantic import BaseModel, Field
+from app.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -17,16 +17,13 @@ _DEFAULT_DEVICES: dict[str, str] = {
     "bedroom_light": "light_003",
 }
 
-redis_host = os.getenv("REDIS_HOST", "localhost")
-redis_port = int(os.getenv("REDIS_PORT", "6379"))
-redis_db = int(os.getenv("REDIS_DB", "0"))
 redis_client = redis.Redis(
-    host=redis_host,
-    port=redis_port,
-    db=redis_db,
+    host=settings.redis_host,
+    port=settings.redis_port,
+    db=settings.redis_db,
     decode_responses=True,
 )
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai_client = OpenAI(api_key=settings.openai_api_key)
 
 
 def _load_devices_from_redis() -> dict[str, str]:

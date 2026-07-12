@@ -1,7 +1,6 @@
 """OpenRouter client for API interactions using OpenAI SDK."""
 
 import logging
-import os
 from collections.abc import AsyncIterator
 from typing import Any
 from openai import (
@@ -12,6 +11,7 @@ from openai import (
     RateLimitError,
 )
 from pydantic import BaseModel
+from app.config import settings
 from app.utils.retry_utils import call_with_retry
 
 
@@ -24,7 +24,7 @@ class OpenRouterClient:
     """Client for OpenRouter API interactions using OpenAI SDK."""
 
     def __init__(self):
-        self.api_key = os.getenv("OPENROUTER_API_KEY")
+        self.api_key = settings.openrouter_api_key
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=OPENROUTER_BASE_URL,

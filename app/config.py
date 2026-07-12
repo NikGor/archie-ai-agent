@@ -1,6 +1,8 @@
-"""Configuration constants for the application."""
+"""Configuration constants and centralized settings for the application."""
 
-import os
+from typing import Annotated
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 MAX_COMMAND_ITERATIONS = 3
@@ -9,20 +11,62 @@ MAX_COMMAND_ITERATIONS = 3
 # weather breakdowns) can exceed the previous 16000 cap and get truncated mid-JSON.
 UI_STREAM_MAX_OUTPUT_TOKENS = 32000
 
+
+class Settings(BaseSettings):
+    """Centralized application settings, loaded from environment variables / .env."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # LLM provider API keys
+    openai_api_key: str | None = None
+    openrouter_api_key: str | None = None
+    gemini_api_key: str | None = None
+
+    # Redis
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    redis_db: int = 0
+
+    # Google integrations
+    google_calendar_credentials_file: str = "credentials.json"
+    google_places_api_key: str | None = None
+    google_api_key: str | None = None
+
+    # OpenAI vector store (document search)
+    openai_vector_store_id: str | None = None
+
+    # Default persona / locale state
+    default_persona: str = "business"
+    default_city: str = "London"
+    default_country: str = "UK"
+    default_timezone: str = "UTC"
+    default_language: str = "en"
+    default_currency: str = "USD"
+    default_holidays: str = "GB"
+    default_transport: Annotated[list[str], NoDecode] = ["car", "public_transport"]
+    default_cuisine: Annotated[list[str], NoDecode] = ["italian", "asian", "local"]
+
+    @field_validator("default_transport", "default_cuisine", mode="before")
+    @classmethod
+    def _split_comma_separated(cls, value: object) -> object:
+        """Parse comma-separated env var strings into lists (matches old .split(","))."""
+        if isinstance(value, str):
+            return value.split(",")
+        return value
+
+
+settings = Settings()
+
 DEFAULT_STATE_CONFIG = {
-    "persona": os.getenv("DEFAULT_PERSONA", "business"),
-    "default_city": os.getenv("DEFAULT_CITY", "London"),
-    "default_country": os.getenv("DEFAULT_COUNTRY", "UK"),
-    "user_timezone": os.getenv("DEFAULT_TIMEZONE", "UTC"),
-    "language": os.getenv("DEFAULT_LANGUAGE", "en"),
-    "currency": os.getenv("DEFAULT_CURRENCY", "USD"),
-    "commercial_holidays": os.getenv("DEFAULT_HOLIDAYS", "GB"),
-    "transport_preferences": os.getenv(
-        "DEFAULT_TRANSPORT", "car,public_transport"
-    ).split(","),
-    "cuisine_preferences": os.getenv("DEFAULT_CUISINE", "italian,asian,local").split(
-        ","
-    ),
+    "persona": settings.default_persona,
+    "default_city": settings.default_city,
+    "default_country": settings.default_country,
+    "user_timezone": settings.default_timezone,
+    "language": settings.default_language,
+    "currency": settings.default_currency,
+    "commercial_holidays": settings.default_holidays,
+    "transport_preferences": settings.default_transport,
+    "cuisine_preferences": settings.default_cuisine,
 }
 
 MODEL_PROVIDERS = {
