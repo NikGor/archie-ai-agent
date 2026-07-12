@@ -1,8 +1,6 @@
 import logging
 import time
-
 from archie_shared.chat.models import LllmTrace
-
 from ..backend.gemini_client import GeminiClient
 from ..backend.openai_client import OpenAIClient
 from ..backend.openrouter_client import OpenRouterClient
@@ -30,9 +28,7 @@ from .prompt_builder import PromptBuilder
 logger = logging.getLogger(__name__)
 
 
-def _format_command_summary(
-    command_history: list[dict], tool_count: int
-) -> str:
+def _format_command_summary(command_history: list[dict], tool_count: int) -> str:
     parts = [
         f"Iteration {h['iteration']}: {h['action_type']} - {h['reasoning']}"
         for h in command_history
@@ -47,15 +43,12 @@ class AgentFactory:
         tool_factory: ToolFactory | None = None,
         state_service: StateService | None = None,
         demo_mode: bool = False,
-        no_image: bool = False,
     ):
         self.openai_client = OpenAIClient()
         self.openrouter_client = OpenRouterClient()
         self.gemini_client = GeminiClient()  # Fallback
         self.prompt_builder = prompt_builder or PromptBuilder()
-        self.tool_factory = tool_factory or ToolFactory(
-            demo_mode=demo_mode, no_image=no_image
-        )
+        self.tool_factory = tool_factory or ToolFactory(demo_mode=demo_mode)
         self.state_service = state_service or StateService()
         self.clients: dict[str, OpenAIClient | OpenRouterClient | GeminiClient] = {
             "openai": self.openai_client,
@@ -63,7 +56,7 @@ class AgentFactory:
             "gemini": self.gemini_client,  # Fallback
         }
         logger.info(
-            f"agent_factory_001: Initialized AgentFactory, demo_mode: \033[35m{demo_mode}\033[0m, no_image: \033[35m{no_image}\033[0m"
+            f"agent_factory_001: Initialized AgentFactory, demo_mode: \033[35m{demo_mode}\033[0m"
         )
 
     async def _make_command_call(
@@ -161,7 +154,7 @@ class AgentFactory:
         logger.info("=== AgentFactory: Response Created ===")
         return final_response
 
-    async def arun(  # noqa: PLR0912
+    async def arun(
         self,
         messages: list[dict[str, str]],
         command_model: str = "gpt-4.1",
@@ -355,7 +348,9 @@ class AgentFactory:
                 on_stream=on_stream,
                 on_stream_event=on_stream_event,
             )
-        await notifier.emit("output", "completed", "Response ready", detail="Response ready")
+        await notifier.emit(
+            "output", "completed", "Response ready", detail="Response ready"
+        )
         total_ms = int((time.monotonic() - arun_start) * 1000)
         final_response.pipeline_trace = build_pipeline_trace(
             total_ms=total_ms,
