@@ -41,7 +41,10 @@ IntentType = Literal[
 ]
 
 # Base item types always present in ui_answer (type field of AdvancedAnswerItem)
-BASE_ITEM_TYPES: list[str] = ["text_answer", "card_grid", "table", "image"]
+# chart is base: Chart schema is small, and Stage 1 intent detection proved too
+# flaky to gate chart availability on analyze_data (chart rule in the format
+# prompt could silently never fire)
+BASE_ITEM_TYPES: list[str] = ["text_answer", "card_grid", "table", "chart", "image"]
 
 # Base card types always available inside CardGrid
 BASE_CARD_TYPES: list[type] = [Card]
@@ -53,7 +56,7 @@ INTENT_EXTENSIONS: dict[str, dict[str, list]] = {
     "search_movie": {"cards": [MovieCard], "item_types": []},
     "search_series": {"cards": [SeriesCard], "item_types": []},
     "search_music": {"cards": [MusicCard], "item_types": []},
-    "search_product": {"cards": [ProductCard], "item_types": ["chart"]},
+    "search_product": {"cards": [ProductCard], "item_types": []},
     "create_shopping_list": {"cards": [ShoppingListCard], "item_types": []},
     "search_article": {"cards": [ArticleCard], "item_types": []},
     "search_document": {"cards": [DocumentCard], "item_types": []},
@@ -61,7 +64,7 @@ INTENT_EXTENSIONS: dict[str, dict[str, list]] = {
     "create_email": {"cards": [], "item_types": ["email_form"]},
     "create_event": {"cards": [], "item_types": ["event_form"]},
     "create_note": {"cards": [], "item_types": ["note_form"]},
-    "analyze_data": {"cards": [], "item_types": ["chart"]},
+    "analyze_data": {"cards": [], "item_types": []},
     "get_football": {"cards": [], "item_types": []},
     "control_light": {"cards": [], "item_types": []},
     "control_climate": {"cards": [], "item_types": []},
