@@ -1,9 +1,9 @@
 import json
 import logging
-import re
 import time
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
+from json_repair import repair_json
 from pydantic import ValidationError
 from .. import config
 from ..agent.prompt_builder import PromptBuilder
@@ -27,12 +27,7 @@ from ..utils.llm_parser import (
 )
 from ..utils.provider_utils import get_provider_for_model
 from ..utils.schema_filter import build_filtered_ui_response
-from ..utils.stream_utils import (
-    JsonLevel2TextExtractor,
-    JsonReasoningExtractor,
-    JsonTextExtractor,
-    JsonUIIntroTextExtractor,
-)
+from ..utils.stream_utils import JsonPathExtractor
 
 
 _STREAMABLE_FORMATS = frozenset({"plain", "voice", "formatted_text"})
@@ -65,47 +60,29 @@ def _clear_card_image_prompts(ui_response: UIResponse) -> None:
     logger.info("create_output_008: no_image=True — cleared image_prompt on all cards")
 
 
-def _repair_json(raw: str) -> str | None:  # noqa: PLR0912
-    """Deterministic repair for LLM-emitted JSON: close unterminated strings/brackets,
-    strip trailing commas. Returns valid JSON string or None."""
+def _repair_json(raw: str) -> str | None:
+    """Repair for LLM-emitted JSON: close unterminated strings/brackets, strip
+    trailing commas, fix other common malformations. Returns valid JSON string
+    or None if nothing usable could be salvaged. Delegates to the `json-repair`
+    library (ARCHIE-154) instead of a hand-rolled brace/bracket tracker.
+
+    Note: `json-repair` is deliberately best-effort — unlike the old bracket
+    tracker, it does not bail out on mismatched delimiters (e.g. `{"a": ]}`);
+    it treats the offending token as garbage and repairs around it. `None` is
+    now returned only for empty input or the rare case where the library's
+    output still fails to parse.
+    """
     candidate = raw.strip()
-    for strip_trailing_commas in (False, True):
-        text = candidate
-        if strip_trailing_commas:
-            text = re.sub(r",\s*([}\]])", r"\1", text)
-        closers: list[str] = []
-        in_str = False
-        escaped = False
-        mismatch = False
-        for ch in text:
-            if in_str:
-                if escaped:
-                    escaped = False
-                elif ch == "\\":
-                    escaped = True
-                elif ch == '"':
-                    in_str = False
-            elif ch == '"':
-                in_str = True
-            elif ch in "{[":
-                closers.append("}" if ch == "{" else "]")
-            elif ch in "}]":
-                if closers and closers[-1] == ch:
-                    closers.pop()
-                else:
-                    mismatch = True
-                    break
-        if mismatch:
-            continue
-        if in_str:
-            text += '"'
-        text += "".join(reversed(closers))
-        try:
-            json.loads(text)
-        except json.JSONDecodeError:
-            continue
-        return text
-    return None
+    if not candidate:
+        return None
+    repaired = repair_json(candidate)
+    if not repaired:
+        return None
+    try:
+        json.loads(repaired)
+    except json.JSONDecodeError:
+        return None
+    return repaired
 
 
 def _sanitize_chart_items(ui_response: UIResponse) -> None:
@@ -139,7 +116,7 @@ async def _stream_and_collect(
     model: str,
     response_model: type,
     previous_response_id: str | None,
-    extractor: JsonTextExtractor | JsonLevel2TextExtractor | JsonReasoningExtractor,
+    extractor: JsonPathExtractor,
     on_chunk: Callable[[str], Awaitable[None]] | None = None,
     response_id_out: list[str] | None = None,
     max_output_tokens: int | None = None,
@@ -303,7 +280,7 @@ Create a complete, well-formatted response in the specified format."""
             model=model,
             response_model=response_model,
             previous_response_id=previous_response_id,
-            extractor=JsonTextExtractor(),
+            extractor=JsonPathExtractor(["text"]),
             on_chunk=on_stream,
             response_id_out=response_id_out,
         )
@@ -345,7 +322,7 @@ Create a complete, well-formatted response in the specified format."""
             model=model,
             response_model=response_model,
             previous_response_id=previous_response_id,
-            extractor=JsonLevel2TextExtractor(),
+            extractor=JsonPathExtractor(["level2_answer", "text", "text"]),
             on_chunk=_on_chunk_l2,
         )
         parsed_l2 = parse_assembled_stream(full_json_l2, model, Level2Response)
@@ -383,7 +360,7 @@ Create a complete, well-formatted response in the specified format."""
 
         extra_extractors_ui = None
         if response_format == "ui_answer":
-            _intro_extractor = JsonUIIntroTextExtractor()
+            _intro_extractor = JsonPathExtractor(["ui_answer", "intro_text", "text"])
 
             async def _on_chunk_intro(chunk: str) -> None:
                 await on_stream_event("stream_delta", chunk)  # type: ignore[misc]
@@ -397,7 +374,7 @@ Create a complete, well-formatted response in the specified format."""
             model=model,
             response_model=response_model,
             previous_response_id=previous_response_id,
-            extractor=JsonReasoningExtractor(),
+            extractor=JsonPathExtractor(["sgr", "reasoning"]),
             on_chunk=_on_chunk_ui,
             response_id_out=response_id_out_ui,
             max_output_tokens=config.UI_STREAM_MAX_OUTPUT_TOKENS,
