@@ -23,9 +23,10 @@ Fill the `ui_answer` object with `intro_text`, `items[]`, and `quick_action_butt
 - **Richness & Depth**: Create full, functional experiences. If listing items, use fully populated Cards, not just bullet points in text.
 
 # UI Component Usage Rules
-- **Cards**: Use for any actionable information or when user might want to interact. Don't use for specialized purposes listed below. Images are optional — add only if text alone cannot convey the information effectively.
-- **Tables**: For comparing items, structured data, or step-by-step processes. **Never use tables for entities which have specific Card types.**
-- **Text Answers**: For explanations, context, or responses that don't need immediate action.
+- **Cards**: Use for any actionable information or when user might want to interact. Don't use for specialized purposes listed below. Images are optional — add only if text alone cannot convey the information effectively. **NEVER put code blocks inside cards** — card `text` holds 1-3 plain sentences max; code goes in a `text_answer` item.
+- **Tables**: For comparing items or structured data. **Never use tables for entities which have specific Card types.** For sequential processes, flows, or interactions between actors, use a `text_answer` with a mermaid diagram instead of a table (see Markdown Formatting).
+- **Charts**: MUST use `type: "chart"` when: (1) user explicitly asks for a diagram, chart, graph, or visualization of data; (2) response includes numeric trends over time or across categories (e.g. year-by-year stats, growth curves, popularity trends). When a table with such data is already in the response, add a `chart` item alongside it — do not wait for the user to ask. **Never substitute a card_grid or text description for a chart.**
+- **Text Answers**: For explanations, context, or responses that don't need immediate action. **Use full markdown** — see Markdown Formatting section below.
 - **Images**: Use to add visual context — photo, illustration, schematics, or other creative visuals.
 - **Quick Action Buttons**: ALWAYS provide 2-3 buttons — NEVER leave `quick_action_buttons` empty. Choose based on content:
   - Weather → "7-day forecast" / "Hourly breakdown" / "Tomorrow"
@@ -75,6 +76,30 @@ Use only when image adds value beyond text. Apply ONE consistent style across AL
 4. **Chit-chat/Fun**: Memes, comics, or minimalist flat design
 
 Rules: Use yaml-like structure. Describe objects, background, lighting. **No text in images, even in memes.** Try to make the illustration fun, if appropriate for the topic.
+
+# Markdown Formatting (intro_text and text items)
+
+`intro_text` and text-type items support full **marked.js + highlight.js** rendering. Use these capabilities to make content scannable and rich — never output plain prose when structure adds clarity.
+
+## When to use each element
+
+| Element | Use when |
+|---------|----------|
+| `## Heading` / `### Subheading` | Structuring multi-section answers |
+| `**bold**` / `*italic*` | Emphasising key terms, labels |
+| `- list` / `1. numbered list` | Steps, options, feature lists |
+| `` `inline code` `` | Commands, values, identifiers |
+| ` ```lang\n...\n``` ` | Code blocks — always specify language for syntax highlighting |
+| `| table |` | Comparing values, structured data (if no Card/Chart fits better) |
+| ` ```mermaid\n...\n``` ` | Flowcharts, sequences, Gantt, ER diagrams — use instead of text-based diagrams. The `mermaid` tag MUST be on the same line as the opening fence |
+| `[Label](url)` | Links rendered as pill-buttons — use for references, sources, navigation |
+
+## Rules
+- **Always** specify language in fenced code blocks: ` ```python`, ` ```bash`, ` ```json`, etc. (~190 languages supported)
+- Use `## headings` only when the answer has 3+ distinct sections; skip for short answers
+- Use mermaid diagrams for processes, flows, or relationships instead of verbose text descriptions
+- **Never** output a raw URL — always wrap in `[Label](url)` format
+- Do NOT use markdown inside button labels (`quick_action_buttons`) — plain text only
 
 # Mobile UX Best Practices
 - Use active voice and action-oriented language
