@@ -28,6 +28,7 @@ from ..utils.llm_parser import (
 from ..utils.provider_utils import get_provider_for_model
 from ..utils.schema_filter import build_filtered_ui_response
 from ..utils.stream_utils import JsonPathExtractor
+from ..utils.url_validator import validate_and_fix_urls
 
 
 _STREAMABLE_FORMATS = frozenset({"plain", "voice", "formatted_text"})
@@ -290,6 +291,7 @@ Create a complete, well-formatted response in the specified format."""
             parsed_content=parsed_obj,
             response_format=response_format,
         )
+        content = await validate_and_fix_urls(content)  # ARCHIE-123
         result = AgentResponse(
             content=content,
             sgr=parsed_obj.sgr,
@@ -331,6 +333,7 @@ Create a complete, well-formatted response in the specified format."""
             parsed_content=parsed_content_l2,
             response_format=response_format,
         )
+        content_l2 = await validate_and_fix_urls(content_l2)
         result_l2 = AgentResponse(
             content=content_l2,
             sgr=parsed_content_l2.sgr,
@@ -398,6 +401,7 @@ Create a complete, well-formatted response in the specified format."""
             parsed_content=parsed_any,
             response_format=response_format,
         )
+        content_ui = await validate_and_fix_urls(content_ui)
         sgr_ui: SGROutput = parsed_any.sgr
         result_ui = AgentResponse(
             content=content_ui,
@@ -446,6 +450,7 @@ Create a complete, well-formatted response in the specified format."""
         parsed_content=parsed_content,
         response_format=response_format,
     )
+    content = await validate_and_fix_urls(content)
 
     result = AgentResponse(
         content=content,
