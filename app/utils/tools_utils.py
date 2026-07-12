@@ -1,11 +1,20 @@
 import inspect
 import logging
+import types
 from collections.abc import Callable
-from typing import Any, Literal, get_args, get_origin, get_type_hints
+from typing import Any, Union, get_args, get_origin, get_type_hints
 import docstring_parser
+from pydantic import TypeAdapter
 
 
 logger = logging.getLogger(__name__)
+
+# JSON schema "type" values a provider tool schema can express directly.
+# A resolved type that maps to anything outside this set (e.g. array, object)
+# falls back to "string", preserving the pre-existing (permissive) parser
+# behavior for parameter annotations like `list[str] | None` that don't have
+# a JSON-schema-native primitive representation in these tool signatures.
+_PRIMITIVE_JSON_TYPES = {"string", "integer", "number", "boolean"}
 
 
 def _full_description(doc: docstring_parser.Docstring) -> str:
@@ -16,50 +25,47 @@ def _full_description(doc: docstring_parser.Docstring) -> str:
     return " ".join(p for p in parts if p)
 
 
-def _get_literal_values(t: type) -> list[str] | None:
-    """Extract literal values if type is Literal."""
-    origin = get_origin(t)
-    if origin is Literal:
-        return list(get_args(t))
-    args = get_args(t)
-    for arg in args:
-        if get_origin(arg) is Literal:
-            return list(get_args(arg))
-    return None
-
-
-def _map_type(t: type) -> str:  # noqa: PLR0911
+def _resolve_hint(t: type) -> type:
     """
-    Map Python type to JSON schema type.
+    Resolve a type hint to the single type a JSON schema should be built from.
 
-    Handles Union types (e.g., int | None) by extracting the non-None type.
+    Tool parameters are frequently declared as unions (e.g. `int | str | None`)
+    because arguments arrive from the LLM as strings and get coerced by the
+    tool itself. For schema-generation purposes we take the first non-None
+    member of the union, matching the previous hand-rolled implementation.
+    """
+    origin = get_origin(t)
+    if origin is Union or origin is types.UnionType:
+        args = [arg for arg in get_args(t) if arg is not type(None)]
+        if args:
+            return args[0]
+    return t
+
+
+def _schema_type_and_enum(t: type) -> tuple[str, list[str] | None]:
+    """
+    Derive JSON schema "type" and optional "enum" for a parameter type via Pydantic.
 
     Args:
         t (type): Python type annotation
 
     Returns:
-        str: JSON schema type string
+        tuple[str, list[str] | None]: JSON schema type string and enum values (if any)
     """
-    origin = get_origin(t)
-    if origin is Literal:
-        return "string"
-    if origin is not None:
-        args = get_args(t)
-        non_none_types = [arg for arg in args if arg is not type(None)]
-        if non_none_types:
-            t = non_none_types[0]
-            if get_origin(t) is Literal:
-                return "string"
+    resolved = _resolve_hint(t)
+    try:
+        schema = TypeAdapter(resolved).json_schema()
+    except Exception:
+        logger.warning(f"tools_utils_warning_001: Failed to build schema for {t!r}")
+        return "string", None
 
-    if t in [str]:
-        return "string"
-    if t in [int]:
-        return "integer"
-    if t in [float]:
-        return "number"
-    if t in [bool]:
-        return "boolean"
-    return "string"
+    json_type = schema.get("type")
+    enum = schema.get("enum")
+    enum_values = list(enum) if isinstance(enum, list) else None
+
+    if json_type not in _PRIMITIVE_JSON_TYPES:
+        return "string", enum_values
+    return json_type, enum_values
 
 
 def _is_required(func: Callable, param_name: str) -> bool:
@@ -97,13 +103,13 @@ def openai_parse(func: Callable) -> dict[str, Any]:
 
     for param in doc.params:
         hint = type_hints.get(param.arg_name, str)
+        json_type, enum_values = _schema_type_and_enum(hint)
         prop = {
-            "type": _map_type(hint),
+            "type": json_type,
             "description": param.description or "",
         }
-        literal_values = _get_literal_values(hint)
-        if literal_values:
-            prop["enum"] = literal_values
+        if enum_values:
+            prop["enum"] = enum_values
         properties[param.arg_name] = prop
         if _is_required(func, param.arg_name):
             required.append(param.arg_name)
@@ -141,7 +147,8 @@ def gemini_parse(func: Callable) -> dict[str, Any]:
         if param.arg_name == "context":
             continue
         hint = type_hints.get(param.arg_name, str)
-        prop = {"type": _map_type(hint), "description": param.description or ""}
+        json_type, _ = _schema_type_and_enum(hint)
+        prop = {"type": json_type, "description": param.description or ""}
 
         if "allowed values:" in (param.description or "").lower():
             allowed = (
@@ -188,7 +195,8 @@ def oss_parse(func: Callable) -> dict[str, Any]:
         if param.arg_name == "context":
             continue
         hint = type_hints.get(param.arg_name, str)
-        properties[param.arg_name] = {"type": _map_type(hint)}
+        json_type, _ = _schema_type_and_enum(hint)
+        properties[param.arg_name] = {"type": json_type}
 
     return {
         "name": func.__name__,
@@ -217,13 +225,13 @@ def openai_responses_parse(func: Callable) -> dict[str, Any]:
 
     for param in doc.params:
         hint = type_hints.get(param.arg_name, str)
+        json_type, enum_values = _schema_type_and_enum(hint)
         prop = {
-            "type": _map_type(hint),
+            "type": json_type,
             "description": param.description or "",
         }
-        literal_values = _get_literal_values(hint)
-        if literal_values:
-            prop["enum"] = literal_values
+        if enum_values:
+            prop["enum"] = enum_values
         properties[param.arg_name] = prop
 
     return {
