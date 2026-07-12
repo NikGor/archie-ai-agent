@@ -1,7 +1,6 @@
 """OpenAI client for API interactions."""
 
 import logging
-import os
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 from openai import (
@@ -12,6 +11,7 @@ from openai import (
     RateLimitError,
 )
 from pydantic import BaseModel
+from app.config import settings
 from app.utils.openai_utils import build_openai_args
 from app.utils.retry_utils import call_with_retry
 
@@ -23,7 +23,7 @@ class OpenAIClient:
     """Client for OpenAI API interactions."""
 
     def __init__(self):
-        self.api_key = os.getenv("OPENAI_API_KEY")
+        self.api_key = settings.openai_api_key
         self.client = OpenAI(api_key=self.api_key)
         self.async_client = AsyncOpenAI(api_key=self.api_key)
         logger.info("openai_client_001: Initialized OpenAI client")
