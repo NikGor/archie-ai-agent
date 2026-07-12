@@ -27,12 +27,7 @@ from ..utils.llm_parser import (
 )
 from ..utils.provider_utils import get_provider_for_model
 from ..utils.schema_filter import build_filtered_ui_response
-from ..utils.stream_utils import (
-    JsonLevel2TextExtractor,
-    JsonReasoningExtractor,
-    JsonTextExtractor,
-    JsonUIIntroTextExtractor,
-)
+from ..utils.stream_utils import JsonPathExtractor
 
 
 _STREAMABLE_FORMATS = frozenset({"plain", "voice", "formatted_text"})
@@ -121,7 +116,7 @@ async def _stream_and_collect(
     model: str,
     response_model: type,
     previous_response_id: str | None,
-    extractor: JsonTextExtractor | JsonLevel2TextExtractor | JsonReasoningExtractor,
+    extractor: JsonPathExtractor,
     on_chunk: Callable[[str], Awaitable[None]] | None = None,
     response_id_out: list[str] | None = None,
     max_output_tokens: int | None = None,
@@ -285,7 +280,7 @@ Create a complete, well-formatted response in the specified format."""
             model=model,
             response_model=response_model,
             previous_response_id=previous_response_id,
-            extractor=JsonTextExtractor(),
+            extractor=JsonPathExtractor(["text"]),
             on_chunk=on_stream,
             response_id_out=response_id_out,
         )
@@ -327,7 +322,7 @@ Create a complete, well-formatted response in the specified format."""
             model=model,
             response_model=response_model,
             previous_response_id=previous_response_id,
-            extractor=JsonLevel2TextExtractor(),
+            extractor=JsonPathExtractor(["level2_answer", "text", "text"]),
             on_chunk=_on_chunk_l2,
         )
         parsed_l2 = parse_assembled_stream(full_json_l2, model, Level2Response)
@@ -365,7 +360,7 @@ Create a complete, well-formatted response in the specified format."""
 
         extra_extractors_ui = None
         if response_format == "ui_answer":
-            _intro_extractor = JsonUIIntroTextExtractor()
+            _intro_extractor = JsonPathExtractor(["ui_answer", "intro_text", "text"])
 
             async def _on_chunk_intro(chunk: str) -> None:
                 await on_stream_event("stream_delta", chunk)  # type: ignore[misc]
@@ -379,7 +374,7 @@ Create a complete, well-formatted response in the specified format."""
             model=model,
             response_model=response_model,
             previous_response_id=previous_response_id,
-            extractor=JsonReasoningExtractor(),
+            extractor=JsonPathExtractor(["sgr", "reasoning"]),
             on_chunk=_on_chunk_ui,
             response_id_out=response_id_out_ui,
             max_output_tokens=config.UI_STREAM_MAX_OUTPUT_TOKENS,
