@@ -15,14 +15,14 @@ Pricing (as of 2025):
 """
 
 import logging
-import os
 from typing import Any
 from openai import AsyncOpenAI
+from app.config import settings
 
 
 logger = logging.getLogger(__name__)
 
-VECTOR_STORE_ID = os.getenv("OPENAI_VECTOR_STORE_ID")
+VECTOR_STORE_ID = settings.openai_vector_store_id
 
 
 async def document_search_tool(
