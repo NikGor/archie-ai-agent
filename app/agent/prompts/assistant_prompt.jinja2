@@ -12,6 +12,8 @@ date format: {{ state.date_format }}
 time format: {{ state.time_format }}
 commercial holidays: {{ state.commercial_holidays }}
 check open now: {{ state.commercial_check_open_now }}
+{% if state.spotify %}spotify: {% if state.spotify.is_playing %}playing "{{ state.spotify.track_title|safe }}" by {{ state.spotify.track_artist|safe }} ({{ state.spotify.progress_seconds }}s in, volume {{ state.spotify.volume }}%, shuffle {{ state.spotify.shuffle }}, repeat {{ state.spotify.repeat }}){% else %}nothing playing{% endif %}
+{% endif %}
 user preferences:
 	transport: {{ state.transport_preferences|join(', ') }}
 	cuisine: {{ state.cuisine_preferences|join(', ') }}
