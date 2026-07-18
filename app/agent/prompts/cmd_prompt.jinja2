@@ -11,6 +11,8 @@ You are analyzing user input to make routing and tool execution decisions.
 - Language: {{ state.language }} (always respond in the same language the user writes in, not in button/tool language)
 - Measurement Units: {{ state.measurement_units }}
 - Currency: {{ state.currency }}
+{% if state.spotify %}- Spotify: {% if state.spotify.is_playing %}playing "{{ state.spotify.track_title|safe }}" by {{ state.spotify.track_artist|safe }} ({{ state.spotify.progress_seconds }}s in, volume {{ state.spotify.volume }}%, shuffle {{ state.spotify.shuffle }}, repeat {{ state.spotify.repeat }}){% else %}nothing playing{% endif %} — this is ONLY the current playback status. It does NOT include the queue, library, top tracks, or search results. For any question about what's next, saved tracks, top tracks/artists, or search — you MUST still call spotify_tool with the matching action (get_queue, get_saved_tracks, get_top_tracks, get_top_artists, search).
+{% endif %}
 
 # Your Task
 Analyze the user's request and decide on the next action:
