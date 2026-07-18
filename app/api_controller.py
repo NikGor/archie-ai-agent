@@ -40,6 +40,7 @@ async def handle_chat(
         previous_response_id=user_request.previous_message_id,
         chat_history=user_request.chat_history,
         user_name=user_request.user_name,
+        conversation_id=user_request.conversation_id,
         no_image=no_image,
         on_status=on_status,
         on_stream=on_stream,
