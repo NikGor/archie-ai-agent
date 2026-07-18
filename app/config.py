@@ -27,10 +27,21 @@ class Settings(BaseSettings):
     redis_port: int = 6379
     redis_db: int = 0
 
+    # Session-scoped tool result cache (ARCHIE-157)
+    tool_result_cache_enabled: bool = False
+    tool_result_cache_ttl: int = 3600
+    tool_result_cache_max_items: int = 20
+
     # Google integrations
     google_calendar_credentials_file: str = "credentials.json"
     google_places_api_key: str | None = None
     google_api_key: str | None = None
+
+    # Spotify integration
+    spotify_client_id: str | None = None
+    spotify_client_secret: str | None = None
+    spotify_refresh_token: str | None = None
+    spotify_redirect_uri: str = "http://127.0.0.1:8888/callback"
 
     # OpenAI vector store (document search)
     openai_vector_store_id: str | None = None
