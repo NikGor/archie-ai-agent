@@ -1,5 +1,6 @@
 """State service for managing user and application state."""
 
+import asyncio
 import json
 import logging
 from datetime import datetime
@@ -7,10 +8,13 @@ from typing import Any
 import redis
 import redis.asyncio as aioredis
 from ..config import DEFAULT_STATE_CONFIG, settings
-from ..models.state_models import UserState
+from ..models.state_models import SpotifyPlaybackState, UserState
+from .spotify_client import get_spotify_client
 
 
 logger = logging.getLogger(__name__)
+
+SPOTIFY_CONTEXT_TIMEOUT_SECONDS = 3.0
 
 
 class StateService:
@@ -55,14 +59,46 @@ class StateService:
             "commercial_check_open_now": True,
         }
 
-    async def get_user_state(self) -> UserState:
-        """Get complete user state for prompt context."""
+    async def _get_spotify_context(self) -> SpotifyPlaybackState | None:
+        """Fetches ambient Spotify playback context for injection into every LLM call.
+
+        Never raises: any failure (missing credentials, timeout, API error) degrades
+        to None so a Spotify outage never blocks an unrelated chat turn.
+        """
+        try:
+            client = get_spotify_client()
+            state = await asyncio.wait_for(
+                client.get_playback_state(), timeout=SPOTIFY_CONTEXT_TIMEOUT_SECONDS
+            )
+        except Exception as e:
+            logger.warning(
+                f"state_service_warn_001: Could not fetch Spotify context: \033[33m{e}\033[0m"
+            )
+            return None
+
+        if not state:
+            return SpotifyPlaybackState(is_playing=False)
+        track = state.get("current_track") or {}
+        return SpotifyPlaybackState(
+            is_playing=state.get("is_playing", False),
+            track_title=track.get("title"),
+            track_artist=track.get("artist"),
+            progress_seconds=state.get("progress_seconds", 0),
+            volume=state.get("volume", 50),
+            shuffle=state.get("shuffle", False),
+            repeat=state.get("repeat", "off"),
+        )
+
+    async def get_user_state(self, demo_mode: bool = False) -> UserState:
+        """Get complete user state for prompt context, including ambient Spotify playback."""
+        spotify_context = None if demo_mode else await self._get_spotify_context()
+
         if not self.user_name:
             logger.info(
                 "state_service_002: No user_name provided, returning default state"
             )
             data = self._get_default_state()
-            return UserState(**data)
+            return UserState(**data, spotify=spotify_context)
 
         redis_key = f"user_state:name:{self.user_name}"
         logger.info(
@@ -76,7 +112,7 @@ class StateService:
                     f"state_service_004: No data found in Redis for key: {redis_key}, using default"
                 )
                 data = self._get_default_state()
-                return UserState(**data)
+                return UserState(**data, spotify=spotify_context)
 
             user_data = json.loads(user_data_json)
             logger.info(
@@ -87,15 +123,15 @@ class StateService:
                 **default_data,
                 **{k: v for k, v in user_data.items() if v is not None},
             }
-            return UserState(**merged)
+            return UserState(**merged, spotify=spotify_context)
 
         except redis.RedisError as e:
             logger.error(f"state_service_error_001: Redis error: \033[31m{e}\033[0m")
             data = self._get_default_state()
-            return UserState(**data)
+            return UserState(**data, spotify=spotify_context)
         except json.JSONDecodeError as e:
             logger.error(
                 f"state_service_error_002: JSON decode error: \033[31m{e}\033[0m"
             )
             data = self._get_default_state()
-            return UserState(**data)
+            return UserState(**data, spotify=spotify_context)
