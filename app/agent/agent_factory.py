@@ -5,6 +5,7 @@ from ..backend.gemini_client import GeminiClient
 from ..backend.openai_client import OpenAIClient
 from ..backend.openrouter_client import OpenRouterClient
 from ..backend.state_service import StateService
+from ..backend.tool_result_store import ToolResultStore
 from ..config import MAX_COMMAND_ITERATIONS
 from ..models.orchestration_sgr import DecisionResponse
 from ..models.output_models import AgentResponse
@@ -50,6 +51,8 @@ class AgentFactory:
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.tool_factory = tool_factory or ToolFactory(demo_mode=demo_mode)
         self.state_service = state_service or StateService()
+        self.tool_result_store = ToolResultStore()
+        self.demo_mode = demo_mode
         self.clients: dict[str, OpenAIClient | OpenRouterClient | GeminiClient] = {
             "openai": self.openai_client,
             "openrouter": self.openrouter_client,
@@ -163,6 +166,7 @@ class AgentFactory:
         previous_response_id: str | None = None,
         chat_history: str | None = None,
         user_name: str | None = None,
+        conversation_id: str | None = None,
         no_image: bool = False,
         on_status: StatusCallback = None,
         on_stream: StreamCallback = None,
@@ -188,7 +192,7 @@ class AgentFactory:
             logger.info(
                 f"agent_factory_001c: Set user_name: \033[35m{user_name}\033[0m"
             )
-        user_state = await self.state_service.get_user_state()
+        user_state = await self.state_service.get_user_state(demo_mode=self.demo_mode)
         persona_key = user_state.persona
         logger.info(f"agent_factory_002: Persona: \033[35m{persona_key}\033[0m")
         logger.info(f"agent_factory_003: Format: \033[36m{response_format}\033[0m")
@@ -216,7 +220,12 @@ class AgentFactory:
                 on_stream_event=on_stream_event,
             )
 
-        tool_results = []
+        # Seed with results persisted from earlier requests in this conversation
+        # so Stage 1, Stage 3 and the summary all see prior tool context.
+        persisted_results = await self.tool_result_store.load(
+            conversation_id, user_name
+        )
+        tool_results = list(persisted_results)
         command_history = []
         stage1_duration_ms = 0
         stage1_llm_traces: list[LllmTrace] = []
@@ -316,6 +325,7 @@ class AgentFactory:
             logger.warning(
                 f"agent_factory_warning_002: Reached max iterations ({MAX_COMMAND_ITERATIONS})"
             )
+        await self.tool_result_store.save(conversation_id, user_name, tool_results)
         command_summary = _format_command_summary(command_history, len(tool_results))
         ui_intents: list[str] = (
             [str(i) for i in decision.sgr.intents] if decision else []
