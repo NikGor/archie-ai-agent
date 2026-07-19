@@ -160,8 +160,8 @@ class AgentFactory:
     async def arun(
         self,
         messages: list[dict[str, str]],
-        command_model: str = "gpt-4.1",
-        final_output_model: str = "gpt-4.1",
+        command_model: str = "gpt-5.6-luna",
+        final_output_model: str = "gpt-5.6-luna",
         response_format: str = "plain",
         previous_response_id: str | None = None,
         chat_history: str | None = None,
