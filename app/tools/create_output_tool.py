@@ -160,7 +160,7 @@ async def create_output(  # noqa: PLR0912
     command_summary: str,
     tool_results: list[ToolResult] | None = None,
     response_format: str = "plain",
-    model: str = "gpt-4.1",
+    model: str = "gpt-5.6-luna",
     state: dict | None = None,
     previous_response_id: str | None = None,
     chat_history: str | None = None,
