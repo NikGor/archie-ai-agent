@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 MAX_COMMAND_ITERATIONS = 3
 
-# gpt-4.1 supports up to 32768 output tokens; verbose UI answers (e.g. multi-month
+# gpt-5.6-luna supports up to 128000 output tokens; verbose UI answers (e.g. multi-month
 # weather breakdowns) can exceed the previous 16000 cap and get truncated mid-JSON.
 UI_STREAM_MAX_OUTPUT_TOKENS = 32000
 
@@ -82,6 +82,7 @@ DEFAULT_STATE_CONFIG = {
 
 MODEL_PROVIDERS = {
     "openai": [
+        "gpt-5.6-luna",
         "gpt-4.1",
         "gpt-4.1-mini",
         "gpt-4.1-nano",
@@ -124,6 +125,7 @@ MODEL_PROVIDERS = {
 # Models not listed return 0.0 from calculate_token_cost() in llm_parser.py
 MODEL_TOKEN_PRICES: dict[str, dict[str, float]] = {
     # OpenAI — platform.openai.com/docs/pricing
+    "gpt-5.6-luna": {"input": 1.00, "output": 6.00},
     "gpt-4.1": {"input": 2.00, "output": 8.00},
     "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
     "gpt-4.1-nano": {"input": 0.10, "output": 0.40},
