@@ -29,8 +29,8 @@ async def handle_chat(
         f"no_image: \033[35m{no_image}\033[0m"
     )
     current_messages = [{"role": "user", "content": user_request.input}]
-    command_model = user_request.command_model or "gpt-4.1"
-    final_output_model = user_request.final_output_model or "gpt-4.1"
+    command_model = user_request.command_model or "gpt-5.6-luna"
+    final_output_model = user_request.final_output_model or "gpt-5.6-luna"
     agent_factory = AgentFactory(demo_mode=user_request.demo_mode)
     agent_response = await agent_factory.arun(
         messages=current_messages,
