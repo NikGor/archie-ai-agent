@@ -1,5 +1,6 @@
 """Spotify Web API client with automatic access token refresh."""
 
+import asyncio
 import datetime
 import logging
 from typing import Any
@@ -12,6 +13,8 @@ logger = logging.getLogger(__name__)
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 API_BASE_URL = "https://api.spotify.com/v1"
 TOKEN_EXPIRY_BUFFER_SECONDS = 60
+PREFERRED_DEVICE_NAME = "Archie Web Player"
+DEVICE_ACTIVATION_SETTLE_SECONDS = 1.0
 
 
 class SpotifyAuthError(Exception):
@@ -36,7 +39,6 @@ class SpotifyClient:
         self.refresh_token = refresh_token or settings.spotify_refresh_token
         self._access_token: str | None = None
         self._token_expiry: datetime.datetime | None = None
-        self._user_id: str | None = None
 
     async def _get_access_token(self) -> str:
         """Returns a cached access token, refreshing it if missing or expired."""
@@ -80,8 +82,15 @@ class SpotifyClient:
         logger.info("spotify_client_001: Refreshed access token")
         return access_token
 
-    async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
-        """Sends an authenticated request to the Spotify Web API."""
+    async def _request(
+        self, method: str, path: str, _retry_on_no_device: bool = True, **kwargs: Any
+    ) -> httpx.Response:
+        """Sends an authenticated request to the Spotify Web API.
+
+        On NO_ACTIVE_DEVICE, tries once to auto-activate a device and retries the
+        request — the user shouldn't have to manually select a Spotify Connect
+        device before a playback command works.
+        """
         token = await self._get_access_token()
         headers = {"Authorization": f"Bearer {token}"}
         async with httpx.AsyncClient(base_url=API_BASE_URL) as client:
@@ -90,9 +99,64 @@ class SpotifyClient:
         if response.status_code == 404:
             body = response.json() if response.content else {}
             if body.get("error", {}).get("reason") == "NO_ACTIVE_DEVICE":
+                if _retry_on_no_device and await self._activate_device():
+                    # Spotify's device-activation state is eventually consistent —
+                    # retrying immediately can still 404 as NO_ACTIVE_DEVICE.
+                    await asyncio.sleep(DEVICE_ACTIVATION_SETTLE_SECONDS)
+                    async with httpx.AsyncClient(base_url=API_BASE_URL) as client:
+                        response = await client.request(
+                            method, path, headers=headers, timeout=30.0, **kwargs
+                        )
+                    if response.status_code == 404:
+                        retry_body = response.json() if response.content else {}
+                        if retry_body.get("error", {}).get("reason") == "NO_ACTIVE_DEVICE":
+                            raise SpotifyNoActiveDeviceError("No active Spotify device found")
+                    return response
                 raise SpotifyNoActiveDeviceError("No active Spotify device found")
 
         return response
+
+    async def _activate_device(self) -> bool:
+        """Transfers playback to an available device. Returns True if one was activated.
+
+        Prefers a device named PREFERRED_DEVICE_NAME (our own web player), falling
+        back to whichever device Spotify lists first.
+        """
+        try:
+            devices_response = await self._request(
+                "GET", "/me/player/devices", _retry_on_no_device=False
+            )
+            devices_response.raise_for_status()
+            devices = devices_response.json().get("devices", [])
+        except Exception as e:
+            logger.warning(
+                f"spotify_client_warn_001: \033[33mCould not list devices for auto-activation: {e}\033[0m"
+            )
+            return False
+
+        if not devices:
+            return False
+
+        device = next(
+            (d for d in devices if d.get("name") == PREFERRED_DEVICE_NAME), devices[0]
+        )
+
+        try:
+            transfer_response = await self._request(
+                "PUT",
+                "/me/player",
+                _retry_on_no_device=False,
+                json={"device_ids": [device["id"]], "play": True},
+            )
+            transfer_response.raise_for_status()
+        except Exception as e:
+            logger.warning(f"spotify_client_warn_002: \033[33mDevice transfer failed: {e}\033[0m")
+            return False
+
+        logger.info(
+            f"spotify_client_002: \033[32mActivated device '{device.get('name')}' ({device['id']})\033[0m"
+        )
+        return True
 
     async def search_tracks(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
         """Searches Spotify for tracks matching the query."""
@@ -251,23 +315,15 @@ class SpotifyClient:
         response.raise_for_status()
         return [_artist_to_dict(item) for item in response.json().get("items", [])]
 
-    async def get_current_user_id(self) -> str:
-        """Returns (and caches) the current user's Spotify ID."""
-        if self._user_id:
-            return self._user_id
-        response = await self._request("GET", "/me")
-        response.raise_for_status()
-        user_id: str = response.json()["id"]
-        self._user_id = user_id
-        return user_id
+    async def create_playlist(self, name: str, description: str = "") -> dict[str, Any]:
+        """Creates a new playlist for the current user.
 
-    async def create_playlist(
-        self, user_id: str, name: str, description: str = ""
-    ) -> dict[str, Any]:
-        """Creates a new playlist for the given user."""
+        Uses POST /me/playlists — the legacy POST /users/{user_id}/playlists
+        endpoint is deprecated and returns 403 for Development Mode apps.
+        """
         response = await self._request(
             "POST",
-            f"/users/{user_id}/playlists",
+            "/me/playlists",
             json={"name": name, "description": description, "public": True},
         )
         response.raise_for_status()
@@ -279,9 +335,13 @@ class SpotifyClient:
         }
 
     async def add_tracks_to_playlist(self, playlist_id: str, track_uris: list[str]) -> None:
-        """Adds tracks to an existing playlist."""
+        """Adds tracks to an existing playlist.
+
+        Uses POST /playlists/{id}/items — the legacy /playlists/{id}/tracks
+        endpoint is deprecated and returns 403 for Development Mode apps.
+        """
         response = await self._request(
-            "POST", f"/playlists/{playlist_id}/tracks", json={"uris": track_uris}
+            "POST", f"/playlists/{playlist_id}/items", json={"uris": track_uris}
         )
         response.raise_for_status()
 
