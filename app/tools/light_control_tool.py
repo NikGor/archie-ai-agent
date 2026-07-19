@@ -102,7 +102,7 @@ Generate 2 follow-up action buttons.
 """
     try:
         response = openai_client.beta.chat.completions.parse(
-            model="gpt-4.1-nano",
+            model="gpt-5.6-luna",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
