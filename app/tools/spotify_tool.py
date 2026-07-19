@@ -36,6 +36,19 @@ class PlaylistSeedQueries(BaseModel):
     queries: list[str] = Field(description="5-15 Spotify search queries matching the theme")
 
 
+class PlaybackRequestClassification(BaseModel):
+    """Classifies a free-form playback request as a specific track or a mood/theme."""
+
+    kind: str = Field(
+        description="'track' if the request names a specific song and/or artist, "
+        "'theme' if it describes a mood, genre, activity, or is otherwise vague"
+    )
+    normalized_query: str = Field(
+        description="For 'track': a concise 'artist - title' search string. "
+        "For 'theme': a short theme description suitable for building a playlist."
+    )
+
+
 _FALLBACK_COMMENTS = {
     "play": "Now playing something good.",
     "pause": "Taking a break.",
@@ -53,7 +66,7 @@ def generate_dj_comment(action: str, context: dict[str, Any]) -> str:
     """Generates a short witty DJ comment for the given action using an LLM."""
     try:
         response = openai_client.beta.chat.completions.parse(
-            model="gpt-4.1-nano",
+            model="gpt-5.6-luna",
             messages=[
                 {
                     "role": "system",
@@ -76,6 +89,41 @@ def generate_dj_comment(action: str, context: dict[str, Any]) -> str:
         return _FALLBACK_COMMENTS.get(action, "Enjoy the music.")
 
 
+def classify_playback_request(request: str) -> PlaybackRequestClassification:
+    """Classifies a free-form music request as a specific track or a mood/theme, via LLM.
+
+    Falls back to treating the request as a literal track search on LLM failure —
+    the existing 'no track found' handling in the 'play' action already degrades
+    that case to a themed playlist.
+    """
+    try:
+        response = openai_client.beta.chat.completions.parse(
+            model="gpt-5.6-luna",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Classify the user's music request. kind='track' ONLY if it names "
+                    "a specific song title (optionally with an artist) — then normalized_query is "
+                    "a concise 'artist - title' search string. Otherwise kind='theme', including "
+                    "requests that only name an artist/genre/mood/activity without a specific song "
+                    "(e.g. 'something by Ozzy', 'play some jazz') — normalized_query is a short "
+                    "theme description.",
+                },
+                {"role": "user", "content": request},
+            ],
+            response_format=PlaybackRequestClassification,
+        )
+        result = response.choices[0].message.parsed
+        if result is None:
+            raise ValueError("spotify_tool_error_004: No parsed classification from LLM")
+        return result
+    except Exception as e:
+        logger.warning(
+            f"spotify_tool_warn_005: Playback request classification failed: \033[33m{e}\033[0m"
+        )
+        return PlaybackRequestClassification(kind="track", normalized_query=request)
+
+
 async def build_thematic_playlist(
     theme: str, duration_minutes: int, client: SpotifyClient
 ) -> dict[str, Any]:
@@ -86,12 +134,17 @@ async def build_thematic_playlist(
     )
     try:
         response = openai_client.beta.chat.completions.parse(
-            model="gpt-4.1-nano",
+            model="gpt-5.6-luna",
             messages=[
                 {
                     "role": "system",
                     "content": f"Generate {query_count} diverse Spotify search queries "
-                    "(track or artist names) that fit the given playlist theme.",
+                    "(track or artist names) that fit the given playlist theme. If the theme "
+                    "is vague or broad (e.g. just an artist name, a generic mood, or otherwise "
+                    "unspecific), prefer lesser-known, deeper-cut tracks over the most obvious "
+                    "hits — hidden gems make for a more interesting playlist. If the theme is "
+                    "already specific (particular era, sub-genre, activity, etc.), follow it "
+                    "literally instead.",
                 },
                 {"role": "user", "content": f"Theme: {theme}"},
             ],
@@ -119,9 +172,21 @@ async def build_thematic_playlist(
             total_seconds += track["duration_seconds"]
             break
 
-    user_id = await client.get_current_user_id()
-    playlist = await client.create_playlist(user_id, name=f"Archie DJ: {theme}")
+    playlist = await client.create_playlist(name=f"Archie DJ: {theme}")
     await client.add_tracks_to_playlist(playlist["playlist_id"], [t["uri"] for t in tracks])
+
+    # The user only expressed a mood/theme, not a track to play — so beyond saving
+    # the playlist, queue every track for immediate playback ("open" the playlist)
+    # instead of leaving the user to find and start it themselves.
+    queued = False
+    try:
+        for track in tracks:
+            await client.add_to_queue(track["uri"])
+        queued = True
+    except SpotifyNoActiveDeviceError:
+        logger.warning(
+            "spotify_tool_warn_004: \033[33mNo active Spotify device — playlist saved but not queued\033[0m"
+        )
 
     return {
         "success": True,
@@ -131,6 +196,7 @@ async def build_thematic_playlist(
         "playlist_url": playlist["playlist_url"],
         "tracks": tracks,
         "track_count": len(tracks),
+        "queued": queued,
     }
 
 
@@ -173,6 +239,7 @@ def _demo_response(action: str, query: str | None, theme: str | None) -> dict[st
             "playlist_url": None,
             "tracks": [demo_track],
             "track_count": 1,
+            "queued": True,
         }
     if action in ("play", "pause", "next", "previous"):
         return {
@@ -229,11 +296,17 @@ async def spotify_tool(  # noqa: PLR0911, PLR0912
         action: One of: search, play, pause, next, previous, get_current, build_playlist,
             save_track, remove_saved_track, get_saved_tracks, get_top_tracks, get_top_artists,
             queue_add, get_queue, set_volume, set_shuffle, set_repeat, seek
-        query: Search query (required for 'search'; used to pick a track for 'play'/'queue_add' if track_uri is absent)
+        query: Search query for 'search' (returns a list, no playback). For 'play', pass any
+            free-form request here instead of a precise title — a specific song/artist
+            ("Believer by Imagine Dragons") is searched and played directly; a mood/genre/activity
+            request ("что-нибудь для вечерней пробежки") is turned into a themed playlist that gets
+            saved and queued for immediate playback. If a specific-sounding request finds no match,
+            it also falls back to a themed playlist instead of failing. Also used to pick a track
+            for 'queue_add' if track_uri is absent.
         track_uri: Spotify track/context URI (optional for 'play' - omit to resume current context;
             required for 'save_track'/'remove_saved_track' if query is absent)
         theme: Playlist theme/mood description (required for 'build_playlist', e.g. "chill Sunday morning jazz")
-        duration_minutes: Target playlist length in minutes for 'build_playlist' (default 30)
+        duration_minutes: Target playlist length in minutes for 'play' (theme fallback) and 'build_playlist' (default 30)
         volume_percent: Volume level 0-100 (required for 'set_volume')
         shuffle: True/False to enable/disable shuffle (required for 'set_shuffle')
         repeat_mode: One of 'track', 'context', 'off' (required for 'set_repeat')
@@ -274,9 +347,18 @@ async def spotify_tool(  # noqa: PLR0911, PLR0912
             if track_uri:
                 await client.play(track_uris=[track_uri])
             elif query:
-                found = await client.search_tracks(query, limit=1)
+                classification = classify_playback_request(query)
+                if classification.kind == "theme":
+                    playlist_result = await build_thematic_playlist(
+                        classification.normalized_query, duration_minutes, client
+                    )
+                    return {**playlist_result, "action": "play", "fallback": "theme"}
+                found = await client.search_tracks(classification.normalized_query, limit=1)
                 if not found:
-                    return {"success": False, "message": f"No tracks found for: {query}"}
+                    # Looked like a specific track but nothing matched — build a themed
+                    # playlist from the same request instead of just failing outright.
+                    playlist_result = await build_thematic_playlist(query, duration_minutes, client)
+                    return {**playlist_result, "action": "play", "fallback": "no_track_match"}
                 played_track = found[0]
                 await client.play(track_uris=[played_track["uri"]])
             else:
