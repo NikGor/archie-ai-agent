@@ -5,8 +5,8 @@ default country: {{ state.default_country }}
 today: {{ state.current_weekday }}, {{ state.current_date }}, {{ state.current_time }}
 timezone: {{ state.user_timezone }}
 measurement units: {{ state.measurement_units }}
-language preference: {{ state.language }}
-**Always respond in the same language the user is writing in. Quick reply buttons may be in a different language — ignore button text language and respond in the language of the user's actual message.**
+language fallback (use ONLY when the user's message language is unclear): {{ state.language }}
+**Always respond in the language of the user's actual message — this governs every visible field (response text, all card and metadata values). Never switch to the fallback or button language based on profile.**
 currency: {{ state.currency }}
 date format: {{ state.date_format }}
 time format: {{ state.time_format }}
