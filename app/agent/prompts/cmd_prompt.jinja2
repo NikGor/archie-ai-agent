@@ -8,7 +8,7 @@ You are analyzing user input to make routing and tool execution decisions.
 - Weekday: {{ state.current_weekday }}
 - Timezone: {{ state.user_timezone }}
 - Location: {{ state.default_city }}, {{ state.default_country }}
-- Language: {{ state.language }} (always respond in the same language the user writes in, not in button/tool language)
+- Language: respond in the language of the user's current message. {{ state.language }} is only a fallback default when the message language is unclear. Never switch to it based on profile or button/tool language.
 - Measurement Units: {{ state.measurement_units }}
 - Currency: {{ state.currency }}
 {% if state.spotify %}- Spotify: {% if state.spotify.is_playing %}playing "{{ state.spotify.track_title|safe }}" by {{ state.spotify.track_artist|safe }} ({{ state.spotify.progress_seconds }}s in, volume {{ state.spotify.volume }}%, shuffle {{ state.spotify.shuffle }}, repeat {{ state.spotify.repeat }}){% else %}nothing playing{% endif %} — this is ONLY the current playback status. It does NOT include the queue, library, top tracks, or search results. For any question about what's next, saved tracks, top tracks/artists, or search — you MUST still call spotify_tool with the matching action (get_queue, get_saved_tracks, get_top_tracks, get_top_artists, search).
@@ -22,9 +22,11 @@ Analyze the user's request and decide on the next action:
 4. For missing parameters: list what information you need from the user
 
 # Decision Types
-- **function_call**: Execute one or more tools to gather information. Use only when NO previous tool results exist.
+- **function_call**: Execute one or more tools to gather information. Use when no tool results exist yet, OR when existing results do not fully cover the request and a new call with adjusted arguments can fill the gap.
 - **parameters_request**: Ask user for missing required parameters
-- **final_response**: Proceed directly to generating the final answer. Use when tool results are already available OR no tools needed.
+- **final_response**: Proceed directly to generating the final answer. Use when existing tool results fully cover the request, OR no tools needed.
+
+**NEVER** use final_response or parameters_request to ask the user whether to search or to offer a search. If the request needs real-time or factual data (see list below) and no tool results exist yet, you MUST choose function_call and search now — deciding to search is your job, not the user's.
 
 # When to use tools vs internal knowledge
 ALWAYS use a search tool (google_search_tool, google_places_search_tool, etc.) for:
@@ -56,7 +58,7 @@ When in doubt — search. A redundant search is far better than a hallucinated a
 - Always pay special attention to the current date and current year
 - For smart-home intents (lights, climate): always call the relevant tool with inferred parameters
 - For smart home tools (lights, climate): prefer inferring missing parameters from context rather than asking user. E.g., 'сделай теплее' → decrease color_temp by 500K, 'ярче' → increase brightness by 20%
-- IMPORTANT: If you see "Previous Tool Results" in context, the tool has already been executed. Choose **final_response** to present results to user. Do NOT call the same tool again.
+- IMPORTANT: If "Previous Tool Results" fully answer the request, choose **final_response**. Never repeat an identical call that returned the same data. But if the results are incomplete for the requested scope (e.g. a 7-day forecast returned only today), issue a new **function_call** with adjusted arguments to fetch the missing part.
 
 # UI Intents (for response_format=ui_answer only)
 Fill `sgr.intents` with relevant intents from this list. Leave empty for base UI only (Card, Text, Table, Image).
