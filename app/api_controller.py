@@ -4,6 +4,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from archie_shared.chat.models import ChatMessage, ChatRequest
 from .agent.agent_factory import AgentFactory
+from .config import DEFAULT_MODEL
 from .models.ws_models import StatusUpdate, StreamCallback, StreamEventCallback
 from .utils.general_utils import generate_message_id
 
@@ -29,8 +30,8 @@ async def handle_chat(
         f"no_image: \033[35m{no_image}\033[0m"
     )
     current_messages = [{"role": "user", "content": user_request.input}]
-    command_model = user_request.command_model or "gpt-5.6-luna"
-    final_output_model = user_request.final_output_model or "gpt-5.6-luna"
+    command_model = user_request.command_model or DEFAULT_MODEL
+    final_output_model = user_request.final_output_model or DEFAULT_MODEL
     agent_factory = AgentFactory(demo_mode=user_request.demo_mode)
     agent_response = await agent_factory.arun(
         messages=current_messages,

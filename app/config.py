@@ -7,6 +7,8 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 MAX_COMMAND_ITERATIONS = 3
 
+DEFAULT_MODEL = "gpt-5.6-luna"
+
 # gpt-5.6-luna supports up to 128000 output tokens; verbose UI answers (e.g. multi-month
 # weather breakdowns) can exceed the previous 16000 cap and get truncated mid-JSON.
 UI_STREAM_MAX_OUTPUT_TOKENS = 32000

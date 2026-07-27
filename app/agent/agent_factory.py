@@ -5,7 +5,7 @@ from ..backend.openai_client import OpenAIClient
 from ..backend.openrouter_client import OpenRouterClient
 from ..backend.state_service import StateService
 from ..backend.tool_result_store import ToolResultStore
-from ..config import MAX_COMMAND_ITERATIONS
+from ..config import DEFAULT_MODEL, MAX_COMMAND_ITERATIONS
 from ..models.orchestration_sgr import DecisionResponse
 from ..models.output_models import AgentResponse
 from ..models.state_models import UserState
@@ -157,8 +157,8 @@ class AgentFactory:
     async def arun(
         self,
         messages: list[dict[str, str]],
-        command_model: str = "gpt-5.6-luna",
-        final_output_model: str = "gpt-5.6-luna",
+        command_model: str = DEFAULT_MODEL,
+        final_output_model: str = DEFAULT_MODEL,
         response_format: str = "plain",
         previous_response_id: str | None = None,
         chat_history: str | None = None,
