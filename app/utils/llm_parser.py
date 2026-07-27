@@ -1,14 +1,10 @@
 import json
 import logging
 from typing import Any
-from archie_shared.chat.models import (
-    Content,
-    InputTokensDetails,
-    LllmTrace,
-    OutputTokensDetails,
-)
+from archie_shared.chat.models import Content, LllmTrace
 from pydantic import BaseModel
 from ..config import MODEL_TOKEN_PRICES
+from .trace_utils import build_llm_trace
 
 
 logger = logging.getLogger(__name__)
@@ -80,16 +76,12 @@ def parse_openai_response(
     logger.info("llm_parser_001: Parsing OpenAI response")
 
     usage = raw_response.usage
-    llm_trace = LllmTrace(
+    llm_trace = build_llm_trace(
         model=raw_response.model,
         input_tokens=usage.input_tokens,
-        input_tokens_details=InputTokensDetails(
-            cached_tokens=usage.input_tokens_details.cached_tokens
-        ),
+        cached_tokens=usage.input_tokens_details.cached_tokens,
         output_tokens=usage.output_tokens,
-        output_tokens_details=OutputTokensDetails(
-            reasoning_tokens=usage.output_tokens_details.reasoning_tokens
-        ),
+        reasoning_tokens=usage.output_tokens_details.reasoning_tokens,
         total_tokens=usage.total_tokens,
         total_cost=calculate_token_cost(
             raw_response.model, usage.input_tokens, usage.output_tokens
@@ -192,12 +184,12 @@ def parse_openrouter_response(
         _extract_openrouter_usage(raw_response)
     )
     openrouter_model = raw_response.model or "unknown"
-    llm_trace = LllmTrace(
+    llm_trace = build_llm_trace(
         model=openrouter_model,
         input_tokens=input_tokens,
-        input_tokens_details=InputTokensDetails(cached_tokens=cached_tokens),
+        cached_tokens=cached_tokens,
         output_tokens=output_tokens,
-        output_tokens_details=OutputTokensDetails(reasoning_tokens=reasoning_tokens),
+        reasoning_tokens=reasoning_tokens,
         total_tokens=total_tokens,
         total_cost=calculate_token_cost(openrouter_model, input_tokens, output_tokens),
     )
@@ -274,12 +266,10 @@ def parse_assembled_stream(
     logger.info(
         f"llm_parser_012: Parsed stream content type: \033[36m{type(parsed_content).__name__}\033[0m"
     )
-    llm_trace = LllmTrace(
+    llm_trace = build_llm_trace(
         model=model,
         input_tokens=0,
-        input_tokens_details=InputTokensDetails(cached_tokens=0),
         output_tokens=0,
-        output_tokens_details=OutputTokensDetails(reasoning_tokens=0),
         total_tokens=0,
         total_cost=0.0,
     )
