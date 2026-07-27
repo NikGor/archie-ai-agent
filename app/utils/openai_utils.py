@@ -1,7 +1,6 @@
 import logging
 from collections.abc import Callable
 from typing import Any
-from archie_shared.chat.models import InputTokensDetails, LllmTrace, OutputTokensDetails
 from pydantic import BaseModel
 from app.utils.tools_utils import openai_responses_parse
 
@@ -43,22 +42,3 @@ def build_openai_args(
         )
 
     return args
-
-
-def create_llm_trace_from_openai_response(
-    raw_response: Any, total_cost: float = 0.0
-) -> LllmTrace:
-    usage = raw_response.usage
-    return LllmTrace(
-        model=raw_response.model,
-        input_tokens=usage.input_tokens,
-        input_tokens_details=InputTokensDetails(
-            cached_tokens=usage.input_tokens_details.cached_tokens
-        ),
-        output_tokens=usage.output_tokens,
-        output_tokens_details=OutputTokensDetails(
-            reasoning_tokens=usage.output_tokens_details.reasoning_tokens
-        ),
-        total_tokens=usage.total_tokens,
-        total_cost=total_cost,
-    )
