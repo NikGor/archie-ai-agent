@@ -4,9 +4,7 @@ import json
 import logging
 import os
 from typing import Any
-
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-
 from ..models.tool_models import ToolResult
 
 
