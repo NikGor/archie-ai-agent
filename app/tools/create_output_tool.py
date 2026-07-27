@@ -7,7 +7,6 @@ from json_repair import repair_json
 from pydantic import ValidationError
 from .. import config
 from ..agent.prompt_builder import PromptBuilder
-from ..backend.gemini_client import GeminiClient
 from ..backend.openai_client import OpenAIClient
 from ..backend.openrouter_client import OpenRouterClient
 from ..models.output_models import (
@@ -42,12 +41,10 @@ logger = logging.getLogger(__name__)
 # Initialize clients once at module level
 _openai_client = OpenAIClient()
 _openrouter_client = OpenRouterClient()
-_gemini_client = GeminiClient()
 
-_clients: dict[str, OpenAIClient | OpenRouterClient | GeminiClient] = {
+_clients: dict[str, OpenAIClient | OpenRouterClient] = {
     "openai": _openai_client,
     "openrouter": _openrouter_client,
-    "gemini": _gemini_client,
 }
 
 
@@ -112,7 +109,7 @@ def _sanitize_chart_items(ui_response: UIResponse) -> None:
 
 
 async def _stream_and_collect(
-    client: OpenAIClient | OpenRouterClient | GeminiClient,
+    client: OpenAIClient | OpenRouterClient,
     messages: list[dict],
     model: str,
     response_model: type,
