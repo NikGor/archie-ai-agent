@@ -2,7 +2,39 @@
 
 import time
 
-from archie_shared.chat.models import LllmTrace, PipelineTrace, StepTrace
+from archie_shared.chat.models import (
+    InputTokensDetails,
+    LllmTrace,
+    OutputTokensDetails,
+    PipelineTrace,
+    StepTrace,
+)
+
+
+def build_llm_trace(
+    *,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    total_tokens: int,
+    total_cost: float,
+    cached_tokens: int = 0,
+    reasoning_tokens: int = 0,
+) -> LllmTrace:
+    """Build an LllmTrace from raw usage figures.
+
+    Single assembly point for the LllmTrace shape, replacing what used to be
+    duplicated construction across the OpenAI/OpenRouter/stream parsers.
+    """
+    return LllmTrace(
+        model=model,
+        input_tokens=input_tokens,
+        input_tokens_details=InputTokensDetails(cached_tokens=cached_tokens),
+        output_tokens=output_tokens,
+        output_tokens_details=OutputTokensDetails(reasoning_tokens=reasoning_tokens),
+        total_tokens=total_tokens,
+        total_cost=total_cost,
+    )
 
 
 class StepTimer:
