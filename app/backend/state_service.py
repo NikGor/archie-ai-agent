@@ -6,9 +6,9 @@ import logging
 from datetime import datetime
 from typing import Any
 import redis
-import redis.asyncio as aioredis
 from ..config import DEFAULT_STATE_CONFIG, settings
 from ..models.state_models import SpotifyPlaybackState, UserState
+from .redis_factory import get_async_redis
 from .spotify_client import get_spotify_client
 
 
@@ -22,19 +22,10 @@ class StateService:
 
     def __init__(self, user_name: str | None = None):
         self.user_name = user_name
-
-        redis_host = settings.redis_host
-        redis_port = settings.redis_port
-        redis_db = settings.redis_db
-
-        self.redis_client = aioredis.Redis(
-            host=redis_host,
-            port=redis_port,
-            db=redis_db,
-            decode_responses=True,
-        )
+        self.redis_client = get_async_redis()
         logger.info(
-            f"state_service_001: Redis connected to {redis_host}:{redis_port}/{redis_db}"
+            f"state_service_001: Redis connected to "
+            f"{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"
         )
 
     def _get_datetime_info(self) -> dict[str, str]:
@@ -97,41 +88,45 @@ class StateService:
             logger.info(
                 "state_service_002: No user_name provided, returning default state"
             )
-            data = self._get_default_state()
-            return UserState(**data, spotify=spotify_context)
+        else:
+            merged = await self._load_merged_state()
+            if merged is not None:
+                return UserState(**merged, spotify=spotify_context)
 
+        return UserState(**self._get_default_state(), spotify=spotify_context)
+
+    async def _load_merged_state(self) -> dict[str, Any] | None:
+        """Fetch persisted state for self.user_name, merged over defaults.
+
+        Returns None (caller falls back to defaults) on any cache miss or error.
+        """
         redis_key = f"user_state:name:{self.user_name}"
         logger.info(
             f"state_service_003: Fetching state from Redis key: \033[36m{redis_key}\033[0m"
         )
-
         try:
             user_data_json = await self.redis_client.get(redis_key)
             if not user_data_json:
                 logger.warning(
                     f"state_service_004: No data found in Redis for key: {redis_key}, using default"
                 )
-                data = self._get_default_state()
-                return UserState(**data, spotify=spotify_context)
+                return None
 
             user_data = json.loads(user_data_json)
             logger.info(
                 f"state_service_005: Loaded user state for: \033[35m{user_data.get('user_name')}\033[0m"
             )
             default_data = self._get_default_state()
-            merged = {
+            return {
                 **default_data,
                 **{k: v for k, v in user_data.items() if v is not None},
             }
-            return UserState(**merged, spotify=spotify_context)
 
         except redis.RedisError as e:
             logger.error(f"state_service_error_001: Redis error: \033[31m{e}\033[0m")
-            data = self._get_default_state()
-            return UserState(**data, spotify=spotify_context)
+            return None
         except json.JSONDecodeError as e:
             logger.error(
                 f"state_service_error_002: JSON decode error: \033[31m{e}\033[0m"
             )
-            data = self._get_default_state()
-            return UserState(**data, spotify=spotify_context)
+            return None

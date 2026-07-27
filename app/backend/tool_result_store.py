@@ -7,9 +7,9 @@ of earlier tool calls across separate requests within the same dialog.
 import json
 import logging
 import redis
-import redis.asyncio as aioredis
 from ..config import settings
 from ..models.tool_models import ToolResult
+from .redis_factory import get_async_redis
 
 
 logger = logging.getLogger(__name__)
@@ -22,12 +22,7 @@ class ToolResultStore:
         self.enabled = settings.tool_result_cache_enabled
         self.ttl = settings.tool_result_cache_ttl
         self.max_items = settings.tool_result_cache_max_items
-        self.redis_client = aioredis.Redis(
-            host=settings.redis_host,
-            port=settings.redis_port,
-            db=settings.redis_db,
-            decode_responses=True,
-        )
+        self.redis_client = get_async_redis()
 
     @staticmethod
     def _build_key(conversation_id: str | None, user_name: str | None) -> str | None:

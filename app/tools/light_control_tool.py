@@ -4,6 +4,7 @@ from typing import Any, Literal
 import redis
 from openai import OpenAI
 from pydantic import BaseModel, Field
+from app.backend.redis_factory import get_sync_redis
 from app.config import DEFAULT_MODEL, settings
 
 
@@ -17,12 +18,7 @@ _DEFAULT_DEVICES: dict[str, str] = {
     "bedroom_light": "light_003",
 }
 
-redis_client = redis.Redis(
-    host=settings.redis_host,
-    port=settings.redis_port,
-    db=settings.redis_db,
-    decode_responses=True,
-)
+redis_client = get_sync_redis()
 openai_client = OpenAI(api_key=settings.openai_api_key)
 
 
