@@ -1,8 +1,7 @@
 import logging
 import time
 from archie_shared.chat.models import LllmTrace
-from ..backend.openai_client import OpenAIClient
-from ..backend.openrouter_client import OpenRouterClient
+from ..backend.llm.registry import get_client
 from ..backend.state_service import StateService
 from ..backend.tool_result_store import ToolResultStore
 from ..config import DEFAULT_MODEL, MAX_COMMAND_ITERATIONS
@@ -45,17 +44,11 @@ class AgentFactory:
         state_service: StateService | None = None,
         demo_mode: bool = False,
     ):
-        self.openai_client = OpenAIClient()
-        self.openrouter_client = OpenRouterClient()
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.tool_factory = tool_factory or ToolFactory(demo_mode=demo_mode)
         self.state_service = state_service or StateService()
         self.tool_result_store = ToolResultStore()
         self.demo_mode = demo_mode
-        self.clients: dict[str, OpenAIClient | OpenRouterClient] = {
-            "openai": self.openai_client,
-            "openrouter": self.openrouter_client,
-        }
         logger.info(
             f"agent_factory_001: Initialized AgentFactory, demo_mode: \033[35m{demo_mode}\033[0m"
         )
@@ -78,7 +71,7 @@ class AgentFactory:
         `ctx` must already be gated for `provider` (see ConversationContext.for_provider).
         """
         logger.info("=== Stage 1: Command Decision ===")
-        client = self.clients[provider]
+        client = get_client(provider)
         tools = self.tool_factory.get_tool_schemas(model, response_format)
         messages = self.prompt_builder.build_command_messages(
             user_input=user_input,
