@@ -116,6 +116,12 @@ class SpotifyClient:
 
         return response
 
+    @staticmethod
+    def _ensure_ok(response: httpx.Response, ok_statuses: tuple[int, ...] = (200, 202, 204)) -> None:
+        """Raise for any status outside `ok_statuses` (playback endpoints return 200/202/204 on success)."""
+        if response.status_code not in ok_statuses:
+            response.raise_for_status()
+
     async def _activate_device(self) -> bool:
         """Transfers playback to an available device. Returns True if one was activated.
 
@@ -202,64 +208,55 @@ class SpotifyClient:
         if context_uri:
             body["context_uri"] = context_uri
         response = await self._request("PUT", "/me/player/play", json=body or None)
-        if response.status_code not in (200, 202, 204):
-            response.raise_for_status()
+        self._ensure_ok(response)
 
     async def pause(self) -> None:
         """Pauses playback."""
         response = await self._request("PUT", "/me/player/pause")
-        if response.status_code not in (200, 202, 204):
-            response.raise_for_status()
+        self._ensure_ok(response)
 
     async def next_track(self) -> None:
         """Skips to the next track."""
         response = await self._request("POST", "/me/player/next")
-        if response.status_code not in (200, 202, 204):
-            response.raise_for_status()
+        self._ensure_ok(response)
 
     async def previous_track(self) -> None:
         """Returns to the previous track."""
         response = await self._request("POST", "/me/player/previous")
-        if response.status_code not in (200, 202, 204):
-            response.raise_for_status()
+        self._ensure_ok(response)
 
     async def set_volume(self, volume_percent: int) -> None:
         """Sets playback volume (0-100)."""
         response = await self._request(
             "PUT", "/me/player/volume", params={"volume_percent": volume_percent}
         )
-        if response.status_code not in (200, 202, 204):
-            response.raise_for_status()
+        self._ensure_ok(response)
 
     async def set_shuffle(self, state: bool) -> None:
         """Toggles shuffle mode."""
         response = await self._request(
             "PUT", "/me/player/shuffle", params={"state": str(state).lower()}
         )
-        if response.status_code not in (200, 202, 204):
-            response.raise_for_status()
+        self._ensure_ok(response)
 
     async def set_repeat(self, state: str) -> None:
         """Sets repeat mode: 'track', 'context', or 'off'."""
         response = await self._request("PUT", "/me/player/repeat", params={"state": state})
-        if response.status_code not in (200, 202, 204):
-            response.raise_for_status()
+        self._ensure_ok(response)
 
     async def seek(self, position_ms: int) -> None:
         """Seeks to the given position (in milliseconds) in the current track."""
         response = await self._request(
             "PUT", "/me/player/seek", params={"position_ms": position_ms}
         )
-        if response.status_code not in (200, 202, 204):
-            response.raise_for_status()
+        self._ensure_ok(response)
 
     async def add_to_queue(self, track_uri: str) -> None:
         """Adds a track to the playback queue."""
         response = await self._request(
             "POST", "/me/player/queue", params={"uri": track_uri}
         )
-        if response.status_code not in (200, 202, 204):
-            response.raise_for_status()
+        self._ensure_ok(response)
 
     async def get_queue(self) -> dict[str, Any]:
         """Returns the currently playing track and the upcoming queue."""
