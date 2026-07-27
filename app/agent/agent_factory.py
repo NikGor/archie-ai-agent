@@ -22,6 +22,7 @@ from ..utils.llm_parser import parse_llm_response
 from ..utils.provider_utils import get_provider_for_model
 from ..utils.tool_executor import execute_tool_calls
 from ..utils.trace_utils import StepTimer, build_pipeline_trace
+from .context import ConversationContext
 from .prompt_builder import PromptBuilder
 
 
@@ -66,15 +67,15 @@ class AgentFactory:
         provider: str,
         user_state: UserState,
         response_format: str,
+        ctx: ConversationContext,
         previous_results: list[ToolResult] | None = None,
-        previous_response_id: str | None = None,
-        chat_history: str | None = None,
     ) -> tuple[DecisionResponse, LllmTrace | None]:
         """
         Stage 1: Analyze request and decide action using cmd_prompt.
 
         Returns (DecisionResponse, LllmTrace) with routing, action type, tool calls, and token usage.
         Can be called multiple times in a loop with previous_results from prior iterations.
+        `ctx` must already be gated for `provider` (see ConversationContext.for_provider).
         """
         logger.info("=== Stage 1: Command Decision ===")
         client = self.clients[provider]
@@ -85,14 +86,14 @@ class AgentFactory:
             tools=tools,
             provider=provider,
             previous_results=previous_results,
-            chat_history=chat_history,
+            chat_history=ctx.chat_history,
         )
         logger.info(f"agent_factory_008: Making command call with {provider}")
         raw_response = await client.create_completion(
             messages=messages,
             model=model,
             response_format=DecisionResponse,
-            previous_response_id=previous_response_id if provider == "openai" else None,
+            previous_response_id=ctx.previous_response_id,
         )
         parsed = parse_llm_response(
             raw_response=raw_response,
@@ -110,16 +111,17 @@ class AgentFactory:
         user_input: str,
         response_format: str,
         final_output_model: str,
-        output_provider: str,
         user_state: UserState,
         arun_start: float,
-        previous_response_id: str | None = None,
-        chat_history: str | None = None,
+        ctx: ConversationContext,
         no_image: bool = False,
         on_stream: StreamCallback = None,
         on_stream_event: StreamEventCallback = None,
     ) -> AgentResponse:
-        """Dashboard/Widget flow: skip command loop, go directly to Stage 3."""
+        """Dashboard/Widget flow: skip command loop, go directly to Stage 3.
+
+        `ctx` must already be gated for the output provider.
+        """
         logger.info(
             f"agent_factory_003b: {response_format} format - skipping command loop"
         )
@@ -131,10 +133,8 @@ class AgentFactory:
                 response_format=response_format,
                 model=final_output_model,
                 state=user_state.model_dump(),
-                previous_response_id=(
-                    previous_response_id if output_provider == "openai" else None
-                ),
-                chat_history=chat_history if output_provider != "openai" else None,
+                previous_response_id=ctx.previous_response_id,
+                chat_history=ctx.chat_history,
                 no_image=no_image,
                 on_stream=on_stream,
                 on_stream_event=on_stream_event,
@@ -180,6 +180,9 @@ class AgentFactory:
         arun_start = time.monotonic()
         cmd_provider = get_provider_for_model(command_model)
         output_provider = get_provider_for_model(final_output_model)
+        conversation_ctx = ConversationContext(
+            previous_response_id=previous_response_id, chat_history=chat_history
+        )
         logger.info(
             f"agent_factory_001b: Command: \033[34m{cmd_provider}\033[0m/\033[36m{command_model}\033[0m | "
             f"Output: \033[34m{output_provider}\033[0m/\033[36m{final_output_model}\033[0m"
@@ -207,11 +210,9 @@ class AgentFactory:
                 user_input=user_input,
                 response_format=response_format,
                 final_output_model=final_output_model,
-                output_provider=output_provider,
                 user_state=user_state,
                 arun_start=arun_start,
-                previous_response_id=previous_response_id,
-                chat_history=chat_history,
+                ctx=conversation_ctx.for_provider(output_provider),
                 no_image=no_image,
                 on_stream=on_stream,
                 on_stream_event=on_stream_event,
@@ -253,9 +254,8 @@ class AgentFactory:
                     provider=cmd_provider,
                     user_state=user_state,
                     response_format=response_format,
+                    ctx=conversation_ctx.for_provider(cmd_provider),
                     previous_results=tool_results if tool_results else None,
-                    previous_response_id=previous_response_id,
-                    chat_history=chat_history,
                 )
             stage1_duration_ms += s1_timer.duration_ms
             if s1_llm_trace:
@@ -336,6 +336,7 @@ class AgentFactory:
             f"Generating {response_format} response with {final_output_model}",
             detail="Generating response",
         )
+        output_ctx = conversation_ctx.for_provider(output_provider)
 
         # STAGE 3: Final output generation
         with StepTimer() as stage3_timer:
@@ -346,10 +347,8 @@ class AgentFactory:
                 response_format=response_format,
                 model=final_output_model,
                 state=user_state.model_dump(),
-                previous_response_id=(
-                    previous_response_id if output_provider == "openai" else None
-                ),
-                chat_history=chat_history if output_provider != "openai" else None,
+                previous_response_id=output_ctx.previous_response_id,
+                chat_history=output_ctx.chat_history,
                 intents=ui_intents,
                 no_image=no_image,
                 on_stream=on_stream,
