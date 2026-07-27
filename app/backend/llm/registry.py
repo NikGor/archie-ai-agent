@@ -1,7 +1,7 @@
 """Single lazy registry of LLM provider client singletons.
 
 Replaces the two independent client dicts that used to be built separately
-in AgentFactory.__init__ and at create_output_tool module scope.
+in AgentFactory.__init__ and at create_output module scope.
 """
 
 from .base import LLMClient
