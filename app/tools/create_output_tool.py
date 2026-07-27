@@ -7,8 +7,8 @@ from json_repair import repair_json
 from pydantic import ValidationError
 from .. import config
 from ..agent.prompt_builder import PromptBuilder
-from ..backend.openai_client import OpenAIClient
-from ..backend.openrouter_client import OpenRouterClient
+from ..backend.llm.base import LLMClient
+from ..backend.llm.registry import get_client
 from ..models.output_models import (
     AgentResponse,
     Level2Response,
@@ -37,15 +37,6 @@ _UI_STREAMABLE_FORMATS = frozenset(
 )
 
 logger = logging.getLogger(__name__)
-
-# Initialize clients once at module level
-_openai_client = OpenAIClient()
-_openrouter_client = OpenRouterClient()
-
-_clients: dict[str, OpenAIClient | OpenRouterClient] = {
-    "openai": _openai_client,
-    "openrouter": _openrouter_client,
-}
 
 
 def _clear_card_image_prompts(ui_response: UIResponse) -> None:
@@ -109,7 +100,7 @@ def _sanitize_chart_items(ui_response: UIResponse) -> None:
 
 
 async def _stream_and_collect(
-    client: OpenAIClient | OpenRouterClient,
+    client: LLMClient,
     messages: list[dict],
     model: str,
     response_model: type,
@@ -193,7 +184,7 @@ async def create_output(  # noqa: PLR0912
     prompt_builder = PromptBuilder()
 
     provider = get_provider_for_model(model)
-    client = _clients[provider]
+    client = get_client(provider)
     logger.info(
         f"create_output_002b: Using provider: \033[34m{provider}\033[0m for model: \033[36m{model}\033[0m"
     )
