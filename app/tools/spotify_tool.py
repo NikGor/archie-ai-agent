@@ -11,7 +11,7 @@ from app.backend.spotify_client import (
     SpotifyNoActiveDeviceError,
     get_spotify_client as _get_spotify_client,
 )
-from app.config import settings
+from app.config import DEFAULT_MODEL, settings
 
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ def generate_dj_comment(action: str, context: dict[str, Any]) -> str:
     """Generates a short witty DJ comment for the given action using an LLM."""
     try:
         response = openai_client.beta.chat.completions.parse(
-            model="gpt-5.6-luna",
+            model=DEFAULT_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -98,7 +98,7 @@ def classify_playback_request(request: str) -> PlaybackRequestClassification:
     """
     try:
         response = openai_client.beta.chat.completions.parse(
-            model="gpt-5.6-luna",
+            model=DEFAULT_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -134,7 +134,7 @@ async def build_thematic_playlist(
     )
     try:
         response = openai_client.beta.chat.completions.parse(
-            model="gpt-5.6-luna",
+            model=DEFAULT_MODEL,
             messages=[
                 {
                     "role": "system",

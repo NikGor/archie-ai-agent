@@ -4,7 +4,7 @@ from typing import Any, Literal
 import redis
 from openai import OpenAI
 from pydantic import BaseModel, Field
-from app.config import settings
+from app.config import DEFAULT_MODEL, settings
 
 
 logger = logging.getLogger(__name__)
@@ -102,7 +102,7 @@ Generate 2 follow-up action buttons.
 """
     try:
         response = openai_client.beta.chat.completions.parse(
-            model="gpt-5.6-luna",
+            model=DEFAULT_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
