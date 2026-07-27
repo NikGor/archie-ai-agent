@@ -2,7 +2,6 @@
 
 from typing import Literal
 from app.utils.tools_utils import (
-    gemini_parse,
     openai_parse,
     openai_responses_parse,
     oss_parse,
@@ -38,7 +37,7 @@ def context_tool(context: str, name: str) -> dict:  # noqa: ARG001
     Tool with a context parameter.
 
     Args:
-        context: Execution context (skipped by gemini/oss parsers)
+        context: Execution context (skipped by the oss parser)
         name: Name to use
     """
     return {}
@@ -68,31 +67,6 @@ class TestOpenaiParse:
     def test_required_params(self):
         schema = openai_parse(sample_tool)
         assert schema["parameters"]["required"] == ["query"]
-
-
-class TestGeminiParse:
-    def test_skips_context_param(self):
-        schema = gemini_parse(context_tool)
-        assert "context" not in schema["parameters"]["properties"]
-        assert "name" in schema["parameters"]["properties"]
-
-    def test_allowed_values_enum_from_description(self):
-        schema = gemini_parse(sample_tool)
-        prop = schema["parameters"]["properties"]["mode"]
-        assert prop["enum"] == ["fast", "slow"]
-
-    def test_date_format_hint(self):
-        def tool_with_date(when: str) -> dict:  # noqa: ARG001
-            """
-            Tool.
-
-            Args:
-                when: Date to use, e.g. 2024-01-01
-            """
-            return {}
-
-        schema = gemini_parse(tool_with_date)
-        assert schema["parameters"]["properties"]["when"]["format"] == "date"
 
 
 class TestOssParse:
@@ -128,6 +102,6 @@ class TestOpenaiResponsesParse:
         assert schema["parameters"]["properties"]["mode"]["enum"] == ["fast", "slow"]
 
     def test_does_not_skip_context_param(self):
-        """Unlike gemini/oss parsers, the Responses API parser keeps 'context'."""
+        """Unlike the oss parser, the Responses API parser keeps 'context'."""
         schema = openai_responses_parse(context_tool)
         assert "context" in schema["parameters"]["properties"]

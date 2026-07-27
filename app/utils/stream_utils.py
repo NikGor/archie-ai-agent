@@ -43,11 +43,8 @@ class JsonPathExtractor:
     (e.g. ``"intro_text": null``); in that case extraction finishes with no
     characters emitted.
 
-    This replaces four near-identical hand-rolled extractors
-    (``JsonTextExtractor``, ``JsonReasoningExtractor``,
-    ``JsonLevel2TextExtractor``, ``JsonUIIntroTextExtractor``) that only
-    differed in their target key path (ARCHIE-154). Those names are kept as
-    thin subclasses below for call-site and test-suite compatibility.
+    This replaces four near-identical hand-rolled extractors that only
+    differed in their target key path (ARCHIE-154).
 
     Usage::
 
@@ -200,32 +197,3 @@ class JsonPathExtractor:
             return ""
 
         return ""
-
-
-class JsonTextExtractor(JsonPathExtractor):
-    """Extracts the top-level ``text`` field, e.g. ``{"text": "...", "sgr": {...}}``."""
-
-    def __init__(self) -> None:
-        super().__init__(["text"])
-
-
-class JsonReasoningExtractor(JsonPathExtractor):
-    """Extracts ``sgr.reasoning``, e.g. ``{"sgr": {"reasoning": "...", ...}}``."""
-
-    def __init__(self) -> None:
-        super().__init__(["sgr", "reasoning"])
-
-
-class JsonLevel2TextExtractor(JsonPathExtractor):
-    """Extracts ``level2_answer.text.text`` from a streaming Level2Response."""
-
-    def __init__(self) -> None:
-        super().__init__(["level2_answer", "text", "text"])
-
-
-class JsonUIIntroTextExtractor(JsonPathExtractor):
-    """Extracts ``ui_answer.intro_text.text`` from a streaming UIResponse.
-    Handles ``intro_text: null`` gracefully — no characters are emitted."""
-
-    def __init__(self) -> None:
-        super().__init__(["ui_answer", "intro_text", "text"])
