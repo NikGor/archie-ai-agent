@@ -125,55 +125,6 @@ def openai_parse(func: Callable) -> dict[str, Any]:
     }
 
 
-def gemini_parse(func: Callable) -> dict[str, Any]:
-    """
-    Parse docstring and type hints into Gemini JSON schema.
-
-    Supports enums via 'Allowed values: x, y, z' in description.
-    Supports format hints for dates.
-
-    Args:
-        func (Callable): Function to parse
-
-    Returns:
-        dict[str, Any]: Gemini function calling schema
-    """
-    doc = docstring_parser.parse(func.__doc__ or "")
-    type_hints = get_type_hints(func)
-    properties = {}
-    required = []
-
-    for param in doc.params:
-        if param.arg_name == "context":
-            continue
-        hint = type_hints.get(param.arg_name, str)
-        json_type, _ = _schema_type_and_enum(hint)
-        prop = {"type": json_type, "description": param.description or ""}
-
-        if "allowed values:" in (param.description or "").lower():
-            allowed = (
-                (param.description or "").lower().split("allowed values:")[1].strip()
-            )
-            prop["enum"] = [v.strip() for v in allowed.split(",")]
-
-        if "date" in (param.description or "").lower():
-            prop["format"] = "date"
-
-        properties[param.arg_name] = prop
-        if _is_required(func, param.arg_name):
-            required.append(param.arg_name)
-
-    return {
-        "name": func.__name__,
-        "description": _full_description(doc),
-        "parameters": {
-            "type": "object",
-            "properties": properties,
-            "required": required,
-        },
-    }
-
-
 def oss_parse(func: Callable) -> dict[str, Any]:
     """
     Parse docstring and type hints into OSS-compatible JSON schema.

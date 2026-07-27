@@ -7,7 +7,7 @@ from collections.abc import Callable
 from typing import Any
 from ..config import TOOLS_CONFIG
 from ..utils.provider_utils import get_provider_for_model
-from ..utils.tools_utils import gemini_parse, openai_parse, oss_parse
+from ..utils.tools_utils import openai_parse, oss_parse
 
 
 logger = logging.getLogger(__name__)
@@ -98,9 +98,6 @@ class ToolFactory:
         if provider == "openai":
             parser = openai_parse
             parser_name = "OpenAI"
-        elif provider == "gemini":
-            parser = gemini_parse
-            parser_name = "Gemini"
         else:
             parser = oss_parse
             parser_name = "OSS"
