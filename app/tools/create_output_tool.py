@@ -417,11 +417,13 @@ Create a complete, well-formatted response in the specified format."""
         return result_ui
 
     # ── Blocking path ──────────────────────────────────────────────────────────
+    # previous_response_id/chat_history are expected to already be gated for
+    # `provider` by the caller (see ConversationContext.for_provider).
     raw_response = await client.create_completion(
         messages=messages,
         model=model,
         response_format=response_model,
-        previous_response_id=previous_response_id if provider == "openai" else None,
+        previous_response_id=previous_response_id,
     )
 
     parsed = parse_llm_response(
