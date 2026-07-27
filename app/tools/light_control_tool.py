@@ -6,6 +6,7 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 from app.backend.redis_factory import get_sync_redis
 from app.config import DEFAULT_MODEL, settings
+from app.utils.arg_coercion import coerce_bool, coerce_int
 
 
 logger = logging.getLogger(__name__)
@@ -168,12 +169,9 @@ async def light_control_tool(  # noqa: PLR0911, PLR0912
             "status": "error",
             "message": f"Unknown device: {device_name}",
         }
-    if isinstance(is_on, str):
-        is_on = is_on.lower() == "true"
-    if isinstance(brightness, str):
-        brightness = int(brightness)
-    if isinstance(color_temp, str):
-        color_temp = int(color_temp)
+    is_on = coerce_bool(is_on)
+    brightness = coerce_int(brightness)
+    color_temp = coerce_int(color_temp)
     logger.info(
         f"light_control_tool_001: Controlling lamp \033[36m{device_name}\033[0m -> \033[36m{device_id}\033[0m, "
         f"demo_mode: \033[35m{demo_mode}\033[0m"

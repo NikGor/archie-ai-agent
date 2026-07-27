@@ -2,6 +2,7 @@ import logging
 from typing import Any
 import httpx
 from app.config import settings
+from app.utils.arg_coercion import coerce_bool, coerce_float, coerce_int
 
 
 logger = logging.getLogger(__name__)
@@ -69,18 +70,12 @@ async def google_places_search_tool(  # noqa: PLR0912
     )
 
     # Type coercion for LLM-provided string values
-    if isinstance(max_results, str):
-        max_results = int(max_results)
-    if isinstance(min_rating, str):
-        min_rating = float(min_rating)
-    if isinstance(open_now, str):
-        open_now = open_now.lower() == "true"
-    if isinstance(location_lat, str):
-        location_lat = float(location_lat)
-    if isinstance(location_lng, str):
-        location_lng = float(location_lng)
-    if isinstance(radius_meters, str):
-        radius_meters = float(radius_meters)
+    max_results = coerce_int(max_results)
+    min_rating = coerce_float(min_rating)
+    open_now = coerce_bool(open_now)
+    location_lat = coerce_float(location_lat)
+    location_lng = coerce_float(location_lng)
+    radius_meters = coerce_float(radius_meters)
 
     try:
         api_key = settings.google_api_key

@@ -12,6 +12,7 @@ from app.backend.spotify_client import (
     get_spotify_client as _get_spotify_client,
 )
 from app.config import DEFAULT_MODEL, settings
+from app.utils.arg_coercion import coerce_bool, coerce_int
 
 
 logger = logging.getLogger(__name__)
@@ -316,14 +317,10 @@ async def spotify_tool(  # noqa: PLR0911, PLR0912
     Returns:
         Dict with playback/search/playlist/library data or error information
     """
-    if isinstance(duration_minutes, str):
-        duration_minutes = int(duration_minutes)
-    if isinstance(volume_percent, str):
-        volume_percent = int(volume_percent)
-    if isinstance(shuffle, str):
-        shuffle = shuffle.lower() == "true"
-    if isinstance(position_ms, str):
-        position_ms = int(position_ms)
+    duration_minutes = coerce_int(duration_minutes)
+    volume_percent = coerce_int(volume_percent)
+    shuffle = coerce_bool(shuffle)
+    position_ms = coerce_int(position_ms)
 
     logger.info(
         f"spotify_tool_001: Action requested: \033[36m{action}\033[0m, "
