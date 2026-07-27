@@ -1,7 +1,6 @@
 import logging
 import time
 from archie_shared.chat.models import LllmTrace
-from ..backend.gemini_client import GeminiClient
 from ..backend.openai_client import OpenAIClient
 from ..backend.openrouter_client import OpenRouterClient
 from ..backend.state_service import StateService
@@ -47,16 +46,14 @@ class AgentFactory:
     ):
         self.openai_client = OpenAIClient()
         self.openrouter_client = OpenRouterClient()
-        self.gemini_client = GeminiClient()  # Fallback
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.tool_factory = tool_factory or ToolFactory(demo_mode=demo_mode)
         self.state_service = state_service or StateService()
         self.tool_result_store = ToolResultStore()
         self.demo_mode = demo_mode
-        self.clients: dict[str, OpenAIClient | OpenRouterClient | GeminiClient] = {
+        self.clients: dict[str, OpenAIClient | OpenRouterClient] = {
             "openai": self.openai_client,
             "openrouter": self.openrouter_client,
-            "gemini": self.gemini_client,  # Fallback
         }
         logger.info(
             f"agent_factory_001: Initialized AgentFactory, demo_mode: \033[35m{demo_mode}\033[0m"
