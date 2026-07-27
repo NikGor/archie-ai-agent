@@ -108,16 +108,6 @@ MODEL_PROVIDERS = {
         "x-ai/grok-4.20-beta",
         "x-ai/grok-4.1-fast",
     ],
-    # Fallback - direct Gemini API (commented out)
-    # "gemini": [
-    #     "gemini-2.5-flash",
-    #     "gemini-2.5-pro",
-    #     "gemini-2.0-flash",
-    #     "gemini-2.0-flash-lite",
-    #     "gemini-2.0-pro-exp",
-    #     "gemini-2.0-flash-thinking-exp",
-    #     "gemini-3-pro-preview",
-    # ],
 }
 
 # Token prices in USD per 1M tokens: {"input": price, "output": price}
