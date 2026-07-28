@@ -10,6 +10,7 @@ from archie_shared.ui.models import (
     QuickActionButtons,
     TextAnswer,
 )
+from app.utils import url_validator
 from app.utils.url_validator import _collect_tasks, validate_and_fix_urls
 
 
@@ -44,7 +45,7 @@ def _fallback_mock(url: str) -> AsyncMock:
 async def test_valid_button_url_passes_unchanged(mock_reachable_url):
     buttons = [_button("https://example.com/valid")]
     tasks: list = []
-    _collect_tasks(buttons, tasks)
+    _collect_tasks(buttons, tasks, url_validator.google_search_tool)
     assert len(tasks) == 1
     await tasks[0]
     assert isinstance(buttons[0], FrontendButton)
@@ -55,7 +56,7 @@ async def test_broken_button_url_with_no_fallback_converts_to_assistant_button(m
     buttons = [_button("https://example.com/broken", command="open_on_youtube_video")]
     with patch("app.utils.url_validator.google_search_tool", new=_no_fallback_mock()):
         tasks: list = []
-        _collect_tasks(buttons, tasks)
+        _collect_tasks(buttons, tasks, url_validator.google_search_tool)
         await tasks[0]
 
     assert isinstance(buttons[0], AssistantButton)
@@ -69,7 +70,7 @@ async def test_broken_button_url_with_search_fallback_replaces_url(mock_unreacha
         new=_fallback_mock("https://amazon.com/replacement"),
     ):
         tasks: list = []
-        _collect_tasks(buttons, tasks)
+        _collect_tasks(buttons, tasks, url_validator.google_search_tool)
         await tasks[0]
 
     assert isinstance(buttons[0], FrontendButton)
@@ -79,7 +80,7 @@ async def test_broken_button_url_with_search_fallback_replaces_url(mock_unreacha
 async def test_valid_location_card_map_url_passes_unchanged(mock_reachable_url):
     card = LocationCard(title="Cafe", open_map_url="https://maps.google.com/valid")
     tasks: list = []
-    _collect_tasks(card, tasks)
+    _collect_tasks(card, tasks, url_validator.google_search_tool)
     assert len(tasks) == 1
     await tasks[0]
     assert card.open_map_url == "https://maps.google.com/valid"
@@ -92,7 +93,7 @@ async def test_broken_location_card_map_url_is_set_to_none(mock_unreachable_url)
         open_map_url="https://maps.google.com/broken",
     )
     tasks: list = []
-    _collect_tasks(card, tasks)
+    _collect_tasks(card, tasks, url_validator.google_search_tool)
     await tasks[0]
 
     assert card.open_map_url is None
@@ -103,7 +104,7 @@ async def test_broken_location_card_map_url_is_set_to_none(mock_unreachable_url)
 async def test_valid_markdown_link_passes_unchanged(mock_reachable_url):
     text_answer = TextAnswer(type="markdown", text="see [this](https://example.com/valid)")
     tasks: list = []
-    _collect_tasks(text_answer, tasks)
+    _collect_tasks(text_answer, tasks, url_validator.google_search_tool)
     assert len(tasks) == 1
     await tasks[0]
     assert text_answer.text == "see [this](https://example.com/valid)"
@@ -116,7 +117,7 @@ async def test_broken_markdown_link_with_fallback_is_replaced(mock_unreachable_u
         new=_fallback_mock("https://example.com/replacement"),
     ):
         tasks: list = []
-        _collect_tasks(text_answer, tasks)
+        _collect_tasks(text_answer, tasks, url_validator.google_search_tool)
         await tasks[0]
 
     assert text_answer.text == "see [this article](https://example.com/replacement)"
@@ -126,7 +127,7 @@ async def test_broken_markdown_link_with_no_fallback_is_stripped_to_plain_text(m
     text_answer = TextAnswer(type="markdown", text="see [this article](https://example.com/broken)")
     with patch("app.utils.url_validator.google_search_tool", new=_no_fallback_mock()):
         tasks: list = []
-        _collect_tasks(text_answer, tasks)
+        _collect_tasks(text_answer, tasks, url_validator.google_search_tool)
         await tasks[0]
 
     assert text_answer.text == "see this article"
