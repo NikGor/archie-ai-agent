@@ -37,11 +37,11 @@ class StateService:
             "current_weekday": now.strftime("%A"),
         }
 
-    def _get_default_state(self) -> dict[str, Any]:
+    def _get_default_state(self, user_name: str | None) -> dict[str, Any]:
         """Get default user state with datetime info."""
         datetime_info = self._get_datetime_info()
         return {
-            "user_name": self.user_name or "User",
+            "user_name": user_name or "User",
             **DEFAULT_STATE_CONFIG,
             **datetime_info,
             "measurement_units": "metric",
@@ -80,27 +80,34 @@ class StateService:
             repeat=state.get("repeat", "off"),
         )
 
-    async def get_user_state(self, demo_mode: bool = False) -> UserState:
-        """Get complete user state for prompt context, including ambient Spotify playback."""
+    async def get_user_state(
+        self, user_name: str | None = None, demo_mode: bool = False
+    ) -> UserState:
+        """Get complete user state for prompt context, including ambient Spotify playback.
+
+        `user_name` is request-scoped and takes precedence over the constructor
+        default — safe to call concurrently on a shared StateService instance.
+        """
+        user_name = user_name or self.user_name
         spotify_context = None if demo_mode else await self._get_spotify_context()
 
-        if not self.user_name:
+        if not user_name:
             logger.info(
                 "state_service_002: No user_name provided, returning default state"
             )
         else:
-            merged = await self._load_merged_state()
+            merged = await self._load_merged_state(user_name)
             if merged is not None:
                 return UserState(**merged, spotify=spotify_context)
 
-        return UserState(**self._get_default_state(), spotify=spotify_context)
+        return UserState(**self._get_default_state(user_name), spotify=spotify_context)
 
-    async def _load_merged_state(self) -> dict[str, Any] | None:
-        """Fetch persisted state for self.user_name, merged over defaults.
+    async def _load_merged_state(self, user_name: str) -> dict[str, Any] | None:
+        """Fetch persisted state for `user_name`, merged over defaults.
 
         Returns None (caller falls back to defaults) on any cache miss or error.
         """
-        redis_key = f"user_state:name:{self.user_name}"
+        redis_key = f"user_state:name:{user_name}"
         logger.info(
             f"state_service_003: Fetching state from Redis key: \033[36m{redis_key}\033[0m"
         )
@@ -116,7 +123,7 @@ class StateService:
             logger.info(
                 f"state_service_005: Loaded user state for: \033[35m{user_data.get('user_name')}\033[0m"
             )
-            default_data = self._get_default_state()
+            default_data = self._get_default_state(user_name)
             return {
                 **default_data,
                 **{k: v for k, v in user_data.items() if v is not None},

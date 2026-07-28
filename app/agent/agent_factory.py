@@ -174,11 +174,10 @@ class AgentFactory:
             f"Output: \033[34m{output_provider}\033[0m/\033[36m{final_output_model}\033[0m"
         )
         if user_name:
-            self.state_service.user_name = user_name
-            logger.info(
-                f"agent_factory_001c: Set user_name: \033[35m{user_name}\033[0m"
-            )
-        user_state = await self.state_service.get_user_state(demo_mode=self.demo_mode)
+            logger.info(f"agent_factory_001c: Using user_name: \033[35m{user_name}\033[0m")
+        user_state = await self.state_service.get_user_state(
+            user_name=user_name, demo_mode=self.demo_mode
+        )
         persona_key = user_state.persona
         logger.info(f"agent_factory_002: Persona: \033[35m{persona_key}\033[0m")
         logger.info(f"agent_factory_003: Format: \033[36m{response_format}\033[0m")
