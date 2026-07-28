@@ -12,6 +12,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _error_chat_message(conversation_id: str | None, text: str) -> ChatMessage:
+    return ChatMessage(
+        message_id=generate_message_id(),
+        role="assistant",
+        content=Content(content_format="plain", text=text),
+        conversation_id=conversation_id,
+    )
+
+
 @router.post("/chat")
 async def chat_endpoint(request: ChatRequest) -> ChatMessage:
     """Chat endpoint for handling user messages."""
@@ -34,20 +43,10 @@ async def chat_endpoint(request: ChatRequest) -> ChatMessage:
         raise
     except ValidationError as e:
         logger.exception("endpoints_error_002: \033[31mValidation error\033[0m")
-        return ChatMessage(
-            message_id=generate_message_id(),
-            role="assistant",
-            content=Content(content_format="plain", text=f"Validation error: {e!s}"),
-            conversation_id=request.conversation_id,
-        )
+        return _error_chat_message(request.conversation_id, f"Validation error: {e!s}")
     except Exception as e:
         logger.exception(f"endpoints_error_001: \033[31m{e!s}\033[0m")
-        return ChatMessage(
-            message_id=generate_message_id(),
-            role="assistant",
-            content=Content(content_format="plain", text=f"Error: {e!s}"),
-            conversation_id=request.conversation_id,
-        )
+        return _error_chat_message(request.conversation_id, f"Error: {e!s}")
 
 
 @router.websocket("/ws_chat")
