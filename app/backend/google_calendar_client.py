@@ -74,7 +74,12 @@ class GoogleCalendarClient:
         """
         try:
             if not time_min:
-                time_min = datetime.datetime.utcnow().isoformat() + "Z"
+                # Preserve the naive-UTC "...Z" format utcnow() used to produce
+                # (aware datetimes would append "+00:00" from isoformat() too).
+                time_min = (
+                    datetime.datetime.now(datetime.UTC).replace(tzinfo=None).isoformat()
+                    + "Z"
+                )
             request_params = {
                 "calendarId": calendar_id,
                 "timeMin": time_min,
