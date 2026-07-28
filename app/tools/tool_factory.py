@@ -87,9 +87,10 @@ class ToolFactory:
                 func = self._load_tool_function(module_path)
                 if func:
                     tool_functions.append(func)
-                    # Register for execution
+                    # tool_name always equals func.__name__ by the TOOLS_CONFIG
+                    # naming convention (module's last path segment) — one
+                    # registration is enough, not two.
                     self.tools[tool_name] = func
-                    self.tools[func.__name__] = func
 
         # Determine provider based on model
         provider = get_provider_for_model(model)
