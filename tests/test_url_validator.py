@@ -77,6 +77,23 @@ async def test_broken_button_url_with_search_fallback_replaces_url(mock_unreacha
     assert buttons[0].url == "https://amazon.com/replacement"
 
 
+async def test_broken_card_button_url_search_query_includes_card_title(mock_unreachable_url):
+    """A button's own label (e.g. "Website") is too generic on its own —
+    the fallback search query must include the enclosing card's title so it
+    finds the actual entity's page instead of unrelated results."""
+    card = LocationCard(
+        title="Takumi NINE 2",
+        buttons=[_button("https://example.com/broken", command="url_to", text="Website")],
+    )
+    search_fn = _fallback_mock("https://takuminine.example/replacement")
+    tasks: list = []
+    _collect_tasks(card, tasks, search_fn)
+    await tasks[0]
+
+    search_fn.assert_awaited_once_with("Takumi NINE 2 Website")
+    assert card.buttons[0].url == "https://takuminine.example/replacement"
+
+
 async def test_valid_location_card_map_url_passes_unchanged(mock_reachable_url):
     card = LocationCard(title="Cafe", open_map_url="https://maps.google.com/valid")
     tasks: list = []
