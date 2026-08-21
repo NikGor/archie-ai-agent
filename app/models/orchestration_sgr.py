@@ -4,8 +4,8 @@ from ..utils.intent_config import IntentType
 
 
 ToolName = Literal[
-    "light_control_tool",
-    "climate_control_tool",
+    "smarthome_control_tool",
+    "smarthome_status_tool",
     "spotify_tool",
     "google_search_tool",
     "google_places_search_tool",

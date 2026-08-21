@@ -1,8 +1,8 @@
 """Shared Redis client construction.
 
-state_service.py, tool_result_store.py and light_control_tool.py each built
-their own Redis client from the same settings.redis_host/port/db — one
-factory replaces the copy-pasted connection blocks.
+state_service.py and tool_result_store.py each built their own Redis client
+from the same settings.redis_host/port/db — one factory replaces the
+copy-pasted connection blocks.
 """
 
 import redis

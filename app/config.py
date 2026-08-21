@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # OpenAI vector store (document search)
     openai_vector_store_id: str | None = None
 
+    # Home Assistant MCP server (smarthome control)
+    homeassistant_mcp_url: str = "http://homeassistant.local:8123/api/mcp"
+    homeassistant_mcp_token: str | None = None
+
     # Default persona / locale state
     default_persona: str = "business"
     default_city: str = "London"
@@ -143,8 +147,8 @@ MODEL_TOKEN_PRICES: dict[str, dict[str, float]] = {
 
 TOOLS_CONFIG = {
     "smarthome": {
-        "light_control_tool": "app.tools.light_control_tool",
-        "climate_control_tool": "app.tools.climate_control_tool",
+        "smarthome_control_tool": "app.tools.smarthome_control_tool",
+        "smarthome_status_tool": "app.tools.smarthome_status_tool",
         "spotify_tool": "app.tools.spotify_tool",
     },
     "internet_search": {

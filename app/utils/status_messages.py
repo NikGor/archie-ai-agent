@@ -73,17 +73,22 @@ def _spotify_detail(args: dict[str, Any]) -> str:
     return f"Spotify: {action}" if action else ""
 
 
-def _light_detail(args: dict[str, Any]) -> str:
-    device = args.get("device_name", "")
-    return f"Controlling light: {device}" if device else "Controlling light"
-
-
-def _climate_detail(args: dict[str, Any]) -> str:
+def _smarthome_control_detail(args: dict[str, Any]) -> str:
     action = args.get("action", "")
+    target = args.get("name", "") or args.get("area", "")
     temp = args.get("temperature", "")
     if action == "set_temperature" and temp:
         return f"Setting temperature: {temp}°"
-    return f"Climate: {action}" if action else "Controlling climate"
+    if action and target:
+        return f"{action}: {target}"
+    return f"Smart home: {action}" if action else "Controlling smart home"
+
+
+def _smarthome_status_detail(args: dict[str, Any]) -> str:
+    name = args.get("name", "")
+    area = args.get("area", "")
+    target = name or area
+    return f"Checking status: {target}" if target else "Checking smart home status"
 
 
 def _football_detail(args: dict[str, Any]) -> str:
@@ -111,8 +116,8 @@ _TOOL_DETAIL_MAP: dict[str, Any] = {
     "task_tool": _task_detail,
     "notes_tool": _notes_detail,
     "spotify_tool": _spotify_detail,
-    "light_control_tool": _light_detail,
-    "climate_control_tool": _climate_detail,
+    "smarthome_control_tool": _smarthome_control_detail,
+    "smarthome_status_tool": _smarthome_status_detail,
     "football_tool": _football_detail,
     "document_search_tool": _document_search_detail,
 }
