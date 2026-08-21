@@ -262,6 +262,9 @@ eval_results/
 # AI-generated reports and plans
 audit-report.html
 test-plan.html
+
+# Archie skills content — personal (apartment layout, home devices, etc.), local only
+app/skills/
 prompt.md
 LOGGING_GUIDELINES.md
 PROJECT_STATE.md
