@@ -44,12 +44,12 @@ class TestGetToolDetail:
         detail = get_tool_detail("spotify_tool", {"action": "get_current"})
         assert detail == "Current track"
 
-    def test_light_with_device(self):
-        detail = get_tool_detail("light_control_tool", {"device_name": "Kitchen Light"})
-        assert detail == "Controlling light: Kitchen Light"
+    def test_smarthome_control_with_target(self):
+        detail = get_tool_detail("smarthome_control_tool", {"action": "turn_on", "name": "Kitchen Light"})
+        assert detail == "turn_on: Kitchen Light"
 
-    def test_climate_set_temp(self):
-        detail = get_tool_detail("climate_control_tool", {"action": "set_temperature", "temperature": "22"})
+    def test_smarthome_control_set_temperature(self):
+        detail = get_tool_detail("smarthome_control_tool", {"action": "set_temperature", "temperature": "22"})
         assert detail == "Setting temperature: 22°"
 
     def test_football_live(self):
@@ -59,6 +59,10 @@ class TestGetToolDetail:
     def test_document_search(self):
         detail = get_tool_detail("document_search_tool", {"query": "project plan"})
         assert detail == "Searching documents: project plan"
+
+    def test_skill_loader(self):
+        detail = get_tool_detail("skill_loader_tool", {"skill_name": "homeassistant-mcp"})
+        assert detail == "Loading skill: homeassistant-mcp"
 
     def test_unknown_tool_returns_none(self):
         detail = get_tool_detail("unknown_tool", {"query": "test"})
