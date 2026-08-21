@@ -14,6 +14,7 @@ ToolName = Literal[
     "notes_tool",
     "events_tool",
     "document_search_tool",
+    "skill_loader_tool",
 ]
 
 

@@ -166,4 +166,7 @@ TOOLS_CONFIG = {
     "knowledge": {
         "document_search_tool": "app.tools.document_search_tool",
     },
+    "skills": {
+        "skill_loader_tool": "app.tools.skill_loader_tool",
+    },
 }

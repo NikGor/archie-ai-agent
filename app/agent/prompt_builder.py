@@ -6,6 +6,7 @@ import os
 from typing import Any
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from ..models.tool_models import ToolResult
+from ..utils.skill_utils import list_skills
 
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,13 @@ class PromptBuilder:
             ]
         )
         system_message = f"{cmd_prompt}\n\nAvailable Tools:\n{tools_list}"
+        skills = list_skills()
+        if skills:
+            skills_list = "\n".join(f"- {s['name']}: {s['description']}" for s in skills)
+            system_message += (
+                "\n\nAvailable Skills (call skill_loader_tool with skill_name to load "
+                f"full instructions):\n{skills_list}"
+            )
         messages: list[dict[str, str]] = [
             {"role": "system", "content": system_message},
             {"role": "user", "content": user_input},

@@ -109,6 +109,11 @@ def _document_search_detail(args: dict[str, Any]) -> str:
     return f"Searching documents: {query}" if query else ""
 
 
+def _skill_loader_detail(args: dict[str, Any]) -> str:
+    skill_name = args.get("skill_name", "")
+    return f"Loading skill: {skill_name}" if skill_name else "Loading skill"
+
+
 _TOOL_DETAIL_MAP: dict[str, Any] = {
     "google_search_tool": _google_search_detail,
     "google_places_search_tool": _google_places_detail,
@@ -120,6 +125,7 @@ _TOOL_DETAIL_MAP: dict[str, Any] = {
     "smarthome_status_tool": _smarthome_status_detail,
     "football_tool": _football_detail,
     "document_search_tool": _document_search_detail,
+    "skill_loader_tool": _skill_loader_detail,
 }
 
 
