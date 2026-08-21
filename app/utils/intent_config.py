@@ -11,6 +11,7 @@ from archie_shared.ui.models import (
     EventForm,
     InternalNoteForm,
     LocationCard,
+    Map,
     MovieCard,
     MusicCard,
     ProductCard,
@@ -52,7 +53,7 @@ BASE_CARD_TYPES: list[type] = [Card]
 # Intent → additional card types and item types unlocked
 INTENT_EXTENSIONS: dict[str, dict[str, list]] = {
     "get_weather": {"cards": [WeatherCard], "item_types": []},
-    "search_place": {"cards": [LocationCard], "item_types": []},
+    "search_place": {"cards": [LocationCard], "item_types": ["map"]},
     "search_movie": {"cards": [MovieCard], "item_types": []},
     "search_series": {"cards": [SeriesCard], "item_types": []},
     "search_music": {"cards": [MusicCard], "item_types": []},
@@ -73,6 +74,7 @@ INTENT_EXTENSIONS: dict[str, dict[str, list]] = {
 # Content type classes for each item type (for FilteredAdvancedAnswerItem.content union)
 ITEM_TYPE_TO_CONTENT_CLASS: dict[str, type] = {
     "chart": Chart,
+    "map": Map,
     "email_form": EmailForm,
     "event_form": EventForm,
     "note_form": InternalNoteForm,

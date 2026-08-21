@@ -28,6 +28,7 @@ Fill the `ui_answer` object with `intro_text`, `items[]`, and `quick_action_butt
 - **Charts**: MUST use `type: "chart"` when: (1) user explicitly asks for a diagram, chart, graph, or visualization of data; (2) response includes numeric trends over time or across categories (e.g. year-by-year stats, growth curves, popularity trends). When a table with such data is already in the response, add a `chart` item alongside it — do not wait for the user to ask. **Never substitute a card_grid or text description for a chart.**
 - **Text Answers**: For explanations, context, or responses that don't need immediate action. **Use full markdown** — see Markdown Formatting section below.
 - **Images**: Use to add visual context — photo, illustration, schematics, or other creative visuals.
+- **Map**: Use `type: "map"` when the response lists 2+ physical places with known coordinates (restaurants, attractions, venues in a city). Add it as the LAST item, after the `card_grid` of `LocationCard`s covering the same places — the map is a spatial summary, not a replacement for the cards. Every `MapPoint` needs real `lat`/`lng`; never guess coordinates you don't have. Skip it for a single place — use `LocationCard` alone.
 - **Quick Action Buttons**: ALWAYS provide 2-3 buttons — NEVER leave `quick_action_buttons` empty. Choose based on content:
   - Weather → "7-day forecast" / "Hourly breakdown" / "Tomorrow"
   - Locations / restaurants → "Get directions" / "Show on map" / "Check reviews"
