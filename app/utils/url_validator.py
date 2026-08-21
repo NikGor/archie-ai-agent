@@ -50,7 +50,19 @@ async def validate_and_fix_urls(
     return content
 
 
-def _collect_tasks(node: Any, tasks: list[Awaitable[None]], search_fn: SearchFn) -> None:
+def _collect_tasks(
+    node: Any,
+    tasks: list[Awaitable[None]],
+    search_fn: SearchFn,
+    context_title: str | None = None,
+) -> None:
+    """Walk the content tree collecting URL-fix tasks.
+
+    `context_title` carries the nearest enclosing card's title down to button
+    fixes — a button's own label (e.g. "Website") is too generic for a search
+    query on its own; paired with the entity name it actually finds the right
+    page instead of unrelated results.
+    """
     if isinstance(node, TextAnswer):
         if node.type == "markdown" and node.text:
             tasks.append(_fix_text_answer(node, search_fn))
@@ -58,19 +70,23 @@ def _collect_tasks(node: Any, tasks: list[Awaitable[None]], search_fn: SearchFn)
     if isinstance(node, LocationCard):
         if node.open_map_url:
             tasks.append(_fix_location_card(node))
-        _collect_tasks(node.buttons, tasks, search_fn)
+        _collect_tasks(node.buttons, tasks, search_fn, context_title=node.title)
         return
     if isinstance(node, list):
         for index, item in enumerate(node):
             if isinstance(item, FrontendButton):
                 if item.url and item.command in _FALLBACK_ELIGIBLE_COMMANDS:
-                    tasks.append(_fix_frontend_button(node, index, search_fn))
+                    tasks.append(
+                        _fix_frontend_button(node, index, search_fn, context_title)
+                    )
             else:
-                _collect_tasks(item, tasks, search_fn)
+                _collect_tasks(item, tasks, search_fn, context_title)
         return
     if isinstance(node, BaseModel):
+        title = getattr(node, "title", None)
+        nested_title = title if isinstance(title, str) else context_title
         for field_name in node.__class__.model_fields:
-            _collect_tasks(getattr(node, field_name), tasks, search_fn)
+            _collect_tasks(getattr(node, field_name), tasks, search_fn, nested_title)
 
 
 async def _is_url_reachable(url: str) -> bool:
@@ -94,13 +110,17 @@ async def _find_replacement_url(query: str, search_fn: SearchFn) -> str | None:
 
 
 async def _fix_frontend_button(
-    container: list[Any], index: int, search_fn: SearchFn
+    container: list[Any],
+    index: int,
+    search_fn: SearchFn,
+    context_title: str | None = None,
 ) -> None:
     button: FrontendButton = container[index]
     url = button.url or ""
     if await _is_url_reachable(url):
         return
-    replacement = await _find_replacement_url(button.text, search_fn)
+    query = f"{context_title} {button.text}" if context_title else button.text
+    replacement = await _find_replacement_url(query, search_fn)
     if replacement:
         logger.warning(
             f"url_validator_002: Replacing broken button URL \033[36m{url}\033[0m "
