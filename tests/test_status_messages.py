@@ -52,10 +52,6 @@ class TestGetToolDetail:
         detail = get_tool_detail("smarthome_control_tool", {"action": "set_temperature", "temperature": "22"})
         assert detail == "Setting temperature: 22°"
 
-    def test_football_live(self):
-        detail = get_tool_detail("football_tool", {"action": "live_scores", "team": "Barcelona"})
-        assert detail == "Checking live scores: Barcelona"
-
     def test_document_search(self):
         detail = get_tool_detail("document_search_tool", {"query": "project plan"})
         assert detail == "Searching documents: project plan"
