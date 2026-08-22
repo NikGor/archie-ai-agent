@@ -155,9 +155,6 @@ TOOLS_CONFIG = {
         "google_search_tool": "app.tools.google_search_tool",
         "google_places_search_tool": "app.tools.google_places_search_tool",
     },
-    "specialized": {
-        "football_tool": "app.tools.football_tool",
-    },
     "productivity": {
         "task_tool": "app.tools.task_tool",
         "notes_tool": "app.tools.notes_tool",
