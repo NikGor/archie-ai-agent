@@ -91,19 +91,6 @@ def _smarthome_status_detail(args: dict[str, Any]) -> str:
     return f"Checking status: {target}" if target else "Checking smart home status"
 
 
-def _football_detail(args: dict[str, Any]) -> str:
-    action = args.get("action", "")
-    team = args.get("team", "")
-    if action == "live_scores":
-        return "Checking live scores" + (f": {team}" if team else "")
-    if action == "fixtures":
-        return "Match schedule" + (f": {team}" if team else "")
-    if action == "standings":
-        league = args.get("league", "")
-        return "Standings" + (f": {league}" if league else "")
-    return f"Football: {action}" if action else ""
-
-
 def _document_search_detail(args: dict[str, Any]) -> str:
     query = args.get("query", "")
     return f"Searching documents: {query}" if query else ""
@@ -123,7 +110,6 @@ _TOOL_DETAIL_MAP: dict[str, Any] = {
     "spotify_tool": _spotify_detail,
     "smarthome_control_tool": _smarthome_control_detail,
     "smarthome_status_tool": _smarthome_status_detail,
-    "football_tool": _football_detail,
     "document_search_tool": _document_search_detail,
     "skill_loader_tool": _skill_loader_detail,
 }
