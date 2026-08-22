@@ -9,7 +9,6 @@ ToolName = Literal[
     "spotify_tool",
     "google_search_tool",
     "google_places_search_tool",
-    "football_tool",
     "task_tool",
     "notes_tool",
     "events_tool",
