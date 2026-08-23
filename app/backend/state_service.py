@@ -3,7 +3,6 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
 from typing import Any
 import redis
 from ..config import DEFAULT_STATE_CONFIG, settings
@@ -28,22 +27,11 @@ class StateService:
             f"{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"
         )
 
-    def _get_datetime_info(self) -> dict[str, str]:
-        """Get current date and time information."""
-        now = datetime.now()
-        return {
-            "current_date": now.strftime("%d.%m.%Y"),
-            "current_time": now.strftime("%H:%M"),
-            "current_weekday": now.strftime("%A"),
-        }
-
     def _get_default_state(self, user_name: str | None) -> dict[str, Any]:
-        """Get default user state with datetime info."""
-        datetime_info = self._get_datetime_info()
+        """Get default user state."""
         return {
             "user_name": user_name or "User",
             **DEFAULT_STATE_CONFIG,
-            **datetime_info,
             "measurement_units": "metric",
             "date_format": "DD Month YYYY",
             "time_format": "24h",
