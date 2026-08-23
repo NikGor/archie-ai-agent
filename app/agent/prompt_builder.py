@@ -3,7 +3,9 @@
 import json
 import logging
 import os
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from ..models.tool_models import ToolResult
 from ..utils.skill_utils import list_skills
@@ -27,6 +29,25 @@ class PromptBuilder:
             f"prompt_builder_001: Initialized with templates: \033[36m{templates_dir}\033[0m"
         )
 
+    def _with_current_datetime(self, state: dict) -> dict:
+        """Add the current date/time/weekday to a copy of `state`, computed fresh
+        in the user's timezone at render time.
+
+        Never source these from persisted state: a Redis-cached UserState snapshot
+        goes stale the moment it's written, silently freezing the agent's clock.
+        """
+        try:
+            tz = ZoneInfo(state.get("user_timezone") or "UTC")
+        except ZoneInfoNotFoundError:
+            tz = ZoneInfo("UTC")
+        now = datetime.now(tz)
+        return {
+            **state,
+            "current_date": now.strftime("%d.%m.%Y"),
+            "current_time": now.strftime("%H:%M"),
+            "current_weekday": now.strftime("%A"),
+        }
+
     def build_command_messages(
         self,
         user_input: str,
@@ -38,7 +59,7 @@ class PromptBuilder:
     ) -> list[dict[str, str]]:
         """Build the full message list for Stage 1 command call."""
         cmd_prompt_template = self.env.get_template("cmd_prompt.jinja2")
-        cmd_prompt = cmd_prompt_template.render(state=state)
+        cmd_prompt = cmd_prompt_template.render(state=self._with_current_datetime(state))
         tools_list = "\n".join(
             [
                 f"- {t['name']}: {t.get('description', '')}\n  Parameters: {json.dumps(t.get('parameters', {}), ensure_ascii=False)}"
@@ -84,7 +105,7 @@ class PromptBuilder:
         logger.info("prompt_builder_003: Building assistant prompt")
         template = self.env.get_template("assistant_prompt.jinja2")
         return template.render(
-            state=state,
+            state=self._with_current_datetime(state),
             response_format=response_format,
         )
 
