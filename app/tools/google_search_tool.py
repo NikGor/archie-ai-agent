@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Any
 from google import genai
@@ -50,7 +51,11 @@ async def google_search_tool(query: str) -> dict[str, Any]:
         config = types.GenerateContentConfig(tools=[grounding_tool])
 
         logger.info("google_search_002: Calling Gemini with Google Search grounding")
-        response = client.models.generate_content(
+        # client.models.generate_content is a blocking (sync) SDK call — running it
+        # directly inside this coroutine serializes parallel google_search_tool calls
+        # that asyncio.gather() is supposed to run concurrently.
+        response = await asyncio.to_thread(
+            client.models.generate_content,
             model="gemini-3-flash-preview",
             contents=query,
             config=config,
@@ -65,7 +70,7 @@ async def google_search_tool(query: str) -> dict[str, Any]:
             }
 
         candidate = response.candidates[0]
-        text = response.text
+        text = response.text or ""
         grounding_metadata = candidate.grounding_metadata
 
         logger.info(
