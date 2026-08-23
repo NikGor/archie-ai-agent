@@ -45,7 +45,7 @@ class TestGetToolDetail:
         assert detail == "Current track"
 
     def test_smarthome_control_with_target(self):
-        detail = get_tool_detail("smarthome_control_tool", {"action": "turn_on", "name": "Kitchen Light"})
+        detail = get_tool_detail("smarthome_control_tool", {"action": "turn_on", "device_name": "Kitchen Light"})
         assert detail == "turn_on: Kitchen Light"
 
     def test_smarthome_control_set_temperature(self):
