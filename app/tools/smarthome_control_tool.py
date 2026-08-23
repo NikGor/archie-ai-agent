@@ -49,8 +49,9 @@ async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
         action: One of: turn_on, turn_off, set_light, set_temperature, increase_temperature,
             decrease_temperature, media_pause, media_unpause, media_next, media_previous,
             media_set_volume, media_volume_step, media_mute, media_unmute, media_search_and_play,
-            broadcast, cancel_timers
-        device_name: Entity name/alias to target, e.g. 'Floor Lamp Living Room', 'Living Room Thermostat'
+            broadcast, cancel_timers, activate_scene
+        device_name: Entity name/alias to target, e.g. 'Floor Lamp Living Room', 'Living Room Thermostat'.
+            For 'activate_scene', the scene name, e.g. 'Jazz Bar', 'Рождество'
         area: Area/room name to target instead of/in addition to name, e.g. 'Гостиная'
         floor: Floor name to target
         brightness: 0-100 percent, for 'set_light'. Interpret naturally: 'brighter'=+20, 'dim'=-20, 'max'=100
@@ -194,6 +195,13 @@ async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
             ha_result = await call_tool("HassBroadcast", {"message": message})
         elif action == "cancel_timers":
             ha_result = await call_tool("HassCancelAllTimers", target)
+        elif action == "activate_scene":
+            if not device_name:
+                return {
+                    "status": "error",
+                    "message": "device_name is required for action=activate_scene",
+                }
+            ha_result = await call_tool("HassTurnOn", target)
         else:
             return {
                 "status": "error",
