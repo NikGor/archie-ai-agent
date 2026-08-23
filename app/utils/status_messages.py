@@ -75,7 +75,7 @@ def _spotify_detail(args: dict[str, Any]) -> str:
 
 def _smarthome_control_detail(args: dict[str, Any]) -> str:
     action = args.get("action", "")
-    target = args.get("name", "") or args.get("area", "")
+    target = args.get("device_name", "") or args.get("area", "")
     temp = args.get("temperature", "")
     if action == "set_temperature" and temp:
         return f"Setting temperature: {temp}°"
@@ -85,9 +85,9 @@ def _smarthome_control_detail(args: dict[str, Any]) -> str:
 
 
 def _smarthome_status_detail(args: dict[str, Any]) -> str:
-    name = args.get("name", "")
+    device_name = args.get("device_name", "")
     area = args.get("area", "")
-    target = name or area
+    target = device_name or area
     return f"Checking status: {target}" if target else "Checking smart home status"
 
 
