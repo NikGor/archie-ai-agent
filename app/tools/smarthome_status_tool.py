@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 async def smarthome_status_tool(
     query: str,
-    name: str | None = None,
+    device_name: str | None = None,
     domain: str | None = None,
     area: str | None = None,
     demo_mode: bool = False,
@@ -25,7 +25,7 @@ async def smarthome_status_tool(
 
     Args:
         query: Original user question, used for logging/context only
-        name: Filter by entity name or alias (case-insensitive), e.g. "Гостиная термостат"
+        device_name: Filter by entity name or alias (case-insensitive), e.g. "Гостиная термостат"
         domain: Filter by domain: light, climate, sensor, binary_sensor, todo
         area: Filter by area/room name, e.g. "Гостиная"
 
@@ -34,7 +34,7 @@ async def smarthome_status_tool(
     """
     logger.info(
         f"smarthome_status_001: Query: \033[36m{query}\033[0m, "
-        f"name: \033[33m{name}\033[0m, domain: \033[33m{domain}\033[0m, area: \033[33m{area}\033[0m"
+        f"device_name: \033[33m{device_name}\033[0m, domain: \033[33m{domain}\033[0m, area: \033[33m{area}\033[0m"
     )
     if demo_mode:
         return {
@@ -44,8 +44,8 @@ async def smarthome_status_tool(
         }
 
     arguments: dict[str, Any] = {}
-    if name:
-        arguments["name"] = name
+    if device_name:
+        arguments["name"] = device_name
     if domain:
         arguments["domain"] = domain
     if area:
