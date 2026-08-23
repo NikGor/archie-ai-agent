@@ -126,7 +126,7 @@ def classify_playback_request(request: str) -> PlaybackRequestClassification:
 
 
 async def build_thematic_playlist(
-    theme: str, duration_minutes: int, client: SpotifyClient
+    theme: str, duration_minutes: int, client: SpotifyClient, playlist_name: str | None = None
 ) -> dict[str, Any]:
     """Builds a themed playlist by generating search queries via LLM and collecting tracks."""
     query_count = min(
@@ -173,7 +173,8 @@ async def build_thematic_playlist(
             total_seconds += track["duration_seconds"]
             break
 
-    playlist = await client.create_playlist(name=f"Archie DJ: {theme}")
+    name = playlist_name if playlist_name else f"Archie DJ: {theme}"
+    playlist = await client.create_playlist(name=name)
     await client.add_tracks_to_playlist(playlist["playlist_id"], [t["uri"] for t in tracks])
 
     # The user only expressed a mood/theme, not a track to play — so beyond saving
@@ -201,7 +202,9 @@ async def build_thematic_playlist(
     }
 
 
-def _demo_response(action: str, query: str | None, theme: str | None) -> dict[str, Any]:
+def _demo_response(
+    action: str, query: str | None, theme: str | None, playlist_name: str | None = None
+) -> dict[str, Any]:
     """Returns canned demo data without calling the Spotify API."""
     demo_track = {
         "track_id": "demo_track_001",
@@ -236,7 +239,7 @@ def _demo_response(action: str, query: str | None, theme: str | None) -> dict[st
             "success": True,
             "action": "build_playlist",
             "playlist_id": "demo_playlist_001",
-            "playlist_name": f"Archie DJ: {theme}",
+            "playlist_name": playlist_name if playlist_name else f"Archie DJ: {theme}",
             "playlist_url": None,
             "tracks": [demo_track],
             "track_count": 1,
@@ -282,6 +285,7 @@ async def spotify_tool(  # noqa: PLR0911, PLR0912
     query: str | None = None,
     track_uri: str | None = None,
     theme: str | None = None,
+    playlist_name: str | None = None,
     duration_minutes: int | str = 30,
     volume_percent: int | str | None = None,
     shuffle: bool | str | None = None,
@@ -307,6 +311,9 @@ async def spotify_tool(  # noqa: PLR0911, PLR0912
         track_uri: Spotify track/context URI (optional for 'play' - omit to resume current context;
             required for 'save_track'/'remove_saved_track' if query is absent)
         theme: Playlist theme/mood description (required for 'build_playlist', e.g. "chill Sunday morning jazz")
+        playlist_name: Explicit playlist title for 'build_playlist', if the user gave one
+            (e.g. "Christmas Jazz & Classics"). Used as-is for the Spotify playlist name instead
+            of the "Archie DJ: {theme}" default — keep it short, it becomes the literal name field.
         duration_minutes: Target playlist length in minutes for 'play' (theme fallback) and 'build_playlist' (default 30)
         volume_percent: Volume level 0-100 (required for 'set_volume')
         shuffle: True/False to enable/disable shuffle (required for 'set_shuffle')
@@ -328,7 +335,7 @@ async def spotify_tool(  # noqa: PLR0911, PLR0912
     )
 
     if demo_mode:
-        return _demo_response(action, query, theme)
+        return _demo_response(action, query, theme, playlist_name)
 
     try:
         client = _get_spotify_client()
@@ -399,7 +406,9 @@ async def spotify_tool(  # noqa: PLR0911, PLR0912
         if action == "build_playlist":
             if not theme:
                 return {"success": False, "message": "theme is required for 'build_playlist'"}
-            return await build_thematic_playlist(theme, duration_minutes, client)
+            return await build_thematic_playlist(
+                theme, duration_minutes, client, playlist_name=playlist_name
+            )
 
         if action in ("save_track", "remove_saved_track"):
             resolved_uri: str
