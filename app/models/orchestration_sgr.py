@@ -37,7 +37,7 @@ class ToolCallRequest(BaseModel):
     )
     is_confirmed: bool = Field(
         default=False,
-        description="Has the user explicitly confirmed the tool call with current parameters? Even when all parameters are present, always ask the user for additional confirmation before function_call.",
+        description="Has the user explicitly confirmed the tool call with current parameters? Even when all parameters are present, always ask the user for additional confirmation before function_call. Exception: smarthome_control_tool for light/climate needs no confirmation — set true directly.",
     )
     reason: str = Field(description="Why this tool is needed")
 
