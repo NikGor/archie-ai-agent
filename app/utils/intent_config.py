@@ -5,11 +5,15 @@ from archie_shared.ui.models import (
     ArticleCard,
     Card,
     Chart,
+    ClimateCard,
+    ClimateSensorCard,
     ContactCard,
     DocumentCard,
     EmailForm,
     EventForm,
     InternalNoteForm,
+    LightCard,
+    LightSensorCard,
     LocationCard,
     Map,
     MovieCard,
@@ -67,8 +71,14 @@ INTENT_EXTENSIONS: dict[str, dict[str, list]] = {
     "create_note": {"cards": [], "item_types": ["note_form"]},
     "analyze_data": {"cards": [], "item_types": []},
     "get_football": {"cards": [], "item_types": []},
-    "control_light": {"cards": [], "item_types": []},
-    "control_climate": {"cards": [], "item_types": []},
+    "control_light": {
+        "cards": [],
+        "item_types": ["light_card", "light_sensor_card"],
+    },
+    "control_climate": {
+        "cards": [],
+        "item_types": ["climate_card", "climate_sensor_card"],
+    },
 }
 
 # Content type classes for each item type (for FilteredAdvancedAnswerItem.content union)
@@ -78,6 +88,10 @@ ITEM_TYPE_TO_CONTENT_CLASS: dict[str, type] = {
     "email_form": EmailForm,
     "event_form": EventForm,
     "note_form": InternalNoteForm,
+    "light_card": LightCard,
+    "light_sensor_card": LightSensorCard,
+    "climate_card": ClimateCard,
+    "climate_sensor_card": ClimateSensorCard,
 }
 
 
