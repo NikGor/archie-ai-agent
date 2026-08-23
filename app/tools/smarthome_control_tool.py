@@ -24,7 +24,7 @@ def _extract_current_temperature(live_context: dict[str, Any]) -> float | None:
 
 async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
     action: str,
-    name: str | None = None,
+    device_name: str | None = None,
     area: str | None = None,
     floor: str | None = None,
     brightness: int | str | None = None,
@@ -50,7 +50,7 @@ async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
             decrease_temperature, media_pause, media_unpause, media_next, media_previous,
             media_set_volume, media_volume_step, media_mute, media_unmute, media_search_and_play,
             broadcast, cancel_timers
-        name: Entity name/alias to target, e.g. 'Floor Lamp Living Room', 'Living Room Thermostat'
+        device_name: Entity name/alias to target, e.g. 'Floor Lamp Living Room', 'Living Room Thermostat'
         area: Area/room name to target instead of/in addition to name, e.g. 'Гостиная'
         floor: Floor name to target
         brightness: 0-100 percent, for 'set_light'. Interpret naturally: 'brighter'=+20, 'dim'=-20, 'max'=100
@@ -73,7 +73,7 @@ async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
     volume_percent = coerce_int(volume_percent)
 
     logger.info(
-        f"smarthome_control_001: Action \033[36m{action}\033[0m, name: \033[33m{name}\033[0m, "
+        f"smarthome_control_001: Action \033[36m{action}\033[0m, device_name: \033[33m{device_name}\033[0m, "
         f"area: \033[33m{area}\033[0m, demo_mode: \033[35m{demo_mode}\033[0m"
     )
 
@@ -83,7 +83,7 @@ async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
             "message": f"[DEMO] {action} would be executed",
             "applied_settings": {
                 "action": action,
-                "name": name,
+                "device_name": device_name,
                 "area": area,
                 "brightness": brightness,
                 "color_temp": color_temp,
@@ -93,8 +93,8 @@ async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
         }
 
     target: dict[str, Any] = {}
-    if name:
-        target["name"] = name
+    if device_name:
+        target["name"] = device_name
     if area:
         target["area"] = area
     if floor:
@@ -131,7 +131,7 @@ async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
             if current_temp is None:
                 return {
                     "status": "error",
-                    "message": f"Could not read current temperature for {name or area}",
+                    "message": f"Could not read current temperature for {device_name or area}",
                 }
             temperature = current_temp + (
                 _TEMPERATURE_STEP
@@ -212,7 +212,7 @@ async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
         "message": f"{action} executed successfully",
         "applied_settings": {
             "action": action,
-            "name": name,
+            "device_name": device_name,
             "area": area,
             "brightness": brightness,
             "color_temp": color_temp,
