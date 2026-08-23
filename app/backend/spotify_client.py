@@ -96,6 +96,15 @@ class SpotifyClient:
         async with httpx.AsyncClient(base_url=API_BASE_URL) as client:
             response = await client.request(method, path, headers=headers, timeout=30.0, **kwargs)
 
+        if response.status_code >= 400:
+            # raise_for_status()'s default message doesn't include the response body,
+            # which is where Spotify actually says which field/value it rejected —
+            # log it here so callers relying on raise_for_status() don't lose it.
+            logger.error(
+                f"spotify_client_error_004: \033[31m{method} {path} returned "
+                f"{response.status_code}: {response.text}\033[0m"
+            )
+
         if response.status_code == 404:
             body = response.json() if response.content else {}
             if body.get("error", {}).get("reason") == "NO_ACTIVE_DEVICE":
