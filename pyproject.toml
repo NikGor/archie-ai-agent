@@ -22,6 +22,8 @@ tenacity = "^9.1.4"
 json-repair = "^0.61.4"
 pydantic-settings = "^2.13.1"
 pyyaml = "^6.0.3"
+androidtvremote2 = "^0.3.1"
+croniter = "^6.0.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.0.0"
