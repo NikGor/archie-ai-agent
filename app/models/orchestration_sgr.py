@@ -7,11 +7,13 @@ ToolName = Literal[
     "smarthome_control_tool",
     "smarthome_status_tool",
     "spotify_tool",
+    "tv_tool",
     "google_search_tool",
     "google_places_search_tool",
     "task_tool",
     "notes_tool",
     "events_tool",
+    "cron_tool",
     "document_search_tool",
     "skill_loader_tool",
 ]
