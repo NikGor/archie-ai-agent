@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import logging
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
 
@@ -7,6 +8,7 @@ load_dotenv()
 
 import uvicorn  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
+from app.backend.cron_scheduler import cron_scheduler  # noqa: E402
 from app.endpoints import router  # noqa: E402
 from app.ws_docs import router as ws_docs_router  # noqa: E402
 
@@ -18,10 +20,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 logger.info("=== STEP 1: App Init ===")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    await cron_scheduler.start()
+    try:
+        yield
+    finally:
+        await cron_scheduler.stop()
+
+
 app = FastAPI(
     title="Archie AI Agent",
     description="3-stage orchestration pipeline with Schema-Guided Reasoning (SGR)",
     version="1.0.0",
+    lifespan=lifespan,
 )
 app.include_router(router)
 app.include_router(ws_docs_router)
