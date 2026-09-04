@@ -96,9 +96,38 @@ def _document_search_detail(args: dict[str, Any]) -> str:
     return f"Searching documents: {query}" if query else ""
 
 
+def _tv_detail(args: dict[str, Any]) -> str:
+    action = args.get("action", "")
+    query = args.get("query", "")
+    remote_detail = {
+        "volume_up": "Turning TV volume up",
+        "volume_down": "Turning TV volume down",
+        "mute": "Toggling TV mute",
+    }.get(action)
+    if remote_detail:
+        return remote_detail
+    if action == "play_channel":
+        return f"Playing TV channel: {query}" if query else "Playing TV channel"
+    if action == "play_youtube":
+        return "Opening YouTube video"
+    if action == "list_channels":
+        return f"Searching TV channels: {query}" if query else "Loading TV channels"
+    return "Opening media on TV" if action == "play_url" else "Controlling TV"
+
+
 def _skill_loader_detail(args: dict[str, Any]) -> str:
     skill_name = args.get("skill_name", "")
     return f"Loading skill: {skill_name}" if skill_name else "Loading skill"
+
+
+def _cron_detail(args: dict[str, Any]) -> str:
+    action = args.get("action", "")
+    name = args.get("schedule_name", "") or args.get("name", "")
+    if action == "create":
+        return f"Scheduling: {name}" if name else "Scheduling a task"
+    if action == "list":
+        return "Loading scheduled tasks"
+    return f"Scheduled tasks: {action}" if action else "Managing scheduled tasks"
 
 
 _TOOL_DETAIL_MAP: dict[str, Any] = {
@@ -111,7 +140,9 @@ _TOOL_DETAIL_MAP: dict[str, Any] = {
     "smarthome_control_tool": _smarthome_control_detail,
     "smarthome_status_tool": _smarthome_status_detail,
     "document_search_tool": _document_search_detail,
+    "tv_tool": _tv_detail,
     "skill_loader_tool": _skill_loader_detail,
+    "cron_tool": _cron_detail,
 }
 
 

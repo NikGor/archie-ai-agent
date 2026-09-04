@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from typing import Any
-
 from ..models.orchestration_sgr import Parameter, ToolCallRequest
 from ..models.tool_models import ToolResult
 from ..models.ws_models import StatusCallback, StatusNotifier
@@ -10,6 +9,17 @@ from .status_messages import get_tool_detail
 
 
 logger = logging.getLogger(__name__)
+
+
+def _result_error(result: Any) -> str | None:
+    """Return an error message for the error dictionaries used by Archie tools."""
+    if not isinstance(result, dict):
+        return None
+    if result.get("error"):
+        return str(result["error"])
+    if result.get("status") == "error":
+        return str(result.get("message") or "Tool returned an error status")
+    return None
 
 
 def convert_parameters_to_dict(parameters: list[Parameter]) -> dict[str, Any]:
@@ -41,6 +51,23 @@ async def execute_tool_call(
             tool_name=tool_call.tool_name,
             tool_arguments=arguments_dict,
         )
+        result_error = _result_error(result)
+        if result_error:
+            logger.error(
+                f"tool_executor_error_002: Tool \033[31m{tool_call.tool_name}\033[0m returned an error: {result_error}"
+            )
+            await notifier.emit(
+                "tools",
+                "failed",
+                f"{tool_call.tool_name} failed: {result_error}",
+                detail=detail,
+            )
+            return ToolResult(
+                tool_name=tool_call.tool_name,
+                success=False,
+                output=result,
+                error=result_error,
+            )
         logger.info(
             f"tool_executor_003: Tool \033[36m{tool_call.tool_name}\033[0m executed successfully"
         )
