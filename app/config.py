@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     redis_port: int = 6379
     redis_db: int = 0
 
+    # Persistent scheduled tool execution
+    cron_poll_interval: float = 1.0
+    cron_max_jobs_per_tick: int = 20
+
     # Session-scoped tool result cache (ARCHIE-157)
     tool_result_cache_enabled: bool = False
     tool_result_cache_ttl: int = 3600
@@ -44,6 +48,15 @@ class Settings(BaseSettings):
     spotify_client_secret: str | None = None
     spotify_refresh_token: str | None = None
     spotify_redirect_uri: str = "http://127.0.0.1:8888/callback"
+
+    # Android TV / IPTV integration
+    tv_host: str | None = None
+    tv_cert_file: str = "~/.config/archie-tv-remote/cert.pem"
+    tv_key_file: str = "~/.config/archie-tv-remote/key.pem"
+    tv_playlist_path: str = "Sharavoz.Tv.ott (2) - футбол.m3u"
+    tv_remote_name: str = "Archie TV Remote"
+    tv_connect_timeout: float = 10.0
+    sharavoz_token: str | None = None
 
     # OpenAI vector store (document search)
     openai_vector_store_id: str | None = None
@@ -151,6 +164,9 @@ TOOLS_CONFIG = {
         "smarthome_status_tool": "app.tools.smarthome_status_tool",
         "spotify_tool": "app.tools.spotify_tool",
     },
+    "tv": {
+        "tv_tool": "app.tools.tv_tool",
+    },
     "internet_search": {
         "google_search_tool": "app.tools.google_search_tool",
         "google_places_search_tool": "app.tools.google_places_search_tool",
@@ -159,6 +175,7 @@ TOOLS_CONFIG = {
         "task_tool": "app.tools.task_tool",
         "notes_tool": "app.tools.notes_tool",
         "events_tool": "app.tools.events_tool",
+        "cron_tool": "app.tools.cron_tool",
     },
     "knowledge": {
         "document_search_tool": "app.tools.document_search_tool",
