@@ -24,4 +24,5 @@ services:
       - .env
     volumes:
       - ./app:/app/app
+      - ${HOME}/.config/archie-tv-remote:/root/.config/archie-tv-remote:ro
     restart: unless-stopped
