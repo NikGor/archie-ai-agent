@@ -57,9 +57,6 @@ This service is part of a microservices architecture:
    # OPENAI_API_KEY=your_api_key_here
    ```
 
-4. **Ensure external backend is running**:
-   The service requires a separate backend service running at `http://localhost:8002` or configured via `BACKEND_API_URL`.
-
 ### Docker Setup
 
 1. **Build and run with Docker Compose**:
@@ -128,7 +125,6 @@ Create a `.env` file with the following variables:
 OPENAI_API_KEY=your_openai_api_key_here
 DEFAULT_PERSONA=business
 DEFAULT_USER_NAME=User
-BACKEND_API_URL=http://localhost:8002
 REDIS_HOST=redis
 REDIS_PORT=6379
 ```
