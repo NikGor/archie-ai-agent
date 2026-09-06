@@ -3,6 +3,7 @@ decisions and tool results.
 """
 
 import logging
+from typing import Any
 from ... import config
 from ...agent.prompt_builder import PromptBuilder
 from ...backend.llm.registry import get_client
@@ -31,19 +32,33 @@ _UI_STREAMABLE_FORMATS = frozenset(
 logger = logging.getLogger(__name__)
 
 
-def _build_system_prompt(
+def _build_static_prompt(
     prompt_builder: PromptBuilder,
     response_format: str,
     intents: list[str],
-    command_summary: str,
     state: dict,
-    tool_results: list[ToolResult] | None,
 ) -> str:
+    """Stable, cacheable part of the Stage 3 system prompt (ARCHIE-180)."""
     format_instructions = prompt_builder.build_format_instructions(
         response_format, intents=intents
     )
     assistant_context = prompt_builder.build_assistant_prompt(state, response_format)
+    return f"""You are creating the final response for the user.
 
+# Format Instructions
+{format_instructions}
+
+# Assistant Context
+{assistant_context}"""
+
+
+def _build_volatile_prompt(
+    prompt_builder: PromptBuilder,
+    command_summary: str,
+    state: dict,
+    tool_results: list[ToolResult] | None,
+) -> str:
+    """Per-turn part of the Stage 3 system prompt, kept out of the cache prefix."""
     tools_context = ""
     if tool_results:
         tools_context = "\n\nTool Results:\n"
@@ -52,18 +67,11 @@ def _build_system_prompt(
         logger.info(
             f"create_output_003: Added \033[33m{len(tool_results)}\033[0m tool results to context"
         )
-
-    return f"""You are creating the final response for the user.
-
-# Command Summary
+    datetime_note = prompt_builder.build_datetime_note(state)
+    return f"""# Command Summary
 {command_summary}
 
-# Format Instructions
-{format_instructions}
-
-# Assistant Context
-{assistant_context}
-{tools_context}
+{datetime_note}{tools_context}
 
 Create a complete, well-formatted response in the specified format."""
 
@@ -116,20 +124,28 @@ async def create_output(
     state = state or {}
     intents = intents or []
 
-    system_prompt_content = _build_system_prompt(
-        prompt_builder, response_format, intents, command_summary, state, tool_results
+    static_content = _build_static_prompt(
+        prompt_builder, response_format, intents, state
     )
-    messages = [
-        {"role": "system", "content": system_prompt_content},
-        {"role": "user", "content": user_input},
+    volatile_content = _build_volatile_prompt(
+        prompt_builder, command_summary, state, tool_results
+    )
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": static_content, "cacheable": True},
     ]
     if chat_history:
-        messages.insert(
-            1, {"role": "system", "content": f"Chat History:\n{chat_history}"}
+        messages.append(
+            {
+                "role": "system",
+                "content": f"Chat History:\n{chat_history}",
+                "cacheable": True,
+            }
         )
         logger.info(
             f"create_output_003b: Added chat_history to context (len: \033[33m{len(chat_history)}\033[0m)"
         )
+    messages.append({"role": "system", "content": volatile_content})
+    messages.append({"role": "user", "content": user_input})
 
     logger.info(
         f"create_output_004: Calling LLM with \033[33m{len(messages)}\033[0m messages"
@@ -156,6 +172,7 @@ async def create_output(
         and on_stream
     ):
         response_id_out: list[str] = []
+        usage_out: dict[str, int] = {}
         full_json, ttft_ms = await stream_and_collect(
             client=client,
             messages=messages,
@@ -165,8 +182,11 @@ async def create_output(
             extractor=JsonPathExtractor(["text"]),
             on_chunk=on_stream,
             response_id_out=response_id_out,
+            usage_out=usage_out,
         )
-        parsed_stream = parse_assembled_stream(full_json, model, PlainResponse)
+        parsed_stream = parse_assembled_stream(
+            full_json, model, PlainResponse, usage_out
+        )
         return await build_agent_response(
             parsed_content=parsed_stream.parsed_content,
             response_format=response_format,
@@ -186,6 +206,7 @@ async def create_output(
         async def _on_chunk_l2(chunk: str) -> None:
             await on_stream_event("stream_delta", chunk)  # type: ignore[misc]
 
+        usage_out_l2: dict[str, int] = {}
         full_json_l2, ttft_ms_l2 = await stream_and_collect(
             client=client,
             messages=messages,
@@ -194,8 +215,11 @@ async def create_output(
             previous_response_id=previous_response_id,
             extractor=JsonPathExtractor(["level2_answer", "text", "text"]),
             on_chunk=_on_chunk_l2,
+            usage_out=usage_out_l2,
         )
-        parsed_l2 = parse_assembled_stream(full_json_l2, model, Level2Response)
+        parsed_l2 = parse_assembled_stream(
+            full_json_l2, model, Level2Response, usage_out_l2
+        )
         return await build_agent_response(
             parsed_content=parsed_l2.parsed_content,
             response_format=response_format,
@@ -226,6 +250,7 @@ async def create_output(
             extra_extractors_ui = [(_intro_extractor, _on_chunk_intro)]
 
         response_id_out_ui: list[str] = []
+        usage_out_ui: dict[str, int] = {}
         full_json_ui, ttft_ms_ui = await stream_and_collect(
             client=client,
             messages=messages,
@@ -236,9 +261,12 @@ async def create_output(
             on_chunk=_on_chunk_ui,
             response_id_out=response_id_out_ui,
             max_output_tokens=config.UI_STREAM_MAX_OUTPUT_TOKENS,
+            usage_out=usage_out_ui,
             extra_extractors=extra_extractors_ui,
         )
-        parsed_stream_ui = parse_assembled_stream(full_json_ui, model, response_model)
+        parsed_stream_ui = parse_assembled_stream(
+            full_json_ui, model, response_model, usage_out_ui
+        )
         return await build_agent_response(
             parsed_content=parsed_stream_ui.parsed_content,
             response_format=response_format,

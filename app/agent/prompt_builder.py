@@ -48,6 +48,19 @@ class PromptBuilder:
             "current_weekday": now.strftime("%A"),
         }
 
+    def build_datetime_note(self, state: dict) -> str:
+        """Return the current date/time line for the volatile prompt tail.
+
+        Kept out of the cacheable prefix so minute-level changes don't break the
+        prompt cache (ARCHIE-180).
+        """
+        dt = self._with_current_datetime(state)
+        return (
+            f"Current date/time: {dt['current_weekday']}, "
+            f"{dt['current_date']}, {dt['current_time']} "
+            f"({state.get('user_timezone') or 'UTC'})"
+        )
+
     def build_command_messages(
         self,
         user_input: str,
@@ -56,10 +69,15 @@ class PromptBuilder:
         provider: str,
         previous_results: list[ToolResult] | None = None,
         chat_history: str | None = None,
-    ) -> list[dict[str, str]]:
-        """Build the full message list for Stage 1 command call."""
+    ) -> list[dict[str, Any]]:
+        """Build the full message list for Stage 1 command call.
+
+        Order keeps a stable, cacheable prefix (static instructions → chat
+        history) ahead of the volatile tail (datetime, tool results, query) so
+        prompt caching stays valid across turns (ARCHIE-180).
+        """
         cmd_prompt_template = self.env.get_template("cmd_prompt.jinja2")
-        cmd_prompt = cmd_prompt_template.render(state=self._with_current_datetime(state))
+        cmd_prompt = cmd_prompt_template.render(state=state)
         tools_list = "\n".join(
             [
                 f"- {t['name']}: {t.get('description', '')}\n  Parameters: {json.dumps(t.get('parameters', {}), ensure_ascii=False)}"
@@ -74,26 +92,30 @@ class PromptBuilder:
                 "\n\nAvailable Skills (call skill_loader_tool with skill_name to load "
                 f"full instructions):\n{skills_list}"
             )
-        messages: list[dict[str, str]] = [
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": user_input},
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": system_message, "cacheable": True},
         ]
         if chat_history and provider != "openai":
-            messages.insert(
-                1,
-                {"role": "system", "content": f"Chat History:\n{chat_history}"},
+            messages.append(
+                {
+                    "role": "system",
+                    "content": f"Chat History:\n{chat_history}",
+                    "cacheable": True,
+                }
             )
             logger.info(
                 f"prompt_builder_010: Added chat_history to context (len: \033[33m{len(chat_history)}\033[0m)"
             )
+        volatile = self.build_datetime_note(state)
         if previous_results:
-            results_context = "\n\nPrevious Tool Results:\n"
+            volatile += "\n\nPrevious Tool Results:\n"
             for result in previous_results:
-                results_context += f"- {result.tool_name}: {result.output}\n"
-            messages.append({"role": "assistant", "content": results_context})
+                volatile += f"- {result.tool_name}: {result.output}\n"
             logger.info(
                 f"prompt_builder_011: Added \033[33m{len(previous_results)}\033[0m previous results to context"
             )
+        messages.append({"role": "system", "content": volatile})
+        messages.append({"role": "user", "content": user_input})
         return messages
 
     def build_assistant_prompt(
@@ -105,7 +127,7 @@ class PromptBuilder:
         logger.info("prompt_builder_003: Building assistant prompt")
         template = self.env.get_template("assistant_prompt.jinja2")
         return template.render(
-            state=self._with_current_datetime(state),
+            state=state,
             response_format=response_format,
         )
 

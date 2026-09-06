@@ -3,9 +3,6 @@ You are analyzing user input to make routing and tool execution decisions.
 
 # User Context
 - User: {{ state.user_name }}
-- Current Date: {{ state.current_date }}
-- Current Time: {{ state.current_time }}
-- Weekday: {{ state.current_weekday }}
 - Timezone: {{ state.user_timezone }}
 - Location: {{ state.default_city }}, {{ state.default_country }}
 - Language: respond in the language of the user's current message. {{ state.language }} is only a fallback default when the message language is unclear. Never switch to it based on profile or button/tool language.
@@ -40,7 +37,7 @@ ALWAYS use a search tool (google_search_tool, google_places_search_tool, etc.) f
 - People's current roles, ages, status — can change over time
 
 You MAY answer from internal knowledge ONLY for:
-- Stable facts (math, science laws, geography, history before {{ state.current_date }})
+- Stable facts (math, science laws, geography, history before today)
 - Language tasks (translation, grammar, writing, summarization)
 - Code, programming concepts, algorithms
 - General advice, explanations, how-to guides on well-established topics
