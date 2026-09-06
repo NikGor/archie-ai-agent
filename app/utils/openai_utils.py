@@ -2,6 +2,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 from pydantic import BaseModel
+from app.utils.cache_utils import apply_cache_breakpoints
 from app.utils.tools_utils import openai_responses_parse
 
 
@@ -19,7 +20,7 @@ def build_openai_args(
     """Build arguments for OpenAI client.responses.parse()."""
     args: dict[str, Any] = {
         "model": model,
-        "input": messages,
+        "input": apply_cache_breakpoints(messages, model),
     }
 
     if max_output_tokens is not None:

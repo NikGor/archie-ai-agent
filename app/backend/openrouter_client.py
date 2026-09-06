@@ -12,12 +12,32 @@ from openai import (
 )
 from pydantic import BaseModel
 from app.config import settings
+from app.utils.cache_utils import apply_cache_breakpoints
 from app.utils.retry_utils import call_with_retry
 
 
 logger = logging.getLogger(__name__)
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+
+def _usage_to_dict(usage: Any) -> dict[str, int]:
+    """Normalize an OpenRouter usage object into the stream usage dict shape."""
+    prompt_details = getattr(usage, "prompt_tokens_details", None)
+    completion_details = getattr(usage, "completion_tokens_details", None)
+    return {
+        "input_tokens": getattr(usage, "prompt_tokens", 0) or 0,
+        "output_tokens": getattr(usage, "completion_tokens", 0) or 0,
+        "total_tokens": getattr(usage, "total_tokens", 0) or 0,
+        "cached_tokens": (
+            getattr(prompt_details, "cached_tokens", 0) or 0 if prompt_details else 0
+        ),
+        "reasoning_tokens": (
+            getattr(completion_details, "reasoning_tokens", 0) or 0
+            if completion_details
+            else 0
+        ),
+    }
 
 
 class OpenRouterClient:
@@ -64,7 +84,7 @@ class OpenRouterClient:
         """Build kwargs dict for chat.completions.create calls."""
         create_kwargs: dict[str, Any] = {
             "model": model,
-            "messages": messages,
+            "messages": apply_cache_breakpoints(messages, model),
         }
         if response_format:
             schema = response_format.model_json_schema()
@@ -144,15 +164,19 @@ class OpenRouterClient:
         previous_response_id: str | None = None,  # noqa: ARG002
         response_id_out: list[str] | None = None,  # noqa: ARG002
         max_output_tokens: int | None = None,
+        usage_out: dict[str, int] | None = None,
     ) -> AsyncIterator[str]:
         """
         Stream completion tokens from OpenRouter API.
 
         Yields raw token strings as they arrive. The caller is responsible
-        for reassembling and parsing the full structured response.
+        for reassembling and parsing the full structured response. If
+        `usage_out` is provided, token usage from the final chunk is written
+        into it (ARCHIE-180).
         """
         create_kwargs = self._build_create_kwargs(messages, model, response_format)
         create_kwargs["stream"] = True
+        create_kwargs["stream_options"] = {"include_usage": True}
         if max_output_tokens is not None:
             create_kwargs["max_tokens"] = max_output_tokens
         logger.info(
@@ -161,6 +185,9 @@ class OpenRouterClient:
         try:
             stream = await self.async_client.chat.completions.create(**create_kwargs)
             async for chunk in stream:
+                usage = getattr(chunk, "usage", None)
+                if usage and usage_out is not None:
+                    usage_out.update(_usage_to_dict(usage))
                 if chunk.choices and chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
         except Exception as e:
