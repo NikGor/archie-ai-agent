@@ -17,11 +17,16 @@ async def stream_and_collect(
     on_chunk: Callable[[str], Awaitable[None]] | None = None,
     response_id_out: list[str] | None = None,
     max_output_tokens: int | None = None,
+    usage_out: dict[str, int] | None = None,
     extra_extractors: (
         Sequence[tuple[Any, Callable[[str], Awaitable[None]]]] | None
     ) = None,
 ) -> tuple[str, int | None]:
-    """Stream LLM response, collect JSON, return (full_json, ttft_ms)."""
+    """Stream LLM response, collect JSON, return (full_json, ttft_ms).
+
+    If `usage_out` is provided, token usage is written into it by the client
+    once the stream completes (ARCHIE-180).
+    """
     json_parts: list[str] = []
     stream_start = time.monotonic()
     ttft_ms: int | None = None
@@ -30,6 +35,8 @@ async def stream_and_collect(
         kwargs["response_id_out"] = response_id_out
     if max_output_tokens is not None:
         kwargs["max_output_tokens"] = max_output_tokens
+    if usage_out is not None:
+        kwargs["usage_out"] = usage_out
     async for token in client.create_completion_stream(
         messages=messages,
         model=model,

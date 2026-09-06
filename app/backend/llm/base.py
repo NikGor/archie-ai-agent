@@ -31,4 +31,5 @@ class LLMClient(Protocol):
         previous_response_id: str | None = None,
         response_id_out: list[str] | None = None,
         max_output_tokens: int | None = None,
+        usage_out: dict[str, int] | None = None,
     ) -> AsyncIterator[str]: ...

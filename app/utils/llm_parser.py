@@ -13,8 +13,14 @@ logger = logging.getLogger(__name__)
 EXCLUDED_FIELDS = {"llm_trace", "response_id"}
 
 
-def calculate_token_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+def calculate_token_cost(
+    model: str, input_tokens: int, output_tokens: int, cached_tokens: int = 0
+) -> float:
     """Calculate LLM call cost in USD using MODEL_TOKEN_PRICES ($/1M tokens).
+
+    Cached input tokens (a subset of input_tokens) are billed at a reduced rate:
+    the model's explicit "cached" price when set, otherwise a provider default
+    (Anthropic cache reads ~0.1x input, others ~0.25x). ARCHIE-180.
 
     Supports versioned model names returned by providers (e.g. gpt-5.6-luna-2026-07-09
     matched against stored key gpt-5.6-luna via prefix lookup).
@@ -27,9 +33,15 @@ def calculate_token_cost(model: str, input_tokens: int, output_tokens: int) -> f
         )
     if prices is None:
         return 0.0
-    return (input_tokens / 1_000_000) * prices["input"] + (
-        output_tokens / 1_000_000
-    ) * prices["output"]
+    cached_price = prices.get("cached")
+    if cached_price is None:
+        cached_price = prices["input"] * (0.1 if model.startswith("anthropic/") else 0.25)
+    uncached_tokens = max(input_tokens - cached_tokens, 0)
+    return (
+        (uncached_tokens / 1_000_000) * prices["input"]
+        + (cached_tokens / 1_000_000) * cached_price
+        + (output_tokens / 1_000_000) * prices["output"]
+    )
 
 
 class ParsedLLMResponse:
@@ -84,7 +96,10 @@ def parse_openai_response(
         reasoning_tokens=usage.output_tokens_details.reasoning_tokens,
         total_tokens=usage.total_tokens,
         total_cost=calculate_token_cost(
-            raw_response.model, usage.input_tokens, usage.output_tokens
+            raw_response.model,
+            usage.input_tokens,
+            usage.output_tokens,
+            usage.input_tokens_details.cached_tokens,
         ),
     )
     logger.info(
@@ -191,7 +206,9 @@ def parse_openrouter_response(
         output_tokens=output_tokens,
         reasoning_tokens=reasoning_tokens,
         total_tokens=total_tokens,
-        total_cost=calculate_token_cost(openrouter_model, input_tokens, output_tokens),
+        total_cost=calculate_token_cost(
+            openrouter_model, input_tokens, output_tokens, cached_tokens
+        ),
     )
     logger.info(
         f"llm_parser_010: Cost: \033[33m${llm_trace.total_cost:.6f}\033[0m "
@@ -240,24 +257,45 @@ def parse_llm_response(
         raise ValueError(f"Unsupported provider: {provider}")
 
 
+def build_stream_trace(model: str, usage: dict[str, int]) -> LllmTrace:
+    """Build an LllmTrace from streamed usage figures (ARCHIE-180)."""
+    input_tokens = usage.get("input_tokens", 0)
+    output_tokens = usage.get("output_tokens", 0)
+    cached_tokens = usage.get("cached_tokens", 0)
+    return build_llm_trace(
+        model=model,
+        input_tokens=input_tokens,
+        cached_tokens=cached_tokens,
+        output_tokens=output_tokens,
+        reasoning_tokens=usage.get("reasoning_tokens", 0),
+        total_tokens=usage.get("total_tokens", input_tokens + output_tokens),
+        total_cost=calculate_token_cost(
+            model, input_tokens, output_tokens, cached_tokens
+        ),
+    )
+
+
 def parse_assembled_stream(
     full_json: str,
     model: str,
     expected_type: type[BaseModel],
+    usage: dict[str, int] | None = None,
 ) -> ParsedLLMResponse:
     """
-    Parse a fully assembled streaming response (no token counts available).
+    Parse a fully assembled streaming response.
 
-    Used when a response was built by concatenating streaming chunks.
-    Sets model in llm_trace but token counts are 0.
+    Used when a response was built by concatenating streaming chunks. When
+    `usage` is provided (populated by the client from the final stream chunk),
+    the llm_trace carries real token counts and cost; otherwise counts are 0.
 
     Args:
         full_json: Complete JSON string assembled from streamed tokens
         model: Model name (for llm_trace)
         expected_type: Expected Pydantic model type
+        usage: Optional stream usage dict (input/output/cached/reasoning/total)
 
     Returns:
-        ParsedLLMResponse with parsed content and minimal llm_trace
+        ParsedLLMResponse with parsed content and llm_trace
     """
     logger.info(
         f"llm_parser_011: Parsing assembled stream, model: \033[36m{model}\033[0m"
@@ -266,13 +304,16 @@ def parse_assembled_stream(
     logger.info(
         f"llm_parser_012: Parsed stream content type: \033[36m{type(parsed_content).__name__}\033[0m"
     )
-    llm_trace = build_llm_trace(
-        model=model,
-        input_tokens=0,
-        output_tokens=0,
-        total_tokens=0,
-        total_cost=0.0,
-    )
+    if usage:
+        llm_trace = build_stream_trace(model, usage)
+    else:
+        llm_trace = build_llm_trace(
+            model=model,
+            input_tokens=0,
+            output_tokens=0,
+            total_tokens=0,
+            total_cost=0.0,
+        )
     return ParsedLLMResponse(
         parsed_content=parsed_content,
         llm_trace=llm_trace,

@@ -19,6 +19,25 @@ from app.utils.retry_utils import call_with_retry
 logger = logging.getLogger(__name__)
 
 
+def _openai_usage_to_dict(usage: Any) -> dict[str, int]:
+    """Normalize an OpenAI Responses usage object into the stream usage shape."""
+    input_details = getattr(usage, "input_tokens_details", None)
+    output_details = getattr(usage, "output_tokens_details", None)
+    return {
+        "input_tokens": getattr(usage, "input_tokens", 0) or 0,
+        "output_tokens": getattr(usage, "output_tokens", 0) or 0,
+        "total_tokens": getattr(usage, "total_tokens", 0) or 0,
+        "cached_tokens": (
+            getattr(input_details, "cached_tokens", 0) or 0 if input_details else 0
+        ),
+        "reasoning_tokens": (
+            getattr(output_details, "reasoning_tokens", 0) or 0
+            if output_details
+            else 0
+        ),
+    }
+
+
 class OpenAIClient:
     """Client for OpenAI API interactions."""
 
@@ -98,6 +117,7 @@ class OpenAIClient:
         previous_response_id: str | None = None,
         response_id_out: list[str] | None = None,
         max_output_tokens: int | None = None,
+        usage_out: dict[str, int] | None = None,
     ) -> AsyncIterator[str]:
         """
         Stream completion tokens using OpenAI Responses API (responses.stream()).
@@ -107,7 +127,9 @@ class OpenAIClient:
 
         Note: previous_response_id is passed through for conversation caching.
         If response_id_out is provided (a mutable list), the OpenAI response ID
-        (resp_...) will be appended to it from the response.created event.
+        (resp_...) will be appended to it from the response.created event. If
+        usage_out is provided, token usage is written into it from the
+        response.completed event (ARCHIE-180).
         """
         args = build_openai_args(
             model=model,
@@ -124,6 +146,10 @@ class OpenAIClient:
                         resp_id = getattr(event.response, "id", None)
                         if resp_id:
                             response_id_out.append(resp_id)
+                    elif event.type == "response.completed" and usage_out is not None:
+                        usage = getattr(event.response, "usage", None)
+                        if usage:
+                            usage_out.update(_openai_usage_to_dict(usage))
                     elif event.type == "response.output_text.delta" and getattr(
                         event, "delta", None
                     ):
