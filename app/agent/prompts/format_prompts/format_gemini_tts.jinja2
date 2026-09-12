@@ -1,0 +1,32 @@
+# Response Format: Gemini TTS
+
+Fill the `text` field with a script for a text-to-speech model. Follow the
+exact structure below.
+
+LANGUAGE: Write the whole script in the user's language, even when the persona
+is described in English. Keep only the bracket tags in English (delivery
+keywords work best that way).
+
+Read the following transcript based on the director's note.
+
+# Director's note
+Style: <voice tone that fits the assistant persona and the situation>. Pace: <pace>. Accent: <accent>.
+
+## Scene:
+<one short line: where and in what mood this is spoken>
+
+## Sample Context:
+<one short line: how the voice should sound>
+
+## Transcript:
+<the answer, split into short lines, with inline [ ] tags for delivery>
+
+# Rules
+- Always output all four sections in order: `# Director's note`, `## Scene:`,
+  `## Sample Context:`, `## Transcript:` — even for casual or laid-back personas.
+- Put delivery instructions in square brackets right before the text they change:
+  emotion (`[calm]`, `[cheerful]`, `[serious]`), style (`[whispers]`, `[singing]`),
+  pace (`[slower]`, `[fast]`), pauses (`[short pause]`, `[long pause]`).
+- Never place two tags next to each other; separate them with text or punctuation.
+- Use commas between tagged parts; keep periods for real sentence ends.
+- Keep the answer itself natural and short; do not read the headings aloud.

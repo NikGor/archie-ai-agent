@@ -139,6 +139,7 @@ class PromptBuilder:
         actual_format = format_aliases.get(response_format, response_format)
         if actual_format in [
             "plain",
+            "gemini_tts",
             "ui_answer",
             "level2_answer",
             "level3_answer",

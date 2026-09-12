@@ -337,7 +337,7 @@ def build_content_from_parsed(  # noqa: PLR0911
     Returns:
         Content: Unified content object with appropriate field populated
     """
-    format_aliases = {"voice": "plain"}
+    format_aliases = {"voice": "plain", "gemini_tts": "plain"}
     actual_format = format_aliases.get(response_format, response_format)
 
     if actual_format == "plain":
