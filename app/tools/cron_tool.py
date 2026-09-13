@@ -59,7 +59,8 @@ async def cron_tool(  # noqa: PLR0912
 ) -> dict[str, Any]:
     """
     Schedule existing Archie tools for later execution and manage saved schedules.
-    Use it for future actions such as turning on a light or opening a football channel.
+    Use it for future actions such as turning on a light, opening a football
+    channel, or speaking a reminder aloud via announce_tool.
     For a new job, translate natural-language dates into an ISO 8601 run_at using the
     current date/time context, or use a standard five-field cron_expression. Always pass
     the user's IANA timezone. arguments_json is the target tool's arguments as JSON.
@@ -73,6 +74,9 @@ async def cron_tool(  # noqa: PLR0912
         Recurring: schedule_name="Saturday football", tool_name="tv_tool",
         arguments_json='{"action":"play_channel","query":"Матч! Футбол 1"}',
         cron_expression="0 20 * * 6", timezone="Europe/Berlin".
+        Voice reminder: schedule_name="Match reminder", tool_name="announce_tool",
+        arguments_json='{"prompt":"remind me the match starts in an hour"}',
+        cron_expression="0 19 * * 6", timezone="Europe/Berlin".
 
     Args:
         action: One of: create, list, get, pause, resume, delete, run_now; defaults to create
