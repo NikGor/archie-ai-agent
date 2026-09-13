@@ -130,6 +130,10 @@ def _cron_detail(args: dict[str, Any]) -> str:
     return f"Scheduled tasks: {action}" if action else "Managing scheduled tasks"
 
 
+def _announce_detail(_args: dict[str, Any]) -> str:
+    return "Speaking a reminder"
+
+
 _TOOL_DETAIL_MAP: dict[str, Any] = {
     "google_search_tool": _google_search_detail,
     "google_places_search_tool": _google_places_detail,
@@ -143,6 +147,7 @@ _TOOL_DETAIL_MAP: dict[str, Any] = {
     "tv_tool": _tv_detail,
     "skill_loader_tool": _skill_loader_detail,
     "cron_tool": _cron_detail,
+    "announce_tool": _announce_detail,
 }
 
 

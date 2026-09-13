@@ -176,6 +176,7 @@ TOOLS_CONFIG = {
         "notes_tool": "app.tools.notes_tool",
         "events_tool": "app.tools.events_tool",
         "cron_tool": "app.tools.cron_tool",
+        "announce_tool": "app.tools.announce_tool",
     },
     "knowledge": {
         "document_search_tool": "app.tools.document_search_tool",
