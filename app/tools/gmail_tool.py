@@ -3,6 +3,7 @@
 import logging
 from typing import Any
 from app.backend.gmail_client import GmailClient
+from app.utils.arg_coercion import coerce_int
 
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,7 @@ async def gmail_tool(
     Returns:
         Dict with messages (message_id, subject, sender_name, sender_email, snippet, received_at, is_unread, has_attachments, gmail_url) or error information
     """
+    max_results = coerce_int(max_results)
     logger.info(f"gmail_001: Action requested: \033[36m{action}\033[0m")
     if demo_mode:
         return _demo_response(action)
