@@ -271,3 +271,6 @@ PROJECT_STATE.md
 SESSION_LOG.md
 CLAUDE.md
 openrouter_model_catalog.md
+
+# Gmail OAuth token
+token_gmail.json
