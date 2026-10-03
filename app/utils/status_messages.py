@@ -36,6 +36,14 @@ def _events_detail(args: dict[str, Any]) -> str:  # noqa: PLR0911
     return f"Calendar: {action}" if action else ""
 
 
+def _gmail_detail(args: dict[str, Any]) -> str:
+    action = args.get("action", "")
+    query = args.get("query", "")
+    if action == "read":
+        return "Reading email"
+    return f"Searching Gmail: {query}" if query else "Loading Gmail inbox"
+
+
 def _task_detail(args: dict[str, Any]) -> str:
     action = args.get("action", "")
     title = args.get("title", "")
@@ -138,6 +146,7 @@ _TOOL_DETAIL_MAP: dict[str, Any] = {
     "google_search_tool": _google_search_detail,
     "google_places_search_tool": _google_places_detail,
     "events_tool": _events_detail,
+    "gmail_tool": _gmail_detail,
     "task_tool": _task_detail,
     "notes_tool": _notes_detail,
     "spotify_tool": _spotify_detail,
