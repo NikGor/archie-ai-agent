@@ -40,6 +40,7 @@ class Settings(BaseSettings):
 
     # Google integrations
     google_calendar_credentials_file: str = "credentials.json"
+    gmail_token_file: str = "token_gmail.json"
     google_places_api_key: str | None = None
     google_api_key: str | None = None
 
@@ -175,6 +176,7 @@ TOOLS_CONFIG = {
         "task_tool": "app.tools.task_tool",
         "notes_tool": "app.tools.notes_tool",
         "events_tool": "app.tools.events_tool",
+        "gmail_tool": "app.tools.gmail_tool",
         "cron_tool": "app.tools.cron_tool",
         "announce_tool": "app.tools.announce_tool",
     },
