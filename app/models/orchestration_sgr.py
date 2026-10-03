@@ -13,6 +13,7 @@ ToolName = Literal[
     "task_tool",
     "notes_tool",
     "events_tool",
+    "gmail_tool",
     "cron_tool",
     "announce_tool",
     "document_search_tool",
