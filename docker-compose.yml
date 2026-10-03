@@ -23,5 +23,6 @@ services:
       - .env
     volumes:
       - ./app:/app/app
+      - ./token_gmail.json:/app/token_gmail.json:ro
       - ${HOME}/.config/archie-tv-remote:/root/.config/archie-tv-remote:ro
     restart: unless-stopped
