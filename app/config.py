@@ -130,6 +130,30 @@ MODEL_PROVIDERS = {
     ],
 }
 
+# Models that accept image input (mirrored in ChatInput.js VISION_MODELS)
+VISION_MODELS: frozenset[str] = frozenset(
+    {
+        "gpt-5.6-luna",
+        "gpt-4.1",
+        "gpt-4.1-mini",
+        "gpt-4.1-nano",
+        "gpt-5.4",
+        "gpt-5.4-pro",
+        "gpt-5.4-mini",
+        "gpt-5.4-nano",
+        "google/gemini-3.1-pro-preview",
+        "google/gemini-3-flash-preview",
+        "google/gemini-3.1-flash-lite-preview",
+        "anthropic/claude-opus-4.6",
+        "anthropic/claude-sonnet-4.6",
+        "anthropic/claude-opus-4.5",
+        "anthropic/claude-sonnet-4.5",
+        "anthropic/claude-haiku-4.5",
+        "x-ai/grok-4.20-beta",
+        "x-ai/grok-4.1-fast",
+    }
+)
+
 # Token prices in USD per 1M tokens: {"input": price, "output": price}
 # Sources: official provider pricing pages (2026-03)
 # Models not listed return 0.0 from calculate_token_cost() in llm_parser.py
