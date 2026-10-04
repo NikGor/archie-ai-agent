@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable
 from archie_shared.chat.models import ChatMessage, ChatRequest
 from .agent.agent_factory import AgentFactory
 from .config import DEFAULT_MODEL
+from .utils.provider_utils import supports_vision
 from .models.ws_models import StatusUpdate, StreamCallback, StreamEventCallback
 from .utils.general_utils import generate_message_id
 
@@ -32,6 +33,13 @@ async def handle_chat(
     current_messages = [{"role": "user", "content": user_request.input}]
     command_model = user_request.command_model or DEFAULT_MODEL
     final_output_model = user_request.final_output_model or DEFAULT_MODEL
+    images = user_request.images or None
+    if images and not supports_vision(command_model):
+        logger.warning(
+            f"api_controller_003: Command model \033[36m{command_model}\033[0m has no vision support, "
+            f"dropping \033[33m{len(images)}\033[0m image(s)"
+        )
+        images = None
     agent_factory = AgentFactory(demo_mode=user_request.demo_mode)
     agent_response = await agent_factory.arun(
         messages=current_messages,
@@ -43,6 +51,7 @@ async def handle_chat(
         user_name=user_request.user_name,
         conversation_id=user_request.conversation_id,
         no_image=no_image,
+        images=images,
         on_status=on_status,
         on_stream=on_stream,
         on_stream_event=on_stream_event,
