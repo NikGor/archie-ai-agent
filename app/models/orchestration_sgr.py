@@ -70,6 +70,14 @@ class DecisionResponse(BaseModel):
     """Response from orchestration/decision-making LLM call"""
 
     sgr: SGROrchestration = Field(description="Orchestration reasoning trace")
+    image_description: str = Field(
+        default="",
+        description=(
+            "Only when the user attached images: a concise factual description of what "
+            "the images show (text, objects, numbers) relevant to the request. "
+            "Passed to the final answer stage, which cannot see the images. Empty otherwise."
+        ),
+    )
     handover_context: str = Field(
         description="results obtained from tool calls, missing parameters or information from internal knowledge to prepare the final answer"
     )
