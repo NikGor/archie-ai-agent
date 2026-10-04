@@ -1,6 +1,6 @@
 import logging
 import time
-from archie_shared.chat.models import LllmTrace
+from archie_shared.chat.models import ImageAttachment, LllmTrace
 from ..backend.llm.registry import get_client
 from ..backend.state_service import StateService
 from ..backend.tool_result_store import ToolResultStore
@@ -55,6 +55,7 @@ class AgentFactory:
         response_format: str,
         ctx: ConversationContext,
         previous_results: list[ToolResult] | None = None,
+        images: list[ImageAttachment] | None = None,
     ) -> tuple[DecisionResponse, LllmTrace | None]:
         """
         Stage 1: Analyze request and decide action using cmd_prompt.
@@ -73,6 +74,7 @@ class AgentFactory:
             provider=provider,
             previous_results=previous_results,
             chat_history=ctx.chat_history,
+            images=images,
         )
         logger.info(f"agent_factory_008: Making command call with {provider}")
         raw_response = await client.create_completion(
@@ -151,6 +153,7 @@ class AgentFactory:
         user_name: str | None = None,
         conversation_id: str | None = None,
         no_image: bool = False,
+        images: list[ImageAttachment] | None = None,
         on_status: StatusCallback = None,
         on_stream: StreamCallback = None,
         on_stream_event: StreamEventCallback = None,
@@ -219,6 +222,7 @@ class AgentFactory:
             response_format=response_format,
             ctx=conversation_ctx.for_provider(cmd_provider),
             seed_results=persisted_results,
+            images=images,
             notifier=notifier,
             on_status=on_status,
         )

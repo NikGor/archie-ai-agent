@@ -8,7 +8,7 @@ patch it) keep working unchanged.
 
 import logging
 from collections.abc import Awaitable, Callable
-from archie_shared.chat.models import LllmTrace
+from archie_shared.chat.models import ImageAttachment, LllmTrace
 from ..models.orchestration_sgr import DecisionResponse
 from ..models.state_models import UserState
 from ..models.tool_models import ToolResult
@@ -25,12 +25,17 @@ logger = logging.getLogger(__name__)
 MakeCommandCall = Callable[..., Awaitable[tuple[DecisionResponse, LllmTrace | None]]]
 
 
-def format_command_summary(command_history: list[dict], tool_count: int) -> str:
+def format_command_summary(
+    command_history: list[dict], tool_count: int, image_description: str = ""
+) -> str:
     parts = [
         f"Iteration {h['iteration']}: {h['action_type']} - {h['reasoning']}"
         for h in command_history
     ]
-    return "\n\n".join(parts) + f"\n\nTotal tools executed: {tool_count}"
+    summary = "\n\n".join(parts) + f"\n\nTotal tools executed: {tool_count}"
+    if image_description:
+        summary += f"\n\nUser-attached images: {image_description}"
+    return summary
 
 
 class CommandLoopResult:
@@ -68,8 +73,10 @@ class CommandLoop:
         seed_results: list[ToolResult],
         notifier: StatusNotifier,
         on_status: StatusCallback,
+        images: list[ImageAttachment] | None = None,
     ) -> CommandLoopResult:
         tool_results = list(seed_results)
+        image_description = ""
         command_history: list[dict] = []
         iteration = 0
         decision: DecisionResponse | None = None
@@ -100,7 +107,10 @@ class CommandLoop:
                     response_format=response_format,
                     ctx=ctx,
                     previous_results=tool_results if tool_results else None,
+                    images=images,
                 )
+            if decision.image_description:
+                image_description = decision.image_description
             self.metrics.add_stage1(s1_timer.duration_ms, s1_llm_trace)
             tool_names = (
                 [tc.tool_name for tc in decision.sgr.tool_calls]
@@ -166,7 +176,9 @@ class CommandLoop:
                 f"agent_factory_warning_002: Reached max iterations ({self.max_iterations})"
             )
 
-        command_summary = format_command_summary(command_history, len(tool_results))
+        command_summary = format_command_summary(
+            command_history, len(tool_results), image_description
+        )
         ui_intents = [str(i) for i in decision.sgr.intents] if decision else []
         return CommandLoopResult(
             tool_results=tool_results,

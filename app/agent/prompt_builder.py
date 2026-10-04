@@ -6,8 +6,10 @@ import os
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from archie_shared.chat.models import ImageAttachment
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from ..models.tool_models import ToolResult
+from ..utils.image_utils import build_user_content
 from ..utils.skill_utils import list_skills
 
 
@@ -69,6 +71,7 @@ class PromptBuilder:
         provider: str,
         previous_results: list[ToolResult] | None = None,
         chat_history: str | None = None,
+        images: list[ImageAttachment] | None = None,
     ) -> list[dict[str, Any]]:
         """Build the full message list for Stage 1 command call.
 
@@ -115,7 +118,9 @@ class PromptBuilder:
                 f"prompt_builder_011: Added \033[33m{len(previous_results)}\033[0m previous results to context"
             )
         messages.append({"role": "system", "content": volatile})
-        messages.append({"role": "user", "content": user_input})
+        messages.append(
+            {"role": "user", "content": build_user_content(user_input, images, provider)}
+        )
         return messages
 
     def build_assistant_prompt(
