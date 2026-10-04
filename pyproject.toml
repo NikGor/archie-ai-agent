@@ -12,7 +12,7 @@ jinja2 = "^3.1.6"
 fastapi = "^0.115.0"
 uvicorn = "^0.31.1"
 httpx = "^0.28.0"
-archie-shared = {git = "https://github.com/NikGor/homeassistant.git", subdirectory = "archie-shared", tag = "v0.1.79"}
+archie-shared = {git = "https://github.com/NikGor/homeassistant.git", subdirectory = "archie-shared", tag = "v0.1.80"}
 google-genai = "^1.50.1"
 redis = "^7.1.0"
 docstring-parser = "^0.17.0"
@@ -24,6 +24,8 @@ pydantic-settings = "^2.13.1"
 pyyaml = "^6.0.3"
 androidtvremote2 = "^0.3.1"
 croniter = "^6.0.0"
+pypdf = "^6.19.0"
+python-docx = "^1.2.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.0.0"
