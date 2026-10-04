@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable
 from archie_shared.chat.models import ChatMessage, ChatRequest
 from .agent.agent_factory import AgentFactory
 from .config import DEFAULT_MODEL
+from .utils.file_utils import build_input_with_files
 from .utils.provider_utils import supports_vision
 from .models.ws_models import StatusUpdate, StreamCallback, StreamEventCallback
 from .utils.general_utils import generate_message_id
@@ -30,7 +31,8 @@ async def handle_chat(
         f"demo_mode: \033[35m{user_request.demo_mode}\033[0m, "
         f"no_image: \033[35m{no_image}\033[0m"
     )
-    current_messages = [{"role": "user", "content": user_request.input}]
+    agent_input = await build_input_with_files(user_request.input, user_request.files)
+    current_messages = [{"role": "user", "content": agent_input}]
     command_model = user_request.command_model or DEFAULT_MODEL
     final_output_model = user_request.final_output_model or DEFAULT_MODEL
     images = user_request.images or None
