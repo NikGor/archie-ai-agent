@@ -38,6 +38,16 @@ class Settings(BaseSettings):
     tool_result_cache_ttl: int = 3600
     tool_result_cache_max_items: int = 20
 
+    # Agent swarm chat (ARCHIE-199)
+    swarm_enabled: bool = True
+    swarm_model: str = "gpt-5.4-nano"
+    swarm_max_depth: int = 3
+    swarm_cooldown_seconds: int = 20
+    swarm_history_size: int = 8
+    swarm_stream_max_length: int = 500
+    swarm_tool_result_max_chars: int = 1000
+    swarm_user_name: str | None = None
+
     # Google integrations
     google_calendar_credentials_file: str = "credentials.json"
     gmail_token_file: str = "token_gmail.json"
