@@ -63,9 +63,15 @@ class ToolFactory:
         return all_groups
 
     def get_tool_schemas(
-        self, model: str, response_format: str
+        self,
+        model: str,
+        response_format: str,
+        allowed_tools: set[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Get tool schemas formatted for specific model."""
+        """Get tool schemas formatted for specific model.
+
+        `allowed_tools` narrows the result to the named tools (swarm agents).
+        """
         logger.info(
             f"tool_factory_005: Building schemas for model \033[36m{model}\033[0m, format \033[36m{response_format}\033[0m"
         )
@@ -84,6 +90,8 @@ class ToolFactory:
 
             group_tools = self.tools_config[group_name]
             for tool_name, module_path in group_tools.items():
+                if allowed_tools is not None and tool_name not in allowed_tools:
+                    continue
                 func = self._load_tool_function(module_path)
                 if func:
                     tool_functions.append(func)
