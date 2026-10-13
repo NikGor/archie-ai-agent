@@ -1,0 +1,257 @@
+"""One swarm agent turn: decide (call 1) -> run allowed tools -> reply (call 2).
+
+Reuses the main pipeline's low level: LLM clients, parser, ToolFactory and
+execute_tool_calls. Skips the heavy cmd_prompt / create_output stages to keep
+every turn small.
+"""
+
+import json
+import logging
+import os
+from typing import Any
+from archie_shared.chat.models import LllmTrace
+from archie_shared.swarm.models import SwarmActionInfo, SwarmMessage, SwarmUsage
+from jinja2 import Environment, FileSystemLoader
+from pydantic import BaseModel, Field
+from ..agent.prompt_builder import PromptBuilder
+from ..backend.llm.registry import get_client
+from ..backend.state_service import StateService
+from ..config import settings
+from ..models.orchestration_sgr import ToolCallRequest
+from ..models.state_models import UserState
+from ..models.tool_models import ToolResult
+from ..tools.tool_factory import ToolFactory
+from ..utils.llm_parser import parse_llm_response
+from ..utils.provider_utils import get_provider_for_model
+from ..utils.skill_utils import load_skill, load_skill_references
+from ..utils.tool_executor import execute_tool_calls
+from .agents import SWARM_AGENTS
+from .models import SwarmAgentProfile, SwarmReply, SwarmToolCall, SwarmTurn
+from .policy import READ_ONLY_TOOLS, check_tool_call
+
+
+logger = logging.getLogger(__name__)
+
+SWARM_PROMPTS_DIR = os.path.join(
+    os.path.dirname(__file__), "..", "agent", "prompts", "swarm"
+)
+
+
+def create_swarm_prompt_env() -> Environment:
+    # No autoescape: prompts are plain text and JSON parameters must stay readable.
+    return Environment(loader=FileSystemLoader(SWARM_PROMPTS_DIR), autoescape=False)
+
+
+def format_chat_line(message: SwarmMessage) -> str:
+    sender = "user" if message.sender == "user" else f"@{message.sender}"
+    return f"[{message.message_id}] {sender}: {message.text}"
+
+
+class SwarmDraft(BaseModel):
+    """Result of an agent turn, ready to post to the chat."""
+
+    text: str = Field(description="Reply text")
+    actions: list[SwarmActionInfo] = Field(description="Side-effect tool calls made")
+    usage: SwarmUsage = Field(description="Summed LLM usage of the turn")
+
+
+class SwarmAgentRunner:
+    def __init__(
+        self,
+        tool_factory: ToolFactory | None = None,
+        state_service: StateService | None = None,
+        prompt_builder: PromptBuilder | None = None,
+    ) -> None:
+        self.tool_factory = tool_factory or ToolFactory()
+        self.state_service = state_service or StateService()
+        self.prompt_builder = prompt_builder or PromptBuilder()
+        self.env = create_swarm_prompt_env()
+
+    def build_system_prompt(self, profile: SwarmAgentProfile, model: str) -> str:
+        """Static, cacheable part: rules, roster, tools and skill of the agent."""
+        tools = self.tool_factory.get_tool_schemas(
+            model, "plain", allowed_tools=set(profile.tools)
+        )
+        return self.env.get_template("swarm_base.jinja2").render(
+            agent=profile,
+            agents=list(SWARM_AGENTS.values()),
+            tools=[
+                {
+                    "name": tool["name"],
+                    "description": tool.get("description", ""),
+                    "parameters": json.dumps(
+                        tool.get("parameters", {}), ensure_ascii=False
+                    ),
+                }
+                for tool in tools
+            ],
+            skill=load_skill(profile.skill) if profile.skill else None,
+            references={
+                name: body
+                for skill_name, reference_names in profile.references.items()
+                for name, body in load_skill_references(
+                    skill_name, reference_names
+                ).items()
+            },
+        )
+
+    def build_context(
+        self, state: UserState, history: list[SwarmMessage], trigger: SwarmMessage
+    ) -> str:
+        """Volatile tail: time, compact user context and recent chat lines."""
+        state_dict = state.model_dump()
+        lines = [
+            self.prompt_builder.build_datetime_note(state_dict),
+            f"User city: {state.default_city}",
+            "Recent chat:",
+            *(
+                format_chat_line(m)
+                for m in history
+                if m.message_id != trigger.message_id
+            ),
+        ]
+        return "\n".join(lines)
+
+    async def run(
+        self,
+        profile: SwarmAgentProfile,
+        trigger: SwarmMessage,
+        history: list[SwarmMessage],
+    ) -> SwarmDraft | None:
+        model = profile.model or settings.swarm_model
+        provider = get_provider_for_model(model)
+        client = get_client(provider)
+        state = await self.state_service.get_user_state(
+            user_name=settings.swarm_user_name
+        )
+        messages: list[dict[str, Any]] = [
+            {
+                "role": "system",
+                "content": self.build_system_prompt(profile, model),
+                "cacheable": True,
+            },
+            {"role": "system", "content": self.build_context(state, history, trigger)},
+            {
+                "role": "user",
+                "content": f"React to this message:\n{format_chat_line(trigger)}",
+            },
+        ]
+        traces: list[LllmTrace] = []
+        turn = await self._call(client, provider, model, messages, SwarmTurn, traces)
+        logger.info(
+            f"swarm_runner_001: \033[36m{profile.agent_id}\033[0m tools="
+            f"{[tc.tool_name for tc in turn.tool_calls]} reasoning: \033[33m{turn.reasoning}\033[0m"
+        )
+        reply = turn.reply.strip()
+        actions: list[SwarmActionInfo] = []
+        if turn.tool_calls:
+            results, actions = await self._execute(profile, turn.tool_calls)
+            messages.append(
+                {"role": "system", "content": self._format_results(results, actions)}
+            )
+            messages.append({"role": "user", "content": "Write your chat reply now."})
+            second = await self._call(
+                client, provider, model, messages, SwarmReply, traces
+            )
+            reply = second.reply.strip()
+        if not reply and not actions:
+            logger.info(
+                f"swarm_runner_002: \033[36m{profile.agent_id}\033[0m stays silent"
+            )
+            return None
+        if not reply:
+            reply = "; ".join(f"{a.tool_name}: {a.status}" for a in actions)
+        return SwarmDraft(
+            text=reply, actions=actions, usage=self._sum_usage(model, traces)
+        )
+
+    async def _call(
+        self,
+        client: Any,
+        provider: str,
+        model: str,
+        messages: list[dict[str, Any]],
+        schema: type[BaseModel],
+        traces: list[LllmTrace],
+    ) -> Any:
+        raw = await client.create_completion(
+            messages=messages, model=model, response_format=schema
+        )
+        parsed = parse_llm_response(
+            raw_response=raw, provider=provider, expected_type=schema
+        )
+        traces.append(parsed.llm_trace)
+        return parsed.parsed_content
+
+    async def _execute(
+        self, profile: SwarmAgentProfile, tool_calls: list[SwarmToolCall]
+    ) -> tuple[list[ToolResult], list[SwarmActionInfo]]:
+        allowed: list[SwarmToolCall] = []
+        actions: list[SwarmActionInfo] = []
+        for call in tool_calls:
+            if check_tool_call(profile, call) == "allow":
+                allowed.append(call)
+            else:
+                actions.append(
+                    self._action_info(call, "blocked", "Not allowed for this agent")
+                )
+        results = await execute_tool_calls(
+            tool_calls=[
+                ToolCallRequest(
+                    tool_name=call.tool_name,
+                    arguments=call.arguments,
+                    missing_parameters=[],
+                    is_confirmed=True,
+                    reason=f"swarm agent {profile.agent_id}",
+                )
+                for call in allowed
+            ],
+            tool_factory=self.tool_factory,
+        )
+        for call, result in zip(allowed, results, strict=True):
+            if call.tool_name not in READ_ONLY_TOOLS:
+                actions.append(
+                    self._action_info(
+                        call, "success" if result.success else "error", result.error
+                    )
+                )
+        return results, actions
+
+    @staticmethod
+    def _action_info(
+        call: SwarmToolCall, status: str, summary: str | None
+    ) -> SwarmActionInfo:
+        return SwarmActionInfo(
+            tool_name=call.tool_name,
+            arguments_json=json.dumps(
+                {p.name: p.value for p in call.arguments}, ensure_ascii=False
+            ),
+            status=status,
+            summary=summary,
+        )
+
+    @staticmethod
+    def _format_results(
+        results: list[ToolResult], actions: list[SwarmActionInfo]
+    ) -> str:
+        limit = settings.swarm_tool_result_max_chars
+        lines = ["Tool results:"]
+        for result in results:
+            output = json.dumps(result.output, ensure_ascii=False, default=str)[:limit]
+            status = "ok" if result.success else f"error: {result.error}"
+            lines.append(f"- {result.tool_name} ({status}): {output}")
+        lines.extend(
+            f"- {a.tool_name}: BLOCKED. You may not do this. Ask the right agent or the user."
+            for a in actions
+            if a.status == "blocked"
+        )
+        return "\n".join(lines)
+
+    @staticmethod
+    def _sum_usage(model: str, traces: list[LllmTrace]) -> SwarmUsage:
+        return SwarmUsage(
+            model=model,
+            input_tokens=sum(t.input_tokens for t in traces),
+            output_tokens=sum(t.output_tokens for t in traces),
+            total_cost=sum(t.total_cost for t in traces),
+        )
