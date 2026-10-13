@@ -102,17 +102,31 @@ class SwarmReply(BaseModel):
     )
 
 
-class CouncilTriage(BaseModel):
-    """Council chair's first call: answer now or convene the council."""
+class CouncilDelegation(BaseModel):
+    """A task the council gives to a home agent."""
+
+    agent_id: str = Field(description="ID of the home agent, without @")
+    task: str = Field(description="Short task for the agent, in the user's language")
+
+
+class CouncilDecision(BaseModel):
+    """The single council answer to the user."""
+
+    reply: str = Field(
+        description="Answer to the user, max 200 characters, without any @mention"
+    )
+    delegations: list[CouncilDelegation] = Field(
+        description=(
+            "Tasks for home agents: only commands the user gave, or data the answer needs. "
+            "Empty if you only give advice or offer an action"
+        )
+    )
+
+
+class CouncilTriage(CouncilDecision):
+    """Council chair's first call: decide now or convene the council."""
 
     reasoning: str = Field(description="One short sentence")
     convene: bool = Field(
         description="True if the council must discuss before the decision"
-    )
-    reply: str = Field(
-        description=(
-            "If convene is false: the council decision for the user, max 280 characters, "
-            "with an @mention and a short task for a home agent if work is needed. "
-            "Empty if convene is true"
-        )
     )

@@ -1,4 +1,4 @@
-"""One swarm agent turn: decide (call 1) -> run allowed tools -> reply (call 2).
+"""One swarm agent turn: decide -> run allowed tools (up to swarm_max_tool_rounds) -> reply.
 
 `ask` is a single structured call without tools, used by council steps.
 
@@ -27,7 +27,7 @@ from ..utils.llm_parser import parse_llm_response
 from ..utils.provider_utils import get_provider_for_model
 from ..utils.skill_utils import load_skill, load_skill_references
 from ..utils.tool_executor import execute_tool_calls
-from .agents import SWARM_AGENTS, SWARM_GROUPS
+from .agents import SWARM_AGENTS, SWARM_GROUPS, SwarmRoster
 from .models import SwarmAgentProfile, SwarmReply, SwarmToolCall, SwarmTurn
 from .policy import READ_ONLY_TOOLS, check_tool_call
 
@@ -36,6 +36,12 @@ logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "agent", "prompts")
 SWARM_PROMPTS_DIR = os.path.join(PROMPTS_DIR, "swarm")
+
+
+FINAL_REPLY_TASK = (
+    "Write your chat reply now. You must reply: say what you did, "
+    "or say that you could not do the task and why."
+)
 
 
 def create_swarm_prompt_env() -> Environment:
@@ -66,13 +72,22 @@ class SwarmAgentRunner:
         tool_factory: ToolFactory | None = None,
         state_service: StateService | None = None,
         prompt_builder: PromptBuilder | None = None,
+        roster: SwarmRoster | None = None,
     ) -> None:
-        self.tool_factory = tool_factory or ToolFactory(
-            demo_mode=settings.swarm_demo_mode
-        )
+        self.tool_factory = tool_factory or ToolFactory()
+        # Dry run: tools with side effects run in demo mode, reads stay real.
+        # Both factories share one tool registry (filled by get_tool_schemas).
+        self.action_factory = ToolFactory(demo_mode=settings.swarm_dry_run)
+        self.action_factory.tools = self.tool_factory.tools
         self.state_service = state_service or StateService()
         self.prompt_builder = prompt_builder or PromptBuilder()
+        self.roster = roster or SwarmRoster()
         self.env = create_swarm_prompt_env()
+
+    async def get_user_state(self) -> UserState:
+        """State of the swarm owner; settings.swarm_user_name wins if set."""
+        user_name = settings.swarm_user_name or await self.roster.get_owner()
+        return await self.state_service.get_user_state(user_name=user_name)
 
     def build_system_prompt(self, profile: SwarmAgentProfile, model: str) -> str:
         """Static, cacheable part: rules, roster, tools and skill of the agent."""
@@ -128,9 +143,7 @@ class SwarmAgentRunner:
         history: list[SwarmMessage],
         task: str,
     ) -> list[dict[str, Any]]:
-        state = await self.state_service.get_user_state(
-            user_name=settings.swarm_user_name
-        )
+        state = await self.get_user_state()
         return [
             {
                 "role": "system",
@@ -179,23 +192,46 @@ class SwarmAgentRunner:
             f"React to this message:\n{format_chat_line(trigger)}",
         )
         traces: list[LllmTrace] = []
-        turn = await self._call(client, provider, model, messages, SwarmTurn, traces)
-        logger.info(
-            f"swarm_runner_001: \033[36m{profile.agent_id}\033[0m tools="
-            f"{[tc.tool_name for tc in turn.tool_calls]} reasoning: \033[33m{turn.reasoning}\033[0m"
-        )
-        reply = turn.reply.strip()
         actions: list[SwarmActionInfo] = []
-        if turn.tool_calls:
-            results, actions = await self._execute(profile, turn.tool_calls)
+        turn: SwarmTurn | SwarmReply = await self._call(
+            client, provider, model, messages, SwarmTurn, traces
+        )
+        rounds = 0
+        # Several tool rounds let an agent read the state, then change it.
+        while isinstance(turn, SwarmTurn) and turn.tool_calls:
+            rounds += 1
+            logger.info(
+                f"swarm_runner_001: \033[36m{profile.agent_id}\033[0m round {rounds} tools="
+                f"{[tc.tool_name for tc in turn.tool_calls]} reasoning: \033[33m{turn.reasoning}\033[0m"
+            )
+            results, new_actions = await self._execute(profile, turn.tool_calls)
+            actions.extend(new_actions)
             messages.append(
-                {"role": "system", "content": self._format_results(results, actions)}
+                {
+                    "role": "system",
+                    "content": self._format_results(results, new_actions),
+                }
             )
-            messages.append({"role": "user", "content": "Write your chat reply now."})
-            second = await self._call(
-                client, provider, model, messages, SwarmReply, traces
+            last_round = rounds >= settings.swarm_max_tool_rounds
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        FINAL_REPLY_TASK
+                        if last_round
+                        else f"Call more tools if you still need them. Else: {FINAL_REPLY_TASK}"
+                    ),
+                }
             )
-            reply = second.reply.strip()
+            turn = await self._call(
+                client,
+                provider,
+                model,
+                messages,
+                SwarmReply if last_round else SwarmTurn,
+                traces,
+            )
+        reply = turn.reply.strip()
         if not reply and not actions:
             logger.info(
                 f"swarm_runner_002: \033[36m{profile.agent_id}\033[0m stays silent"
@@ -237,19 +273,12 @@ class SwarmAgentRunner:
                 actions.append(
                     self._action_info(call, "blocked", "Not allowed for this agent")
                 )
-        results = await execute_tool_calls(
-            tool_calls=[
-                ToolCallRequest(
-                    tool_name=call.tool_name,
-                    arguments=call.arguments,
-                    missing_parameters=[],
-                    is_confirmed=True,
-                    reason=f"swarm agent {profile.agent_id}",
-                )
-                for call in allowed
-            ],
-            tool_factory=self.tool_factory,
-        )
+        reads = [c for c in allowed if c.tool_name in READ_ONLY_TOOLS]
+        writes = [c for c in allowed if c.tool_name not in READ_ONLY_TOOLS]
+        results = await self._run_calls(
+            profile, reads, self.tool_factory
+        ) + await self._run_calls(profile, writes, self.action_factory)
+        allowed = reads + writes
         for call, result in zip(allowed, results, strict=True):
             if call.tool_name not in READ_ONLY_TOOLS:
                 actions.append(
@@ -258,6 +287,26 @@ class SwarmAgentRunner:
                     )
                 )
         return results, actions
+
+    @staticmethod
+    async def _run_calls(
+        profile: SwarmAgentProfile, calls: list[SwarmToolCall], factory: ToolFactory
+    ) -> list[ToolResult]:
+        if not calls:
+            return []
+        return await execute_tool_calls(
+            tool_calls=[
+                ToolCallRequest(
+                    tool_name=call.tool_name,
+                    arguments=call.arguments,
+                    missing_parameters=[],
+                    is_confirmed=True,
+                    reason=f"swarm agent {profile.agent_id}",
+                )
+                for call in calls
+            ],
+            tool_factory=factory,
+        )
 
     @staticmethod
     def _action_info(

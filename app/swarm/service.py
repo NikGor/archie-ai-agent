@@ -12,7 +12,7 @@ class SwarmService:
         self.hub = SwarmHub()
         self.bus = SwarmBus(self.hub)
         self.roster = SwarmRoster()
-        runner = SwarmAgentRunner()
+        runner = SwarmAgentRunner(roster=self.roster)
         self.dispatcher = SwarmDispatcher(
             hub=self.hub,
             bus=self.bus,

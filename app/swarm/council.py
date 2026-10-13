@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from ..config import settings
 from .agents import SWARM_AGENTS
 from .bus import SwarmBus, SwarmHub
-from .models import CouncilTriage, SwarmReply
+from .models import CouncilDecision, CouncilTriage, SwarmReply
 from .runner import SwarmAgentRunner, format_chat_line
 
 
@@ -47,9 +47,7 @@ class SwarmCouncil:
 
     async def choose_chair(self, members: list[str]) -> str:
         """The member whose persona the user picked chairs the council."""
-        state = await self.runner.state_service.get_user_state(
-            user_name=settings.swarm_user_name
-        )
+        state = await self.runner.get_user_state()
         persona = (state.persona or "").lower()
         if persona in members:
             return persona
@@ -71,7 +69,7 @@ class SwarmCouncil:
             f"\033[35m{triage.convene or force}\033[0m: \033[33m{triage.reasoning}\033[0m"
         )
         if not (triage.convene or force) and triage.reply.strip():
-            await self._post(chair, "decision", triage.reply, trigger, triage_usage)
+            await self._post_decision(chair, triage, trigger, triage_usage)
             return
         for member in members:
             if member == chair:
@@ -82,10 +80,10 @@ class SwarmCouncil:
             if opinion.reply.strip():
                 await self._post(member, "opinion", opinion.reply, trigger, usage)
         decision, usage = await self._ask(
-            chair, trigger, "council_decision.jinja2", SwarmReply, line=line
+            chair, trigger, "council_decision.jinja2", CouncilDecision, line=line
         )
-        await self._post(
-            chair, "decision", decision.reply, trigger, merge_usage(triage_usage, usage)
+        await self._post_decision(
+            chair, decision, trigger, merge_usage(triage_usage, usage)
         )
 
     async def _ask(
@@ -109,6 +107,31 @@ class SwarmCouncil:
         finally:
             self.hub.publish(SwarmTypingEvent(agent_id=agent_id, active=False))
 
+    async def _post_decision(
+        self,
+        chair: str,
+        decision: CouncilDecision,
+        trigger: SwarmMessage,
+        usage: SwarmUsage,
+    ) -> None:
+        """Only structured delegations wake agents; an "@" in the reply text is
+        removed, so offering an action never runs it (ARCHIE-204)."""
+        delegations = [
+            d
+            for d in decision.delegations
+            if d.agent_id in SWARM_AGENTS and not SWARM_AGENTS[d.agent_id].groups
+        ]
+        lines = [decision.reply.replace("@", "").strip()]
+        lines += [f"→ @{d.agent_id}: {d.task}" for d in delegations]
+        await self._post(
+            chair,
+            "decision",
+            "\n".join(line for line in lines if line),
+            trigger,
+            usage,
+            mentions=list(dict.fromkeys(d.agent_id for d in delegations)),
+        )
+
     async def _post(
         self,
         agent_id: str,
@@ -116,6 +139,7 @@ class SwarmCouncil:
         text: str,
         trigger: SwarmMessage,
         usage: SwarmUsage,
+        mentions: list[str] | None = None,
     ) -> None:
         await self.bus.post(
             sender=agent_id,
@@ -124,4 +148,5 @@ class SwarmCouncil:
             reply_to=trigger.message_id,
             depth=trigger.depth + 1,
             usage=usage,
+            mentions=mentions,
         )

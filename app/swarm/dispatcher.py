@@ -76,6 +76,10 @@ class SwarmDispatcher:
         if self.wants_council(message):
             await self._start_council(message, enabled)
         targets = self.select_targets(message, enabled)
+        if self.is_human_intent(message):
+            # A user command or council decision must not be lost to a busy agent.
+            for agent_id in self.select_busy(message, enabled):
+                self._pending[agent_id] = message
         for agent_id in targets:
             self._start(agent_id, message)
         for agent_id in self.select_listeners(message, enabled):
@@ -95,8 +99,12 @@ class SwarmDispatcher:
             return True
         return message.sender == "user" and not message.mentions
 
-    def select_targets(self, message: SwarmMessage, enabled: set[str]) -> list[str]:
-        """Agents named directly by @mention, after the loop guards."""
+    @staticmethod
+    def is_human_intent(message: SwarmMessage) -> bool:
+        """User messages and council decisions carry the user's will: no cooldown."""
+        return message.sender == "user" or message.kind == "decision"
+
+    def _mentioned(self, message: SwarmMessage, enabled: set[str]) -> list[str]:
         if message.kind == "opinion":
             return []
         if message.depth >= settings.swarm_max_depth:
@@ -104,16 +112,28 @@ class SwarmDispatcher:
                 f"swarm_dispatcher_003: Depth limit reached at {message.message_id}"
             )
             return []
-        from_agent = message.sender in _AGENT_SENDERS
         return [
             agent_id
             for agent_id in message.mentions
             if agent_id not in SWARM_GROUPS
             and agent_id in enabled
             and agent_id != message.sender
-            and agent_id not in self._running
-            and not (from_agent and self._in_cooldown(agent_id))
         ]
+
+    def select_targets(self, message: SwarmMessage, enabled: set[str]) -> list[str]:
+        """Agents named directly by @mention, after the loop guards. Cooldown
+        applies only to agent-to-agent mentions (ARCHIE-204)."""
+        cooled = message.sender in _AGENT_SENDERS and not self.is_human_intent(message)
+        return [
+            agent_id
+            for agent_id in self._mentioned(message, enabled)
+            if agent_id not in self._running
+            and not (cooled and self._in_cooldown(agent_id))
+        ]
+
+    def select_busy(self, message: SwarmMessage, enabled: set[str]) -> list[str]:
+        """Mentioned agents that are running now."""
+        return [a for a in self._mentioned(message, enabled) if a in self._running]
 
     @staticmethod
     def select_listeners(message: SwarmMessage, enabled: set[str]) -> list[str]:

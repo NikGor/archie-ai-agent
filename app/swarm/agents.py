@@ -10,6 +10,7 @@ from .models import ActionRule, SwarmAgentProfile
 logger = logging.getLogger(__name__)
 
 _DISABLED_KEY = "archie:swarm:disabled"
+_OWNER_KEY = "archie:swarm:owner"
 
 SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
     profile.agent_id: profile
@@ -113,7 +114,8 @@ def get_group_members(group: str) -> list[str]:
 
 
 class SwarmRoster:
-    """Keeps track of which agents are awake. Disabled IDs live in a Redis set."""
+    """Keeps track of which agents are awake (disabled IDs in a Redis set) and
+    of the swarm owner: the user whose UserState the agents use."""
 
     def __init__(self) -> None:
         self.redis = get_async_redis()
@@ -139,3 +141,10 @@ class SwarmRoster:
         logger.info(
             f"swarm_agents_001: Agent \033[36m{agent_id}\033[0m enabled=\033[35m{enabled}\033[0m"
         )
+
+    async def get_owner(self) -> str | None:
+        return await self.redis.get(_OWNER_KEY)
+
+    async def set_owner(self, user_name: str) -> None:
+        if await self.redis.getset(_OWNER_KEY, user_name) != user_name:
+            logger.info(f"swarm_agents_002: Owner is \033[35m{user_name}\033[0m")

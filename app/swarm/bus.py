@@ -82,7 +82,9 @@ class SwarmBus:
         depth: int = 0,
         actions: list[SwarmActionInfo] | None = None,
         usage: SwarmUsage | None = None,
+        mentions: list[str] | None = None,
     ) -> SwarmMessage:
+        """`mentions` overrides the mentions parsed from the text (council delegations)."""
         text = clip_text(text)
         message = SwarmMessage(
             message_id="",
@@ -90,7 +92,11 @@ class SwarmBus:
             sender=sender,
             kind=kind,
             text=text,
-            mentions=[m for m in parse_mentions(text) if m != sender],
+            mentions=[
+                m
+                for m in (mentions if mentions is not None else parse_mentions(text))
+                if m != sender
+            ],
             reply_to=reply_to,
             depth=depth,
             actions=actions or [],

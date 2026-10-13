@@ -59,8 +59,12 @@ async def _send_events(websocket: WebSocket, queue: asyncio.Queue) -> None:
 
 
 @router.websocket("/ws_swarm")
-async def ws_swarm(websocket: WebSocket) -> None:
+async def ws_swarm(websocket: WebSocket, user_name: str | None = None) -> None:
+    """`user_name` (the logged-in user) becomes the swarm owner: agents use
+    that user's UserState, also for runs nobody watches (cron, HA events)."""
     await websocket.accept()
+    if user_name:
+        await swarm_service.roster.set_owner(user_name)
     queue = swarm_service.hub.subscribe()
     sender = asyncio.create_task(_send_events(websocket, queue))
     logger.info("swarm_ws_001: Client connected")
