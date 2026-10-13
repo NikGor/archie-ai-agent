@@ -3,6 +3,7 @@
 import logging
 from archie_shared.swarm.models import SwarmAgentInfo
 from ..backend.redis_factory import get_async_redis
+from ..config import settings
 from .models import ActionRule, SwarmAgentProfile
 
 
@@ -69,7 +70,7 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
             agent_id="voice",
             display_name="Voice",
             role="action",
-            description="Decides which events to speak aloud on the home speaker",
+            description="Speaks events aloud on the home speaker; does not control devices or volume",
             tools=["announce_tool"],
             auto_actions=[ActionRule(tool_name="announce_tool")],
             listens_to=["light", "climate", "football"],
@@ -81,10 +82,11 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
                 agent_id=persona,
                 display_name=display_name,
                 role="state",
-                description=f"Council member with the {persona} persona: opinions and advice",
-                tools=["google_search_tool"],
+                description=f"Council member with the {persona} persona",
+                tools=[],
                 persona=persona,
                 groups=["council"],
+                model=settings.swarm_council_model,
                 icon=icon,
                 color=color,
             )
@@ -98,7 +100,7 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
 }
 
 SWARM_GROUPS: dict[str, str] = {
-    "council": "General questions, opinions, advice and decisions; three personas discuss",
+    "council": "Main contact of the user: decides and delegates work to home agents",
 }
 
 

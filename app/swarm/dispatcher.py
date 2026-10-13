@@ -1,20 +1,25 @@
 """Swarm dispatcher: wakes agents for new chat messages, with loop guards.
 
+Routing: a user message without @mentions, or any '@council' mention, goes to
+the council (see council.py). Other @mentions wake the named agents directly.
+listens_to subscribers hear their senders without mentions. Council opinions
+wake nobody.
+
 Guards: hop depth limit, no self-wake, one running turn per agent, and a
-cooldown between agent-to-agent wake-ups. '@group' mentions wake the members
-one after another; listens_to subscribers hear their senders without mentions.
+cooldown between agent-to-agent wake-ups.
 """
 
 import asyncio
 import contextlib
 import logging
 import time
+from collections.abc import Coroutine
+from typing import Any
 from archie_shared.swarm.models import SwarmMessage, SwarmMessageEvent, SwarmTypingEvent
 from ..config import settings
 from .agents import SWARM_AGENTS, SWARM_GROUPS, SwarmRoster, get_group_members
 from .bus import SwarmBus, SwarmHub
-from .gate import SwarmGate
-from .models import SwarmRouteOption
+from .council import COUNCIL_GROUP, SwarmCouncil
 from .runner import SwarmAgentRunner
 
 
@@ -30,13 +35,13 @@ class SwarmDispatcher:
         bus: SwarmBus,
         roster: SwarmRoster,
         runner: SwarmAgentRunner,
-        gate: SwarmGate,
+        council: SwarmCouncil,
     ) -> None:
         self.hub = hub
         self.bus = bus
         self.roster = roster
         self.runner = runner
-        self.gate = gate
+        self.council = council
         self._running: set[str] = set()
         self._last_run: dict[str, float] = {}
         self._pending: dict[str, SwarmMessage] = {}
@@ -68,57 +73,47 @@ class SwarmDispatcher:
 
     async def handle(self, message: SwarmMessage) -> None:
         enabled = await self.roster.get_enabled_ids()
-        queues = await self.select_targets(message, enabled)
-        for queue in queues:
-            self._start(queue, message)
-        queued = {agent_id for queue in queues for agent_id in queue}
+        if self.wants_council(message):
+            await self._start_council(message, enabled)
+        targets = self.select_targets(message, enabled)
+        for agent_id in targets:
+            self._start(agent_id, message)
         for agent_id in self.select_listeners(message, enabled):
-            if agent_id in queued:
+            if agent_id in targets:
                 continue
             if agent_id in self._running:
                 # Keep the latest event for a busy listener instead of dropping it.
                 self._pending[agent_id] = message
             else:
-                self._start([agent_id], message)
+                self._start(agent_id, message)
 
-    async def select_targets(
-        self, message: SwarmMessage, enabled: set[str]
-    ) -> list[list[str]]:
-        """Return wake queues: agents in one queue speak one after another
-        (a group), separate queues run in parallel."""
+    @staticmethod
+    def wants_council(message: SwarmMessage) -> bool:
+        if message.kind == "opinion" or message.depth >= settings.swarm_max_depth:
+            return False
+        if COUNCIL_GROUP in message.mentions:
+            return True
+        return message.sender == "user" and not message.mentions
+
+    def select_targets(self, message: SwarmMessage, enabled: set[str]) -> list[str]:
+        """Agents named directly by @mention, after the loop guards."""
+        if message.kind == "opinion":
+            return []
         if message.depth >= settings.swarm_max_depth:
             logger.info(
                 f"swarm_dispatcher_003: Depth limit reached at {message.message_id}"
             )
             return []
-        if message.mentions:
-            candidates = message.mentions
-        elif message.sender == "user":
-            candidates = await self.gate.route(message, self._route_options(enabled))
-        else:
-            return []
         from_agent = message.sender in _AGENT_SENDERS
-        queues: list[list[str]] = []
-        seen: set[str] = set()
-        for candidate in candidates:
-            members = (
-                get_group_members(candidate)
-                if candidate in SWARM_GROUPS
-                else [candidate]
-            )
-            queue = [
-                agent_id
-                for agent_id in members
-                if agent_id not in seen
-                and agent_id in enabled
-                and agent_id != message.sender
-                and agent_id not in self._running
-                and not (from_agent and self._in_cooldown(agent_id))
-            ]
-            seen.update(queue)
-            if queue:
-                queues.append(queue)
-        return queues
+        return [
+            agent_id
+            for agent_id in message.mentions
+            if agent_id not in SWARM_GROUPS
+            and agent_id in enabled
+            and agent_id != message.sender
+            and agent_id not in self._running
+            and not (from_agent and self._in_cooldown(agent_id))
+        ]
 
     @staticmethod
     def select_listeners(message: SwarmMessage, enabled: set[str]) -> list[str]:
@@ -131,32 +126,55 @@ class SwarmDispatcher:
             and profile.agent_id != message.sender
         ]
 
-    @staticmethod
-    def _route_options(enabled: set[str]) -> list[SwarmRouteOption]:
-        agents = [
-            SwarmRouteOption(agent_id=profile.agent_id, description=profile.description)
-            for profile in SWARM_AGENTS.values()
-            if profile.agent_id in enabled and not profile.groups
-        ]
-        groups = [
-            SwarmRouteOption(agent_id=group, description=description)
-            for group, description in SWARM_GROUPS.items()
-            if any(agent_id in enabled for agent_id in get_group_members(group))
-        ]
-        return agents + groups
+    async def _start_council(self, message: SwarmMessage, enabled: set[str]) -> None:
+        members = [m for m in get_group_members(COUNCIL_GROUP) if m in enabled]
+        if not members:
+            # No "@" here: a mention would route back to the council.
+            await self.bus.post(
+                sender="system",
+                kind="system",
+                text="The council is asleep. Wake a council member or mention an agent.",
+                reply_to=message.message_id,
+                depth=settings.swarm_max_depth,
+            )
+            return
+        if self._running & set(members):
+            # The council is busy: answer the latest message when it is free.
+            self._pending[COUNCIL_GROUP] = message
+            return
+        self._running.update(members)
+        # Only the user can force a discussion; agents get a chair triage.
+        force = message.sender == "user" and COUNCIL_GROUP in message.mentions
+        self._track(self._run_council(message, members, force))
 
-    def _start(self, queue: list[str], trigger: SwarmMessage) -> None:
-        self._running.update(queue)
-        task = asyncio.create_task(self._run_queue(queue, trigger))
+    async def _run_council(
+        self, trigger: SwarmMessage, members: list[str], force: bool
+    ) -> None:
+        try:
+            await self.council.run(trigger, members, force)
+        except Exception as exc:
+            logger.exception("swarm_dispatcher_error_003: Council failed")
+            await self._post_failure(COUNCIL_GROUP, trigger, exc)
+        finally:
+            self._running.difference_update(members)
+        pending = self._pending.pop(COUNCIL_GROUP, None)
+        if pending:
+            await self._start_council(pending, await self.roster.get_enabled_ids())
+
+    def _start(self, agent_id: str, trigger: SwarmMessage) -> None:
+        self._running.add(agent_id)
+        self._track(self._run_single(agent_id, trigger))
+
+    def _track(self, coroutine: Coroutine[Any, Any, None]) -> None:
+        task = asyncio.create_task(coroutine)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    async def _run_queue(self, queue: list[str], trigger: SwarmMessage) -> None:
-        for agent_id in queue:
-            await self._run_agent(agent_id, trigger)
-            pending = self._pending.pop(agent_id, None)
-            if pending:
-                self._start([agent_id], pending)
+    async def _run_single(self, agent_id: str, trigger: SwarmMessage) -> None:
+        await self._run_agent(agent_id, trigger)
+        pending = self._pending.pop(agent_id, None)
+        if pending:
+            self._start(agent_id, pending)
 
     def _in_cooldown(self, agent_id: str) -> bool:
         last = self._last_run.get(agent_id)
@@ -191,15 +209,20 @@ class SwarmDispatcher:
                 )
         except Exception as exc:
             logger.exception(f"swarm_dispatcher_error_002: Agent {agent_id} failed")
-            # No "@" here: a mention would wake the failing agent again.
-            await self.bus.post(
-                sender="system",
-                kind="system",
-                text=f"{agent_id} failed: {exc}",
-                reply_to=trigger.message_id,
-                depth=settings.swarm_max_depth,
-            )
+            await self._post_failure(agent_id, trigger, exc)
         finally:
             self._last_run[agent_id] = time.monotonic()
             self._running.discard(agent_id)
             self.hub.publish(SwarmTypingEvent(agent_id=agent_id, active=False))
+
+    async def _post_failure(
+        self, name: str, trigger: SwarmMessage, exc: Exception
+    ) -> None:
+        # No "@" here: a mention would wake the failing agent again.
+        await self.bus.post(
+            sender="system",
+            kind="system",
+            text=f"{name} failed: {exc}",
+            reply_to=trigger.message_id,
+            depth=settings.swarm_max_depth,
+        )

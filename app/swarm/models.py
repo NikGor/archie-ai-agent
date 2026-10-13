@@ -72,13 +72,6 @@ class SwarmAgentProfile(BaseModel):
         )
 
 
-class SwarmRouteOption(BaseModel):
-    """An agent or a group the gate may route a message to."""
-
-    agent_id: str = Field(description="Agent or group ID")
-    description: str = Field(description="What the agent or group handles")
-
-
 class SwarmToolCall(BaseModel):
     """A tool call requested by a swarm agent (compact ToolCallRequest)."""
 
@@ -109,10 +102,17 @@ class SwarmReply(BaseModel):
     )
 
 
-class SwarmRoute(BaseModel):
-    """Gate decision: which agents must react to a message without mentions."""
+class CouncilTriage(BaseModel):
+    """Council chair's first call: answer now or convene the council."""
 
     reasoning: str = Field(description="One short sentence")
-    agent_ids: list[str] = Field(
-        description="IDs of agents or groups that must react; empty if none"
+    convene: bool = Field(
+        description="True if the council must discuss before the decision"
+    )
+    reply: str = Field(
+        description=(
+            "If convene is false: the council decision for the user, max 280 characters, "
+            "with an @mention and a short task for a home agent if work is needed. "
+            "Empty if convene is true"
+        )
     )

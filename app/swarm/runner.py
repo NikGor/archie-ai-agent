@@ -1,5 +1,7 @@
 """One swarm agent turn: decide (call 1) -> run allowed tools -> reply (call 2).
 
+`ask` is a single structured call without tools, used by council steps.
+
 Reuses the main pipeline's low level: LLM clients, parser, ToolFactory and
 execute_tool_calls. Skips the heavy cmd_prompt / create_output stages to keep
 every turn small.
@@ -65,7 +67,9 @@ class SwarmAgentRunner:
         state_service: StateService | None = None,
         prompt_builder: PromptBuilder | None = None,
     ) -> None:
-        self.tool_factory = tool_factory or ToolFactory()
+        self.tool_factory = tool_factory or ToolFactory(
+            demo_mode=settings.swarm_demo_mode
+        )
         self.state_service = state_service or StateService()
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.env = create_swarm_prompt_env()
@@ -116,6 +120,48 @@ class SwarmAgentRunner:
         ]
         return "\n".join(lines)
 
+    async def build_messages(
+        self,
+        profile: SwarmAgentProfile,
+        model: str,
+        trigger: SwarmMessage,
+        history: list[SwarmMessage],
+        task: str,
+    ) -> list[dict[str, Any]]:
+        state = await self.state_service.get_user_state(
+            user_name=settings.swarm_user_name
+        )
+        return [
+            {
+                "role": "system",
+                "content": self.build_system_prompt(profile, model),
+                "cacheable": True,
+            },
+            {"role": "system", "content": self.build_context(state, history, trigger)},
+            {"role": "user", "content": task},
+        ]
+
+    def render_task(self, template: str, **context: Any) -> str:
+        return self.env.get_template(template).render(**context)
+
+    async def ask(
+        self,
+        profile: SwarmAgentProfile,
+        trigger: SwarmMessage,
+        history: list[SwarmMessage],
+        task: str,
+        schema: type[BaseModel],
+    ) -> tuple[Any, SwarmUsage]:
+        """One structured call without tools, for council steps."""
+        model = profile.model or settings.swarm_model
+        provider = get_provider_for_model(model)
+        messages = await self.build_messages(profile, model, trigger, history, task)
+        traces: list[LllmTrace] = []
+        content = await self._call(
+            get_client(provider), provider, model, messages, schema, traces
+        )
+        return content, self._sum_usage(model, traces)
+
     async def run(
         self,
         profile: SwarmAgentProfile,
@@ -125,21 +171,13 @@ class SwarmAgentRunner:
         model = profile.model or settings.swarm_model
         provider = get_provider_for_model(model)
         client = get_client(provider)
-        state = await self.state_service.get_user_state(
-            user_name=settings.swarm_user_name
+        messages = await self.build_messages(
+            profile,
+            model,
+            trigger,
+            history,
+            f"React to this message:\n{format_chat_line(trigger)}",
         )
-        messages: list[dict[str, Any]] = [
-            {
-                "role": "system",
-                "content": self.build_system_prompt(profile, model),
-                "cacheable": True,
-            },
-            {"role": "system", "content": self.build_context(state, history, trigger)},
-            {
-                "role": "user",
-                "content": f"React to this message:\n{format_chat_line(trigger)}",
-            },
-        ]
         traces: list[LllmTrace] = []
         turn = await self._call(client, provider, model, messages, SwarmTurn, traces)
         logger.info(
