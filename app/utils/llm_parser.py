@@ -27,10 +27,13 @@ def calculate_token_cost(
     """
     prices = MODEL_TOKEN_PRICES.get(model)
     if prices is None:
-        prices = next(
-            (v for k, v in MODEL_TOKEN_PRICES.items() if model.startswith(k)),
-            None,
+        # Longest prefix wins: "gpt-5.4-nano-2026-03-17" must not match "gpt-5.4". ARCHIE-199
+        prefix = max(
+            (k for k in MODEL_TOKEN_PRICES if model.startswith(k)),
+            key=len,
+            default=None,
         )
+        prices = MODEL_TOKEN_PRICES[prefix] if prefix else None
     if prices is None:
         return 0.0
     cached_price = prices.get("cached")
