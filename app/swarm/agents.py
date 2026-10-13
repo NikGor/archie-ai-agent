@@ -68,6 +68,15 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
             color="#2f9e44",
         ),
         SwarmAgentProfile(
+            agent_id="search",
+            display_name="Search",
+            role="state",
+            description="Web search: weather forecast, news, places, opening hours, general facts",
+            tools=["google_search_tool", "google_places_search_tool"],
+            icon="search",
+            color="#15aabf",
+        ),
+        SwarmAgentProfile(
             agent_id="voice",
             display_name="Voice",
             role="action",
