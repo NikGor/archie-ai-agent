@@ -48,9 +48,11 @@ class Settings(BaseSettings):
     swarm_history_size: int = 12
     swarm_stream_max_length: int = 500
     swarm_tool_result_max_chars: int = 1000
+    swarm_max_tool_rounds: int = 3
     swarm_user_name: str | None = None
-    # Tools return demo data and never touch the home (safe testing)
-    swarm_demo_mode: bool = False
+    # Dry run: tools with side effects (lights, climate, voice) run in demo mode;
+    # state reads stay real. For safe testing against the real home.
+    swarm_dry_run: bool = False
 
     # Google integrations
     google_calendar_credentials_file: str = "credentials.json"
