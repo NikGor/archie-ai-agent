@@ -1,11 +1,34 @@
 """Smart home status/query tool — reads real-time device and sensor state via Home Assistant MCP."""
 
 import logging
+import re
 from typing import Any
 from app.backend.homeassistant_mcp_client import HomeAssistantMCPError, call_tool
 
 
 logger = logging.getLogger(__name__)
+
+_BRIGHTNESS_PATTERN = re.compile(
+    r"^(?P<indent>\s*)brightness: '?(?P<value>\d+)'?$", re.MULTILINE
+)
+
+
+def add_brightness_percent(context: str) -> str:
+    """Add brightness_pct next to the raw 0-255 light brightness.
+
+    smarthome_control_tool takes brightness in percent, but older Home Assistant
+    versions report the raw 0-255 attribute in GetLiveContext, so "brightness: '3'"
+    (about 1%) was read as 3%. Newer HA adds brightness_pct itself. ARCHIE-204
+    """
+    if "brightness_pct" in context:
+        return context
+
+    def _with_percent(match: re.Match[str]) -> str:
+        raw = int(match["value"])
+        percent = max(round(raw / 255 * 100), 1) if raw > 0 else 0
+        return f"{match[0]}\n{match['indent']}brightness_pct: '{percent}'"
+
+    return _BRIGHTNESS_PATTERN.sub(_with_percent, context)
 
 
 async def smarthome_status_tool(
@@ -63,5 +86,5 @@ async def smarthome_status_tool(
     logger.info("smarthome_status_002: Fetched live context successfully")
     return {
         "status": "success",
-        "context": result.get("result", ""),
+        "context": add_brightness_percent(result.get("result", "")),
     }
