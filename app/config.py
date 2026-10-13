@@ -41,12 +41,16 @@ class Settings(BaseSettings):
     # Agent swarm chat (ARCHIE-199)
     swarm_enabled: bool = True
     swarm_model: str = "gpt-5.4-nano"
+    # The council decides and delegates, so it gets a stronger model than the workers
+    swarm_council_model: str = "gpt-5.4-mini"
     swarm_max_depth: int = 3
     swarm_cooldown_seconds: int = 20
-    swarm_history_size: int = 8
+    swarm_history_size: int = 12
     swarm_stream_max_length: int = 500
     swarm_tool_result_max_chars: int = 1000
     swarm_user_name: str | None = None
+    # Tools return demo data and never touch the home (safe testing)
+    swarm_demo_mode: bool = False
 
     # Google integrations
     google_calendar_credentials_file: str = "credentials.json"
