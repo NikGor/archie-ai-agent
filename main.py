@@ -9,7 +9,10 @@ load_dotenv()
 import uvicorn  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from app.backend.cron_scheduler import cron_scheduler  # noqa: E402
+from app.config import settings  # noqa: E402
 from app.endpoints import router  # noqa: E402
+from app.swarm.endpoints import router as swarm_router  # noqa: E402
+from app.swarm.service import swarm_service  # noqa: E402
 from app.ws_docs import router as ws_docs_router  # noqa: E402
 
 
@@ -25,9 +28,13 @@ logger.info("=== STEP 1: App Init ===")
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     await cron_scheduler.start()
+    if settings.swarm_enabled:
+        await swarm_service.start()
     try:
         yield
     finally:
+        if settings.swarm_enabled:
+            await swarm_service.stop()
         await cron_scheduler.stop()
 
 
@@ -39,6 +46,7 @@ app = FastAPI(
 )
 app.include_router(router)
 app.include_router(ws_docs_router)
+app.include_router(swarm_router)
 logger.info("main_001: FastAPI ready")
 
 if __name__ == "__main__":
