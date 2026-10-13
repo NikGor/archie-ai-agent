@@ -65,8 +65,49 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
             icon="trophy",
             color="#2f9e44",
         ),
+        SwarmAgentProfile(
+            agent_id="voice",
+            display_name="Voice",
+            role="action",
+            description="Decides which events to speak aloud on the home speaker",
+            tools=["announce_tool"],
+            auto_actions=[ActionRule(tool_name="announce_tool")],
+            listens_to=["light", "climate", "football"],
+            icon="megaphone",
+            color="#7950f2",
+        ),
+        *(
+            SwarmAgentProfile(
+                agent_id=persona,
+                display_name=display_name,
+                role="state",
+                description=f"Council member with the {persona} persona: opinions and advice",
+                tools=["google_search_tool"],
+                persona=persona,
+                groups=["council"],
+                icon=icon,
+                color=color,
+            )
+            for persona, display_name, icon, color in [
+                ("bro", "Bro", "beer", "#20c997"),
+                ("business", "Business", "briefcase", "#4dabf7"),
+                ("flirty", "Flirty", "heart", "#f06595"),
+            ]
+        ),
     ]
 }
+
+SWARM_GROUPS: dict[str, str] = {
+    "council": "General questions, opinions, advice and decisions; three personas discuss",
+}
+
+
+def get_group_members(group: str) -> list[str]:
+    return [
+        agent_id
+        for agent_id, profile in SWARM_AGENTS.items()
+        if group in profile.groups
+    ]
 
 
 class SwarmRoster:

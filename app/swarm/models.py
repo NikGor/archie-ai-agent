@@ -44,6 +44,18 @@ class SwarmAgentProfile(BaseModel):
     model: str | None = Field(
         default=None, description="LLM override; settings.swarm_model if empty"
     )
+    persona: str | None = Field(
+        default=None,
+        description="Persona prompt from persona_prompts/ (e.g. 'bro') for voice and tone",
+    )
+    groups: list[str] = Field(
+        default_factory=list,
+        description="Groups; an '@group' mention wakes the members one after another",
+    )
+    listens_to: list[str] = Field(
+        default_factory=list,
+        description="Agent IDs whose messages wake this agent without an @mention",
+    )
     icon: str = Field(description="Lucide icon name")
     color: str = Field(description="Accent color as CSS hex")
 
@@ -56,7 +68,15 @@ class SwarmAgentProfile(BaseModel):
             icon=self.icon,
             color=self.color,
             enabled=enabled,
+            groups=self.groups,
         )
+
+
+class SwarmRouteOption(BaseModel):
+    """An agent or a group the gate may route a message to."""
+
+    agent_id: str = Field(description="Agent or group ID")
+    description: str = Field(description="What the agent or group handles")
 
 
 class SwarmToolCall(BaseModel):
@@ -94,5 +114,5 @@ class SwarmRoute(BaseModel):
 
     reasoning: str = Field(description="One short sentence")
     agent_ids: list[str] = Field(
-        description="IDs of agents that must react; empty if none"
+        description="IDs of agents or groups that must react; empty if none"
     )

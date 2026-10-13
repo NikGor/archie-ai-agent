@@ -1,4 +1,4 @@
-"""Gate: picks agents for a message that has no @mentions.
+"""Gate: picks agents or groups for a message that has no @mentions.
 
 SwarmGate is the seam for the Jev (TypeSafe) gate planned in stage 2;
 LlmGate is the default cheap-LLM implementation.
@@ -11,7 +11,7 @@ from ..backend.llm.registry import get_client
 from ..config import settings
 from ..utils.llm_parser import parse_llm_response
 from ..utils.provider_utils import get_provider_for_model
-from .models import SwarmAgentProfile, SwarmRoute
+from .models import SwarmRoute, SwarmRouteOption
 from .runner import create_swarm_prompt_env
 
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class SwarmGate(Protocol):
     async def route(
-        self, message: SwarmMessage, agents: list[SwarmAgentProfile]
+        self, message: SwarmMessage, options: list[SwarmRouteOption]
     ) -> list[str]: ...
 
 
@@ -30,12 +30,14 @@ class LlmGate:
         self.env = create_swarm_prompt_env()
 
     async def route(
-        self, message: SwarmMessage, agents: list[SwarmAgentProfile]
+        self, message: SwarmMessage, options: list[SwarmRouteOption]
     ) -> list[str]:
-        if not agents:
+        if not options:
             return []
         provider = get_provider_for_model(self.model)
-        system_prompt = self.env.get_template("swarm_gate.jinja2").render(agents=agents)
+        system_prompt = self.env.get_template("swarm_gate.jinja2").render(
+            agents=options
+        )
         raw = await get_client(provider).create_completion(
             messages=[
                 {"role": "system", "content": system_prompt, "cacheable": True},
@@ -47,7 +49,7 @@ class LlmGate:
         route: SwarmRoute = parse_llm_response(
             raw_response=raw, provider=provider, expected_type=SwarmRoute
         ).parsed_content
-        known = {agent.agent_id for agent in agents}
+        known = {option.agent_id for option in options}
         selected = [agent_id for agent_id in route.agent_ids if agent_id in known]
         logger.info(
             f"swarm_gate_001: Routed to \033[36m{selected}\033[0m: \033[33m{route.reasoning}\033[0m"

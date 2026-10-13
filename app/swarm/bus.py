@@ -21,7 +21,7 @@ from archie_shared.swarm.models import (
 )
 from ..backend.redis_factory import get_async_redis
 from ..config import settings
-from .agents import SWARM_AGENTS
+from .agents import SWARM_AGENTS, SWARM_GROUPS
 
 
 logger = logging.getLogger(__name__)
@@ -31,8 +31,12 @@ _MENTION_PATTERN = re.compile(r"@([a-z][a-z0-9_]*)")
 
 
 def parse_mentions(text: str) -> list[str]:
-    """Return known agent IDs mentioned in `text`, in order, without duplicates."""
-    found = [m for m in _MENTION_PATTERN.findall(text.lower()) if m in SWARM_AGENTS]
+    """Return known agent and group IDs mentioned in `text`, in order, without duplicates."""
+    found = [
+        m
+        for m in _MENTION_PATTERN.findall(text.lower())
+        if m in SWARM_AGENTS or m in SWARM_GROUPS
+    ]
     return list(dict.fromkeys(found))
 
 

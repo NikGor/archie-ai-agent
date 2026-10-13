@@ -25,26 +25,29 @@ from ..utils.llm_parser import parse_llm_response
 from ..utils.provider_utils import get_provider_for_model
 from ..utils.skill_utils import load_skill, load_skill_references
 from ..utils.tool_executor import execute_tool_calls
-from .agents import SWARM_AGENTS
+from .agents import SWARM_AGENTS, SWARM_GROUPS
 from .models import SwarmAgentProfile, SwarmReply, SwarmToolCall, SwarmTurn
 from .policy import READ_ONLY_TOOLS, check_tool_call
 
 
 logger = logging.getLogger(__name__)
 
-SWARM_PROMPTS_DIR = os.path.join(
-    os.path.dirname(__file__), "..", "agent", "prompts", "swarm"
-)
+PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "agent", "prompts")
+SWARM_PROMPTS_DIR = os.path.join(PROMPTS_DIR, "swarm")
 
 
 def create_swarm_prompt_env() -> Environment:
     # No autoescape: prompts are plain text and JSON parameters must stay readable.
-    return Environment(loader=FileSystemLoader(SWARM_PROMPTS_DIR), autoescape=False)
+    # PROMPTS_DIR is on the path so swarm prompts can include persona_prompts/.
+    return Environment(
+        loader=FileSystemLoader([SWARM_PROMPTS_DIR, PROMPTS_DIR]), autoescape=False
+    )
 
 
 def format_chat_line(message: SwarmMessage) -> str:
     sender = "user" if message.sender == "user" else f"@{message.sender}"
-    return f"[{message.message_id}] {sender}: {message.text}"
+    reply = f" (reply to [{message.reply_to}])" if message.reply_to else ""
+    return f"[{message.message_id}] {sender}{reply}: {message.text}"
 
 
 class SwarmDraft(BaseModel):
@@ -75,6 +78,7 @@ class SwarmAgentRunner:
         return self.env.get_template("swarm_base.jinja2").render(
             agent=profile,
             agents=list(SWARM_AGENTS.values()),
+            groups=SWARM_GROUPS,
             tools=[
                 {
                     "name": tool["name"],
