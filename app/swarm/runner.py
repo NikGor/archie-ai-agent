@@ -125,7 +125,7 @@ class SwarmAgentRunner:
         state_dict = state.model_dump()
         lines = [
             self.prompt_builder.build_datetime_note(state_dict),
-            f"User city: {state.default_city}",
+            f"User city: {state.default_city}, user language: {state.language}",
             "Recent chat:",
             *(
                 format_chat_line(m)
@@ -212,7 +212,10 @@ class SwarmAgentRunner:
                     "content": self._format_results(results, new_actions),
                 }
             )
-            last_round = rounds >= settings.swarm_max_tool_rounds
+            # After a successful side effect only the reply is left: no repeated actions.
+            last_round = rounds >= settings.swarm_max_tool_rounds or any(
+                a.status == "success" for a in new_actions
+            )
             messages.append(
                 {
                     "role": "user",
@@ -238,7 +241,7 @@ class SwarmAgentRunner:
             )
             return None
         if not reply:
-            reply = "; ".join(f"{a.tool_name}: {a.status}" for a in actions)
+            reply = "; ".join(self._describe_action(a) for a in actions)
         return SwarmDraft(
             text=reply, actions=actions, usage=self._sum_usage(model, traces)
         )
@@ -320,6 +323,12 @@ class SwarmAgentRunner:
             status=status,
             summary=summary,
         )
+
+    @staticmethod
+    def _describe_action(action: SwarmActionInfo) -> str:
+        """Fallback reply line: the action and its argument values (e.g. spoken text)."""
+        values = ", ".join(str(v) for v in json.loads(action.arguments_json).values())
+        return f"{action.tool_name} ({action.status}): {values}"
 
     @staticmethod
     def _format_results(

@@ -82,6 +82,7 @@ class SwarmDispatcher:
                 self._pending[agent_id] = message
         for agent_id in targets:
             self._start(agent_id, message)
+        await self._report_skipped(message, enabled, targets)
         for agent_id in self.select_listeners(message, enabled):
             if agent_id in targets:
                 continue
@@ -213,6 +214,9 @@ class SwarmDispatcher:
         try:
             history = await self.bus.get_history(settings.swarm_history_size)
             draft = await self.runner.run(SWARM_AGENTS[agent_id], trigger, history)
+            if not draft and self.is_human_intent(trigger):
+                # A task from the user or the council must not end in silence.
+                await self._post_note(f"{agent_id} gave no answer", trigger)
             if draft:
                 await self.bus.post(
                     sender=agent_id,
@@ -234,6 +238,43 @@ class SwarmDispatcher:
             self._last_run[agent_id] = time.monotonic()
             self._running.discard(agent_id)
             self.hub.publish(SwarmTypingEvent(agent_id=agent_id, active=False))
+
+    async def _report_skipped(
+        self, message: SwarmMessage, enabled: set[str], targets: list[str]
+    ) -> None:
+        """Say in the chat why a mentioned agent does not answer, instead of a
+        silent drop (ARCHIE-206)."""
+        if message.kind == "opinion":
+            return
+        for agent_id in message.mentions:
+            if (
+                agent_id in SWARM_GROUPS
+                or agent_id not in enabled
+                or agent_id == message.sender
+                or agent_id in targets
+                or self._pending.get(agent_id) is message
+            ):
+                continue
+            if message.depth >= settings.swarm_max_depth:
+                reason = f"chain limit of {settings.swarm_max_depth} steps reached"
+            elif agent_id in self._running:
+                reason = "busy with another task"
+            else:
+                reason = "asked again too soon by an agent"
+            logger.info(
+                f"swarm_dispatcher_005: \033[36m{agent_id}\033[0m skipped: {reason}"
+            )
+            await self._post_note(f"{agent_id} skipped: {reason}", message)
+
+    async def _post_note(self, text: str, trigger: SwarmMessage) -> None:
+        # No "@" in notes: a mention would wake the agent again.
+        await self.bus.post(
+            sender="system",
+            kind="system",
+            text=text,
+            reply_to=trigger.message_id,
+            depth=settings.swarm_max_depth,
+        )
 
     async def _post_failure(
         self, name: str, trigger: SwarmMessage, exc: Exception
