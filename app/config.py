@@ -43,7 +43,8 @@ class Settings(BaseSettings):
     swarm_model: str = "gpt-5.4-nano"
     # The council decides and delegates, so it gets a stronger model than the workers
     swarm_council_model: str = "gpt-5.4-mini"
-    swarm_max_depth: int = 3
+    # The council takes one hop itself: user -> decision -> agent -> agent
+    swarm_max_depth: int = 4
     swarm_cooldown_seconds: int = 20
     swarm_history_size: int = 12
     swarm_stream_max_length: int = 500
