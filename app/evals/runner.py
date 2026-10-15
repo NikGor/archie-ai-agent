@@ -1,0 +1,159 @@
+"""Runs one attempt of one eval case against the agent pipeline."""
+
+import logging
+import time
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from archie_shared.chat.models import PipelineTrace
+from archie_shared.evals.models import (
+    EvalAssertionFailure,
+    EvalCaseInfo,
+    EvalCaseResult,
+)
+from app.agent.agent_factory import AgentFactory
+from app.agent.context import ConversationContext
+from app.config import settings
+from app.models.ws_models import StatusUpdate
+from app.utils.provider_utils import get_provider_for_model
+from .assertions import check_decision, check_response, find_ui_answer
+from .judge import judge_response
+
+
+logger = logging.getLogger(__name__)
+
+StepCallback = Callable[[str], Awaitable[None]]
+
+
+def _sum_tokens(trace: PipelineTrace | None) -> int | None:
+    if trace is None:
+        return None
+    stages = (trace.command_call, trace.tool_execution, trace.create_output)
+    return sum(
+        stage.llm_trace.total_tokens for stage in stages if stage and stage.llm_trace
+    )
+
+
+def _status(failures: list[EvalAssertionFailure]) -> str:
+    return "failed" if failures else "passed"
+
+
+class EvalAttemptRunner:
+    """Runs eval attempts in demo mode as a dedicated eval user."""
+
+    def __init__(self, agent_factory: AgentFactory | None = None) -> None:
+        self.agent_factory = agent_factory or AgentFactory(demo_mode=True)
+
+    async def run(
+        self,
+        run_id: str,
+        case: EvalCaseInfo,
+        model: str,
+        attempt: int,
+        judge_model: str | None,
+        on_step: StepCallback,
+    ) -> EvalCaseResult:
+        base = {
+            "run_id": run_id,
+            "case_id": case.id,
+            "model": model,
+            "attempt": attempt,
+        }
+        started = time.monotonic()
+        try:
+            if case.stage == "stage1":
+                fields = await self._run_stage1(case, model, on_step)
+            else:
+                fields = await self._run_full(case, model, judge_model, on_step)
+        except Exception as exc:
+            logger.error(
+                f"eval_runner_error_001: \033[36m{case.id}\033[0m/{model}#{attempt}: "
+                f"\033[31m{type(exc).__name__}: {exc}\033[0m"
+            )
+            fields = {
+                "status": "error",
+                "error": f"{type(exc).__name__}: {exc}",
+                "total_ms": int((time.monotonic() - started) * 1000),
+            }
+        return EvalCaseResult(
+            **base, **fields, finished_at=datetime.now(UTC).isoformat()
+        )
+
+    async def _run_stage1(
+        self, case: EvalCaseInfo, model: str, on_step: StepCallback
+    ) -> dict:
+        await on_step("command")
+        provider = get_provider_for_model(model)
+        user_state = await self.agent_factory.state_service.get_user_state(
+            user_name=settings.eval_user_name, demo_mode=True
+        )
+        started = time.monotonic()
+        decision, trace = await self.agent_factory._make_command_call(
+            user_input=case.input,
+            model=model,
+            provider=provider,
+            user_state=user_state,
+            response_format=case.response_format,
+            ctx=ConversationContext().for_provider(provider),
+        )
+        elapsed = int((time.monotonic() - started) * 1000)
+        failures = check_decision(case, decision)
+        return {
+            "status": _status(failures),
+            "failures": failures,
+            "stage1_ms": elapsed,
+            "total_ms": elapsed,
+            "total_tokens": trace.total_tokens if trace else None,
+            "output_json": decision.model_dump_json(),
+        }
+
+    async def _run_full(
+        self,
+        case: EvalCaseInfo,
+        model: str,
+        judge_model: str | None,
+        on_step: StepCallback,
+    ) -> dict:
+        async def on_status(update: StatusUpdate) -> None:
+            await on_step(update.step)
+
+        response = await self.agent_factory.arun(
+            messages=[{"role": "user", "content": case.input}],
+            command_model=model,
+            final_output_model=model,
+            response_format=case.response_format,
+            user_name=settings.eval_user_name,
+            on_status=on_status,
+        )
+        trace = response.pipeline_trace
+        total_tokens = _sum_tokens(trace)
+        total_ms = trace.total_ms if trace else None
+        failures = check_response(case, response, total_tokens, total_ms)
+        judge = None
+        if case.judge and judge_model:
+            await on_step("judge")
+            judge = await judge_response(case, response.content, judge_model)
+        ui_answer = find_ui_answer(response)
+        return {
+            "status": _status(failures),
+            "failures": failures,
+            "stage1_ms": (
+                trace.command_call.duration_ms if trace and trace.command_call else None
+            ),
+            "stage2_ms": (
+                trace.tool_execution.duration_ms
+                if trace and trace.tool_execution
+                else None
+            ),
+            "stage3_ms": (
+                trace.create_output.duration_ms
+                if trace and trace.create_output
+                else None
+            ),
+            "total_ms": total_ms,
+            "total_tokens": total_tokens,
+            "ui_items_count": len(ui_answer.items) if ui_answer else None,
+            "judge": judge,
+            "output_json": (
+                response.content.model_dump_json() if response.content else None
+            ),
+        }
