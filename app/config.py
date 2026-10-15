@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     # state reads stay real. For safe testing against the real home.
     swarm_dry_run: bool = False
 
+    # Prompt eval suite (ARCHIE-208)
+    eval_default_model: str = "gpt-4.1-mini"
+    eval_concurrency: int = 3
+    eval_user_name: str = "eval"
+    # Django stores eval runs; results are only kept in memory if unset
+    eval_publish_url: str | None = None
+    eval_publish_token: str | None = None
+
     # Google integrations
     google_calendar_credentials_file: str = "credentials.json"
     gmail_token_file: str = "token_gmail.json"
