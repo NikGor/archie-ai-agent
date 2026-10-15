@@ -141,10 +141,9 @@ class PromptBuilder:
             response_format=response_format,
         )
 
-    def build_format_instructions(
-        self, response_format: str, intents: list[str] | None = None
-    ) -> str:
-        """Build format-specific instructions."""
+    @staticmethod
+    def format_template_name(response_format: str) -> str:
+        """Return the format template path (relative to prompts/) for a response format."""
         format_aliases = {"voice": "plain"}
         actual_format = format_aliases.get(response_format, response_format)
         if actual_format in [
@@ -156,9 +155,14 @@ class PromptBuilder:
             "dashboard",
             "widget",
         ]:
-            format_template_name = f"format_prompts/format_{actual_format}.jinja2"
-        else:
-            format_template_name = "format_prompts/format_formatted_text.jinja2"
+            return f"format_prompts/format_{actual_format}.jinja2"
+        return "format_prompts/format_formatted_text.jinja2"
+
+    def build_format_instructions(
+        self, response_format: str, intents: list[str] | None = None
+    ) -> str:
+        """Build format-specific instructions."""
+        format_template_name = self.format_template_name(response_format)
         format_template_path = os.path.join(self.templates_dir, format_template_name)
         if not os.path.exists(format_template_path):
             logger.warning(
