@@ -10,7 +10,7 @@ from archie_shared.evals.models import (
 )
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from app.config import MODEL_PROVIDERS, settings
-from .catalog import CatalogError, get_catalog
+from .catalog import CatalogError, compute_prompt_hashes, get_catalog
 from .service import EvalBusyError, EvalRunNotFoundError, eval_service
 
 
@@ -24,6 +24,12 @@ _KNOWN_MODELS = {model for models in MODEL_PROVIDERS.values() for model in model
 @router.get("/cases")
 async def list_cases() -> list[EvalCaseInfo]:
     return list(get_catalog())
+
+
+@router.get("/prompts")
+async def list_prompts() -> dict[str, str]:
+    """Prompt template name -> sha256 of its current source."""
+    return compute_prompt_hashes()
 
 
 @router.get("/models")
