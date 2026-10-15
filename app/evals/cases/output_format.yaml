@@ -1,0 +1,61 @@
+# Full pipeline, simple formats: content is not empty and fits token/latency budgets.
+
+- id: format.plain_greeting
+  name: Приветствие (plain)
+  description: Короткий ответ на приветствие укладывается в малый бюджет токенов.
+  tags: [smalltalk, budget]
+  input: "Привет! Как дела?"
+  response_format: plain
+  stage: full
+  expect:
+    content_not_empty: true
+    max_total_tokens: 1000
+    max_latency_ms: 15000
+
+- id: format.plain_day_of_week
+  name: День недели (plain)
+  description: Ответ из контекста даты без tools укладывается в малый бюджет токенов.
+  tags: [datetime, budget]
+  input: "Какой сейчас день недели?"
+  response_format: plain
+  stage: full
+  expect:
+    content_not_empty: true
+    max_total_tokens: 800
+    max_latency_ms: 15000
+
+- id: format.plain_capabilities
+  name: Что ты умеешь (plain)
+  description: Рассказ о возможностях не раздувается и укладывается в бюджет.
+  tags: [smalltalk, budget]
+  input: "Что ты умеешь делать?"
+  response_format: plain
+  stage: full
+  expect:
+    content_not_empty: true
+    max_total_tokens: 1200
+    max_latency_ms: 20000
+
+- id: format.level2_greeting
+  name: Приветствие (level2)
+  description: Формат level2_answer даёт непустой ответ в бюджете.
+  tags: [smalltalk, budget]
+  input: "Добрый вечер!"
+  response_format: level2_answer
+  stage: full
+  expect:
+    content_not_empty: true
+    max_total_tokens: 1200
+    max_latency_ms: 15000
+
+- id: format.dashboard
+  name: Панель управления
+  description: Формат dashboard пропускает Stage 1 и строит непустую панель в бюджете.
+  tags: [dashboard, budget]
+  input: "Покажи панель управления"
+  response_format: dashboard
+  stage: full
+  expect:
+    content_not_empty: true
+    max_total_tokens: 1500
+    max_latency_ms: 20000

@@ -1,0 +1,83 @@
+# Stage 1 routing: the command prompt picks the right action type.
+# Fields: id (unique), name, description (required), tags, input, response_format, stage, expect.
+# `prompts` is inferred from stage/response_format; set it only to add more templates.
+
+- id: routing.greeting
+  name: Приветствие
+  description: На простое приветствие агент отвечает сразу, без вызова tools.
+  tags: [smalltalk]
+  input: "Привет!"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: final_response
+
+- id: routing.day_of_week
+  name: День недели
+  description: День недели есть в контексте даты; агент не должен искать его через tools.
+  tags: [datetime]
+  input: "Какой сейчас день недели?"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: final_response
+
+- id: routing.current_time
+  name: Текущее время
+  description: Время есть в контексте даты; агент не должен искать его через tools.
+  tags: [datetime]
+  input: "Который сейчас час?"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: final_response
+
+- id: routing.light_on
+  name: Включить свет
+  description: Команда умному дому сразу ведёт к вызову tool, без уточнений.
+  tags: [smarthome]
+  input: "Включи свет на кухне"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: function_call
+
+- id: routing.play_music
+  name: Включить музыку
+  description: Размытая музыкальная просьба всё равно ведёт к вызову tool, а не к уточняющему вопросу.
+  tags: [music]
+  input: "Включи что-нибудь на Spotify"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: function_call
+
+- id: routing.web_search
+  name: Поиск в интернете
+  description: Явная просьба найти в интернете ведёт к вызову tool.
+  tags: [search]
+  input: "Найди в интернете погоду в Москве"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: function_call
+
+- id: routing.add_task
+  name: Добавить задачу
+  description: Создание задачи ведёт к вызову tool, а не к ответу текстом.
+  tags: [tasks]
+  input: "Добавь задачу купить молоко"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: function_call
+
+- id: routing.capabilities
+  name: Что ты умеешь
+  description: Вопрос о возможностях агента не требует tools; агент отвечает сам.
+  tags: [smalltalk]
+  input: "Что ты умеешь?"
+  response_format: plain
+  stage: stage1
+  expect:
+    action_type: final_response

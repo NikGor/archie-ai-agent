@@ -1,0 +1,151 @@
+# Full pipeline, ui_answer: right UI components, forms and quick actions; judge scores quality.
+# Tag `mini` marks a cheap subset for quick model comparison.
+
+- id: ui.weather_london
+  name: Погода в Лондоне
+  description: Прогноз погоды рендерится карточкой погоды в card_grid и даёт быстрые действия.
+  tags: [weather]
+  input: "какая завтра погода в Лондоне?"
+  response_format: ui_answer
+  stage: full
+  judge: true
+  expect:
+    content_not_empty: true
+    min_ui_items: 1
+    expected_item_types: [card_grid]
+    has_quick_actions: true
+    max_total_tokens: 25000
+    max_latency_ms: 35000
+
+- id: ui.engine_explanation
+  name: Бензин против дизеля
+  description: Объяснение без tools собирается из нескольких структурных элементов, а не одним текстом.
+  tags: [explain, mini]
+  input: "Объясни устройство и разницу бензинового и дизельного двигателя"
+  response_format: ui_answer
+  stage: full
+  judge: true
+  expect:
+    content_not_empty: true
+    min_ui_items: 2
+    has_quick_actions: true
+    max_total_tokens: 28000
+    max_latency_ms: 45000
+
+- id: ui.light_on
+  name: Включить торшер
+  description: После управления светом ответ короткий и даёт быстрые действия.
+  tags: [smarthome]
+  input: "Включи торшер в гостиной"
+  response_format: ui_answer
+  stage: full
+  judge: true
+  expect:
+    content_not_empty: true
+    has_quick_actions: true
+    max_total_tokens: 22000
+    max_latency_ms: 20000
+
+- id: ui.bedroom_temperature
+  name: Температура в спальне
+  description: После управления климатом ответ короткий и даёт быстрые действия.
+  tags: [smarthome]
+  input: "сделай температуру в спальне 18 градусов"
+  response_format: ui_answer
+  stage: full
+  judge: true
+  expect:
+    content_not_empty: true
+    has_quick_actions: true
+    max_total_tokens: 22000
+    max_latency_ms: 20000
+
+- id: ui.climate_sensors
+  name: Все климатические датчики
+  description: Состояние климатических датчиков рендерится через climate_sensor_card.
+  tags: [smarthome]
+  input: "Покажи показания всех климатических датчиков"
+  response_format: ui_answer
+  stage: full
+  expect:
+    content_not_empty: true
+    min_ui_items: 1
+    expected_item_types: [climate_sensor_card]
+    max_total_tokens: 25000
+    max_latency_ms: 30000
+
+- id: ui.light_sensor
+  name: Освещённость в гостиной
+  description: Показания датчика света рендерятся через light_sensor_card.
+  tags: [smarthome]
+  input: "Какая освещённость в гостиной?"
+  response_format: ui_answer
+  stage: full
+  expect:
+    content_not_empty: true
+    min_ui_items: 1
+    expected_item_types: [light_sensor_card]
+    max_total_tokens: 22000
+    max_latency_ms: 25000
+
+- id: ui.pizzeria
+  name: Пиццерия в Бад Мергентхайме
+  description: Поиск мест рендерится карточками мест в card_grid и даёт быстрые действия.
+  tags: [places, mini]
+  input: "посоветуй пиццерию в Бад Мергентхайме"
+  response_format: ui_answer
+  stage: full
+  judge: true
+  expect:
+    content_not_empty: true
+    min_ui_items: 2
+    expected_item_types: [card_grid]
+    has_quick_actions: true
+    max_total_tokens: 35000
+    max_latency_ms: 45000
+
+- id: ui.bundesliga_weekend
+  name: Бундеслига на выходных
+  description: Расписание матчей рендерится карточками в card_grid и даёт быстрые действия.
+  tags: [football]
+  input: "кто играет в эти выходные в Бундеслиге?"
+  response_format: ui_answer
+  stage: full
+  judge: true
+  expect:
+    content_not_empty: true
+    min_ui_items: 1
+    expected_item_types: [card_grid]
+    has_quick_actions: true
+    max_total_tokens: 25000
+    max_latency_ms: 35000
+
+- id: ui.calendar_event
+  name: Событие в календаре
+  description: Намерение создать событие рендерит event_form, а не описание текстом.
+  tags: [calendar, forms]
+  input: "добавь в календарь на завтра встречу в ресторане Pizzeria in Weberdorf на 18:00"
+  response_format: ui_answer
+  stage: full
+  judge: true
+  expect:
+    content_not_empty: true
+    has_form: true
+    has_quick_actions: true
+    max_total_tokens: 18000
+    max_latency_ms: 30000
+
+- id: ui.note
+  name: Заметка о сериале
+  description: Намерение создать заметку рендерит note_form, а не описание текстом.
+  tags: [notes, forms]
+  input: "Добавь заметку 'посмотреть новый сериал Рыцарь 7 королевств'"
+  response_format: ui_answer
+  stage: full
+  judge: true
+  expect:
+    content_not_empty: true
+    has_form: true
+    has_quick_actions: true
+    max_total_tokens: 18000
+    max_latency_ms: 20000
