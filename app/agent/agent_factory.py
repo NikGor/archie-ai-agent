@@ -177,7 +177,9 @@ class AgentFactory:
             f"Output: \033[34m{output_provider}\033[0m/\033[36m{final_output_model}\033[0m"
         )
         if user_name:
-            logger.info(f"agent_factory_001c: Using user_name: \033[35m{user_name}\033[0m")
+            logger.info(
+                f"agent_factory_001c: Using user_name: \033[35m{user_name}\033[0m"
+            )
         user_state = await self.state_service.get_user_state(
             user_name=user_name, demo_mode=self.demo_mode
         )
@@ -245,7 +247,9 @@ class AgentFactory:
             final_response = await create_output(
                 user_input=user_input,
                 command_summary=loop_result.command_summary,
-                tool_results=loop_result.tool_results if loop_result.tool_results else None,
+                tool_results=(
+                    loop_result.tool_results if loop_result.tool_results else None
+                ),
                 response_format=response_format,
                 model=final_output_model,
                 state=user_state.model_dump(),

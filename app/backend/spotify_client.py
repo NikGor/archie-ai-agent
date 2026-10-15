@@ -47,8 +47,12 @@ class SpotifyClient:
             return self._access_token
 
         if not (self.client_id and self.client_secret and self.refresh_token):
-            logger.error("spotify_client_error_001: \033[31mMissing Spotify credentials\033[0m")
-            raise SpotifyAuthError("Spotify client_id/client_secret/refresh_token not configured")
+            logger.error(
+                "spotify_client_error_001: \033[31mMissing Spotify credentials\033[0m"
+            )
+            raise SpotifyAuthError(
+                "Spotify client_id/client_secret/refresh_token not configured"
+            )
 
         try:
             async with httpx.AsyncClient() as client:
@@ -63,14 +67,18 @@ class SpotifyClient:
                     timeout=30.0,
                 )
         except httpx.HTTPError as e:
-            logger.error(f"spotify_client_error_002: \033[31mToken refresh request failed: {e}\033[0m")
+            logger.error(
+                f"spotify_client_error_002: \033[31mToken refresh request failed: {e}\033[0m"
+            )
             raise SpotifyAuthError(f"Token refresh request failed: {e}") from e
 
         if response.status_code != 200:
             logger.error(
                 f"spotify_client_error_003: \033[31mToken refresh returned {response.status_code}\033[0m"
             )
-            raise SpotifyAuthError(f"Token refresh failed: {response.status_code} {response.text}")
+            raise SpotifyAuthError(
+                f"Token refresh failed: {response.status_code} {response.text}"
+            )
 
         data = response.json()
         access_token: str = data["access_token"]
@@ -94,7 +102,9 @@ class SpotifyClient:
         token = await self._get_access_token()
         headers = {"Authorization": f"Bearer {token}"}
         async with httpx.AsyncClient(base_url=API_BASE_URL) as client:
-            response = await client.request(method, path, headers=headers, timeout=30.0, **kwargs)
+            response = await client.request(
+                method, path, headers=headers, timeout=30.0, **kwargs
+            )
 
         if response.status_code >= 400:
             # raise_for_status()'s default message doesn't include the response body,
@@ -118,15 +128,22 @@ class SpotifyClient:
                         )
                     if response.status_code == 404:
                         retry_body = response.json() if response.content else {}
-                        if retry_body.get("error", {}).get("reason") == "NO_ACTIVE_DEVICE":
-                            raise SpotifyNoActiveDeviceError("No active Spotify device found")
+                        if (
+                            retry_body.get("error", {}).get("reason")
+                            == "NO_ACTIVE_DEVICE"
+                        ):
+                            raise SpotifyNoActiveDeviceError(
+                                "No active Spotify device found"
+                            )
                     return response
                 raise SpotifyNoActiveDeviceError("No active Spotify device found")
 
         return response
 
     @staticmethod
-    def _ensure_ok(response: httpx.Response, ok_statuses: tuple[int, ...] = (200, 202, 204)) -> None:
+    def _ensure_ok(
+        response: httpx.Response, ok_statuses: tuple[int, ...] = (200, 202, 204)
+    ) -> None:
         """Raise for any status outside `ok_statuses` (playback endpoints return 200/202/204 on success)."""
         if response.status_code not in ok_statuses:
             response.raise_for_status()
@@ -165,7 +182,9 @@ class SpotifyClient:
             )
             transfer_response.raise_for_status()
         except Exception as e:
-            logger.warning(f"spotify_client_warn_002: \033[33mDevice transfer failed: {e}\033[0m")
+            logger.warning(
+                f"spotify_client_warn_002: \033[33mDevice transfer failed: {e}\033[0m"
+            )
             return False
 
         logger.info(
@@ -250,7 +269,9 @@ class SpotifyClient:
 
     async def set_repeat(self, state: str) -> None:
         """Sets repeat mode: 'track', 'context', or 'off'."""
-        response = await self._request("PUT", "/me/player/repeat", params={"state": state})
+        response = await self._request(
+            "PUT", "/me/player/repeat", params={"state": state}
+        )
         self._ensure_ok(response)
 
     async def seek(self, position_ms: int) -> None:
@@ -274,7 +295,9 @@ class SpotifyClient:
         data = response.json()
         currently_playing = data.get("currently_playing")
         return {
-            "current_track": _track_to_dict(currently_playing) if currently_playing else None,
+            "current_track": (
+                _track_to_dict(currently_playing) if currently_playing else None
+            ),
             "queue": [_track_to_dict(t) for t in data.get("queue", [])],
         }
 
@@ -291,7 +314,9 @@ class SpotifyClient:
 
     async def save_tracks(self, track_ids: list[str]) -> None:
         """Adds tracks to the user's saved library."""
-        response = await self._request("PUT", "/me/tracks", params={"ids": ",".join(track_ids)})
+        response = await self._request(
+            "PUT", "/me/tracks", params={"ids": ",".join(track_ids)}
+        )
         response.raise_for_status()
 
     async def remove_saved_tracks(self, track_ids: list[str]) -> None:
@@ -340,7 +365,9 @@ class SpotifyClient:
             "playlist_url": data.get("external_urls", {}).get("spotify"),
         }
 
-    async def add_tracks_to_playlist(self, playlist_id: str, track_uris: list[str]) -> None:
+    async def add_tracks_to_playlist(
+        self, playlist_id: str, track_uris: list[str]
+    ) -> None:
         """Adds tracks to an existing playlist.
 
         Uses POST /playlists/{id}/items — the legacy /playlists/{id}/tracks

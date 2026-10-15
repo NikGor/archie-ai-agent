@@ -25,7 +25,9 @@ def _parse_frontmatter_file(path: Path) -> tuple[dict[str, Any], str] | None:
     text = path.read_text(encoding="utf-8")
     parts = text.split("---", 2)
     if not text.startswith("---") or len(parts) < 3:
-        logger.warning(f"skill_utils_warning_001: Malformed frontmatter in \033[33m{path}\033[0m")
+        logger.warning(
+            f"skill_utils_warning_001: Malformed frontmatter in \033[33m{path}\033[0m"
+        )
         return None
     try:
         frontmatter = yaml.safe_load(parts[1]) or {}
@@ -71,7 +73,9 @@ def load_skill(skill_name: str) -> dict[str, Any] | None:
     """
     skill_file = SKILLS_DIR / skill_name / "SKILL.md"
     if not skill_file.is_file():
-        logger.warning(f"skill_utils_warning_003: Skill not found: \033[33m{skill_name}\033[0m")
+        logger.warning(
+            f"skill_utils_warning_003: Skill not found: \033[33m{skill_name}\033[0m"
+        )
         return None
 
     parsed = _parse_frontmatter_file(skill_file)
@@ -110,7 +114,9 @@ def list_skill_references(skill_name: str) -> list[dict[str, str]]:
     return references
 
 
-def load_skill_references(skill_name: str, reference_names: list[str]) -> dict[str, str]:
+def load_skill_references(
+    skill_name: str, reference_names: list[str]
+) -> dict[str, str]:
     """Load the body content of specific reference files for a skill, by name.
 
     Silently skips names that don't resolve to a valid reference file — the caller

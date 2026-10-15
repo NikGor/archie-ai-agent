@@ -1,7 +1,6 @@
 """WebSocket models for status updates and streaming."""
 
 from collections.abc import Awaitable, Callable
-
 from pydantic import BaseModel, Field
 
 
@@ -38,4 +37,6 @@ class StatusNotifier:
         self, step: str, status: str, message: str, detail: str | None = None
     ) -> None:
         if self._cb:
-            await self._cb(StatusUpdate(step=step, status=status, message=message, detail=detail))
+            await self._cb(
+                StatusUpdate(step=step, status=status, message=message, detail=detail)
+            )

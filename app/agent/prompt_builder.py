@@ -90,7 +90,9 @@ class PromptBuilder:
         system_message = f"{cmd_prompt}\n\nAvailable Tools:\n{tools_list}"
         skills = list_skills()
         if skills:
-            skills_list = "\n".join(f"- {s['name']}: {s['description']}" for s in skills)
+            skills_list = "\n".join(
+                f"- {s['name']}: {s['description']}" for s in skills
+            )
             system_message += (
                 "\n\nAvailable Skills (call skill_loader_tool with skill_name to load "
                 f"full instructions):\n{skills_list}"
@@ -119,7 +121,10 @@ class PromptBuilder:
             )
         messages.append({"role": "system", "content": volatile})
         messages.append(
-            {"role": "user", "content": build_user_content(user_input, images, provider)}
+            {
+                "role": "user",
+                "content": build_user_content(user_input, images, provider),
+            }
         )
         return messages
 

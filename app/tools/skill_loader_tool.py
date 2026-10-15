@@ -8,7 +8,9 @@ from ..utils.skill_utils import load_skill, load_skill_references
 logger = logging.getLogger(__name__)
 
 
-async def skill_loader_tool(skill_name: str, references: str | None = None) -> dict[str, Any]:
+async def skill_loader_tool(
+    skill_name: str, references: str | None = None
+) -> dict[str, Any]:
     """
     Loads the full purpose and usage instructions for one skill from the "Available Skills"
     list injected into this prompt. Call this before acting on a request that matches a
@@ -34,7 +36,9 @@ async def skill_loader_tool(skill_name: str, references: str | None = None) -> d
     logger.info(f"skill_loader_001: Requested skill: \033[36m{skill_name}\033[0m")
     skill = load_skill(skill_name)
     if skill is None:
-        logger.warning(f"skill_loader_warning_001: Skill not found: \033[33m{skill_name}\033[0m")
+        logger.warning(
+            f"skill_loader_warning_001: Skill not found: \033[33m{skill_name}\033[0m"
+        )
         return {
             "success": False,
             "error": f"Skill not found: {skill_name}",
@@ -49,7 +53,9 @@ async def skill_loader_tool(skill_name: str, references: str | None = None) -> d
     }
 
     if references:
-        reference_names = [name.strip() for name in references.split(",") if name.strip()]
+        reference_names = [
+            name.strip() for name in references.split(",") if name.strip()
+        ]
         loaded_references = load_skill_references(skill_name, reference_names)
         result["references"] = loaded_references
         missing = [name for name in reference_names if name not in loaded_references]

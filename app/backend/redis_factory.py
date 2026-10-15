@@ -7,7 +7,6 @@ copy-pasted connection blocks.
 
 import redis
 import redis.asyncio as aioredis
-
 from .. import config
 
 

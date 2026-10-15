@@ -1,7 +1,6 @@
 """Pipeline step timing utilities for agent tracing."""
 
 import time
-
 from archie_shared.chat.models import (
     InputTokensDetails,
     LllmTrace,

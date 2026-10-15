@@ -38,7 +38,9 @@ def calculate_token_cost(
         return 0.0
     cached_price = prices.get("cached")
     if cached_price is None:
-        cached_price = prices["input"] * (0.1 if model.startswith("anthropic/") else 0.25)
+        cached_price = prices["input"] * (
+            0.1 if model.startswith("anthropic/") else 0.25
+        )
     uncached_tokens = max(input_tokens - cached_tokens, 0)
     return (
         (uncached_tokens / 1_000_000) * prices["input"]

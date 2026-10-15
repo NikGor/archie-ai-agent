@@ -55,14 +55,24 @@ async def gmail_tool(
             "message": "Gmail token not configured",
         }
     if action == "search":
-        result = await client.search_messages(query=query or "", max_results=max(1, min(max_results, 20)))
+        result = await client.search_messages(
+            query=query or "", max_results=max(1, min(max_results, 20))
+        )
     elif action == "read":
         if not message_id:
-            return {"success": False, "action": action, "error": "message_id is required for read action"}
+            return {
+                "success": False,
+                "action": action,
+                "error": "message_id is required for read action",
+            }
         result = await client.get_message(message_id)
     else:
         logger.warning(f"gmail_002: Unknown action: \033[33m{action}\033[0m")
-        return {"success": False, "action": action, "error": f"Unknown action: {action}"}
+        return {
+            "success": False,
+            "action": action,
+            "error": f"Unknown action: {action}",
+        }
     result["action"] = action
     return result
 
@@ -82,5 +92,9 @@ def _demo_response(action: str) -> dict[str, Any]:
         "gmail_url": "https://mail.google.com/mail/u/0/#all/demo_001",
     }
     if action == "read":
-        return {"success": True, "action": action, "message": {**message, "body": "Your smart home assistant is ready."}}
+        return {
+            "success": True,
+            "action": action,
+            "message": {**message, "body": "Your smart home assistant is ready."},
+        }
     return {"success": True, "action": action, "messages": [message], "count": 1}

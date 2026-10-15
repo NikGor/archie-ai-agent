@@ -70,7 +70,9 @@ class ToolResultStore:
             )
             return results
         except (redis.RedisError, json.JSONDecodeError, ValueError) as e:
-            logger.error(f"tool_result_store_error_001: Load failed: \033[31m{e}\033[0m")
+            logger.error(
+                f"tool_result_store_error_001: Load failed: \033[31m{e}\033[0m"
+            )
             return []
 
     async def save(
@@ -94,4 +96,6 @@ class ToolResultStore:
                 f"results to \033[36m{key}\033[0m (ttl=\033[33m{self.ttl}\033[0ms)"
             )
         except (redis.RedisError, TypeError) as e:
-            logger.error(f"tool_result_store_error_002: Save failed: \033[31m{e}\033[0m")
+            logger.error(
+                f"tool_result_store_error_002: Save failed: \033[31m{e}\033[0m"
+            )

@@ -31,9 +31,7 @@ def _openai_usage_to_dict(usage: Any) -> dict[str, int]:
             getattr(input_details, "cached_tokens", 0) or 0 if input_details else 0
         ),
         "reasoning_tokens": (
-            getattr(output_details, "reasoning_tokens", 0) or 0
-            if output_details
-            else 0
+            getattr(output_details, "reasoning_tokens", 0) or 0 if output_details else 0
         ),
     }
 

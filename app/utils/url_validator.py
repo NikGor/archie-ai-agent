@@ -97,7 +97,9 @@ async def _is_url_reachable(url: str) -> bool:
             response = await client.head(url, follow_redirects=True)
             return response.is_success
     except httpx.HTTPError as error:
-        logger.warning(f"url_validator_001: URL unreachable \033[36m{url}\033[0m: {error}")
+        logger.warning(
+            f"url_validator_001: URL unreachable \033[36m{url}\033[0m: {error}"
+        )
         return False
 
 
@@ -159,6 +161,8 @@ async def _fix_text_answer(text_answer: TextAnswer, search_fn: SearchFn) -> None
             )
             new_text = new_text.replace(match.group(0), f"[{label}]({replacement})")
         else:
-            logger.warning(f"url_validator_006: Stripping broken text link \033[36m{url}\033[0m")
+            logger.warning(
+                f"url_validator_006: Stripping broken text link \033[36m{url}\033[0m"
+            )
             new_text = new_text.replace(match.group(0), label)
     text_answer.text = new_text

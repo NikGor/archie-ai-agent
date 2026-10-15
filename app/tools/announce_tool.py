@@ -11,6 +11,7 @@ from typing import Any
 from redis.exceptions import RedisError
 from app.backend.redis_factory import get_async_redis
 
+
 logger = logging.getLogger(__name__)
 
 # Must match ANNOUNCE_CHANNEL in the archie-voice service config.
