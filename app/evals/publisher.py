@@ -16,13 +16,16 @@ _MAX_ATTEMPTS = 4
 class EvalPublisher:
     """Posts updates in order through one background worker; never blocks the run."""
 
-    def __init__(self) -> None:
+    def __init__(self, active: bool = True) -> None:
+        self.active = active
         self._queue: asyncio.Queue[EvalRunInfo | EvalCaseResult] = asyncio.Queue()
         self._worker: asyncio.Task | None = None
 
     @property
     def enabled(self) -> bool:
-        return bool(settings.eval_publish_url and settings.eval_publish_token)
+        return bool(
+            self.active and settings.eval_publish_url and settings.eval_publish_token
+        )
 
     def publish(self, update: EvalRunInfo | EvalCaseResult) -> None:
         if not self.enabled:
