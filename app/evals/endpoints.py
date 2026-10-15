@@ -10,7 +10,14 @@ from archie_shared.evals.models import (
 )
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from app.config import MODEL_PROVIDERS, settings
-from .catalog import CatalogError, compute_prompt_hashes, get_catalog
+from .catalog import (
+    CatalogError,
+    EvalCaseDraft,
+    EvalSchema,
+    build_case,
+    compute_prompt_hashes,
+    get_schema,
+)
 from .service import EvalBusyError, EvalRunNotFoundError, eval_service
 
 
@@ -21,9 +28,19 @@ ws_router = APIRouter()
 _KNOWN_MODELS = {model for models in MODEL_PROVIDERS.values() for model in models}
 
 
-@router.get("/cases")
-async def list_cases() -> list[EvalCaseInfo]:
-    return list(get_catalog())
+@router.get("/schema")
+async def get_case_schema() -> EvalSchema:
+    """Allowed values for case fields (tools, ui item types, formats, prompts)."""
+    return get_schema()
+
+
+@router.post("/cases/validate")
+async def validate_case(draft: EvalCaseDraft) -> EvalCaseInfo:
+    """Check a case before Django saves it; returns it with the inferred prompts."""
+    try:
+        return build_case(draft)
+    except CatalogError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.get("/prompts")

@@ -31,7 +31,7 @@ class EvalPublisher:
     @property
     def enabled(self) -> bool:
         return bool(
-            self.active and settings.eval_publish_url and settings.eval_publish_token
+            self.active and settings.eval_django_url and settings.eval_api_token
         )
 
     def publish(self, update: Update) -> None:
@@ -59,13 +59,13 @@ class EvalPublisher:
                     self._queue.task_done()
 
     async def _send(self, client: httpx.AsyncClient, update: Update) -> None:
-        base = str(settings.eval_publish_url).rstrip("/")
+        base = f"{str(settings.eval_django_url).rstrip('/')}/ingest"
         if isinstance(update, EvalSnapshotEvent | EvalRunInfo):
             url = f"{base}/runs/"
         else:
             url = f"{base}/runs/{update.run_id}/results/"
         headers = {
-            "Authorization": f"Bearer {settings.eval_publish_token}",
+            "Authorization": f"Bearer {settings.eval_api_token}",
             "Content-Type": "application/json",
         }
         async for attempt in AsyncRetrying(

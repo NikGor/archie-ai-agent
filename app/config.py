@@ -59,9 +59,9 @@ class Settings(BaseSettings):
     eval_default_model: str = "gpt-4.1-mini"
     eval_concurrency: int = 3
     eval_user_name: str = "eval"
-    # Django stores eval runs; results are only kept in memory if unset
-    eval_publish_url: str | None = None
-    eval_publish_token: str | None = None
+    # Django prompt-evals API (.../prompt-evals/api): stores cases and runs
+    eval_django_url: str | None = None
+    eval_api_token: str | None = None
 
     # Google integrations
     google_calendar_credentials_file: str = "credentials.json"

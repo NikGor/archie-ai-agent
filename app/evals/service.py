@@ -27,7 +27,7 @@ from archie_shared.evals.models import (
     EvalSnapshotEvent,
 )
 from app.config import settings
-from .catalog import CatalogError, compute_prompt_hashes, get_catalog, select_cases
+from .catalog import CatalogError, compute_prompt_hashes, fetch_catalog, select_cases
 from .publisher import EvalPublisher, eval_publisher
 from .runner import EvalAttemptRunner
 
@@ -115,7 +115,7 @@ class EvalService:
         """Start a run in the background; raises EvalBusyError or CatalogError."""
         if active := self.active_run():
             raise EvalBusyError(f"Run {active.run_id} is in progress")
-        cases = select_cases(get_catalog(), request)
+        cases = select_cases(await fetch_catalog(), request)
         if not cases:
             raise CatalogError("No cases match the request")
         judge_model = request.judge_model or settings.eval_default_model
