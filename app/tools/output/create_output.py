@@ -206,6 +206,7 @@ async def create_output(
         async def _on_chunk_l2(chunk: str) -> None:
             await on_stream_event("stream_delta", chunk)
 
+        response_id_out_l2: list[str] = []
         usage_out_l2: dict[str, int] = {}
         full_json_l2, ttft_ms_l2 = await stream_and_collect(
             client=client,
@@ -215,6 +216,7 @@ async def create_output(
             previous_response_id=previous_response_id,
             extractor=JsonPathExtractor(["level2_answer", "text", "text"]),
             on_chunk=_on_chunk_l2,
+            response_id_out=response_id_out_l2,
             usage_out=usage_out_l2,
         )
         parsed_l2 = parse_assembled_stream(
@@ -224,7 +226,8 @@ async def create_output(
             parsed_content=parsed_l2.parsed_content,
             response_format=response_format,
             llm_trace=parsed_l2.llm_trace,
-            response_id=None,
+            # ARCHIE-210: without the resp_ id the next OpenAI turn loses the thread
+            response_id=response_id_out_l2[0] if response_id_out_l2 else None,
             ttft_ms=ttft_ms_l2,
             no_image=no_image,
         )
