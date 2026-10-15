@@ -1,6 +1,12 @@
 """Conversation threading context shared across the 3-stage pipeline."""
 
+import logging
 from dataclasses import dataclass
+
+
+logger = logging.getLogger(__name__)
+
+OPENAI_RESPONSE_ID_PREFIX = "resp_"
 
 
 @dataclass(frozen=True)
@@ -20,5 +26,17 @@ class ConversationContext:
     def for_provider(self, provider: str) -> "ConversationContext":
         """Return the context fields actually valid for `provider`."""
         if provider == "openai":
-            return ConversationContext(previous_response_id=self.previous_response_id)
+            if self.previous_response_id and self.previous_response_id.startswith(
+                OPENAI_RESPONSE_ID_PREFIX
+            ):
+                return ConversationContext(
+                    previous_response_id=self.previous_response_id
+                )
+            # ARCHIE-210: a non-OpenAI id (e.g. our generated message-...) cannot
+            # be threaded, so fall back to inlined history instead of losing it.
+            if self.previous_response_id:
+                logger.warning(
+                    f"context_001: previous_response_id \033[33m{self.previous_response_id}\033[0m "
+                    "is not an OpenAI response id, falling back to chat_history"
+                )
         return ConversationContext(chat_history=self.chat_history)
