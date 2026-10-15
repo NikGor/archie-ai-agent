@@ -18,6 +18,7 @@ from .catalog import (
     compute_prompt_hashes,
     get_schema,
 )
+from .prompt_descriptions import PROMPT_DESCRIPTIONS
 from .service import EvalBusyError, EvalRunNotFoundError, eval_service
 
 
@@ -47,6 +48,12 @@ async def validate_case(draft: EvalCaseDraft) -> EvalCaseInfo:
 async def list_prompts() -> dict[str, str]:
     """Prompt template name -> sha256 of its current source."""
     return compute_prompt_hashes()
+
+
+@router.get("/prompt-descriptions")
+async def list_prompt_descriptions() -> dict[str, str]:
+    """Prompt template name -> what it is responsible for (empty if not described)."""
+    return {name: PROMPT_DESCRIPTIONS.get(name, "") for name in compute_prompt_hashes()}
 
 
 @router.get("/models")
