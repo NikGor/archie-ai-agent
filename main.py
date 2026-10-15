@@ -11,6 +11,8 @@ from fastapi import FastAPI  # noqa: E402
 from app.backend.cron_scheduler import cron_scheduler  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.endpoints import router  # noqa: E402
+from app.evals.endpoints import router as evals_router  # noqa: E402
+from app.evals.endpoints import ws_router as evals_ws_router  # noqa: E402
 from app.swarm.endpoints import router as swarm_router  # noqa: E402
 from app.swarm.service import swarm_service  # noqa: E402
 from app.ws_docs import router as ws_docs_router  # noqa: E402
@@ -47,6 +49,8 @@ app = FastAPI(
 app.include_router(router)
 app.include_router(ws_docs_router)
 app.include_router(swarm_router)
+app.include_router(evals_router)
+app.include_router(evals_ws_router)
 logger.info("main_001: FastAPI ready")
 
 if __name__ == "__main__":
