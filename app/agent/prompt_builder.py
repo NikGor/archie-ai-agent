@@ -100,7 +100,7 @@ class PromptBuilder:
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_message, "cacheable": True},
         ]
-        if chat_history and provider != "openai":
+        if chat_history:
             messages.append(
                 {
                     "role": "system",
