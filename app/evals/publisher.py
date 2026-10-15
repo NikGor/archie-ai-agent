@@ -1,9 +1,14 @@
-"""Sends eval runs and results to Django, which stores the history."""
+"""Sends eval runs and results to Django, which stores the history.
+
+A run starts with a snapshot (run + case descriptions), then gets results and a
+final EvalRunInfo; all go out in order.
+"""
 
 import asyncio
 import logging
+from typing import TypeAlias
 import httpx
-from archie_shared.evals.models import EvalCaseResult, EvalRunInfo
+from archie_shared.evals.models import EvalCaseResult, EvalRunInfo, EvalSnapshotEvent
 from tenacity import AsyncRetrying, stop_after_attempt, wait_exponential
 from app.config import settings
 
@@ -12,13 +17,15 @@ logger = logging.getLogger(__name__)
 
 _MAX_ATTEMPTS = 4
 
+Update: TypeAlias = EvalSnapshotEvent | EvalRunInfo | EvalCaseResult
+
 
 class EvalPublisher:
     """Posts updates in order through one background worker; never blocks the run."""
 
     def __init__(self, active: bool = True) -> None:
         self.active = active
-        self._queue: asyncio.Queue[EvalRunInfo | EvalCaseResult] = asyncio.Queue()
+        self._queue: asyncio.Queue[Update] = asyncio.Queue()
         self._worker: asyncio.Task | None = None
 
     @property
@@ -27,7 +34,7 @@ class EvalPublisher:
             self.active and settings.eval_publish_url and settings.eval_publish_token
         )
 
-    def publish(self, update: EvalRunInfo | EvalCaseResult) -> None:
+    def publish(self, update: Update) -> None:
         if not self.enabled:
             return
         self._queue.put_nowait(update)
@@ -51,11 +58,9 @@ class EvalPublisher:
                 finally:
                     self._queue.task_done()
 
-    async def _send(
-        self, client: httpx.AsyncClient, update: EvalRunInfo | EvalCaseResult
-    ) -> None:
+    async def _send(self, client: httpx.AsyncClient, update: Update) -> None:
         base = str(settings.eval_publish_url).rstrip("/")
-        if isinstance(update, EvalRunInfo):
+        if isinstance(update, EvalSnapshotEvent | EvalRunInfo):
             url = f"{base}/runs/"
         else:
             url = f"{base}/runs/{update.run_id}/results/"

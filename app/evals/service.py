@@ -177,7 +177,7 @@ class EvalService:
     async def _execute(self, state: _RunState) -> None:
         request = state.info.request
         self._update(state, status="running")
-        self.publisher.publish(state.info)
+        self.publisher.publish(state.snapshot())
         semaphore = asyncio.Semaphore(settings.eval_concurrency)
         jobs = [
             self._run_attempt(state, semaphore, case, model, attempt)
