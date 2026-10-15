@@ -63,7 +63,13 @@ async def smarthome_status_tool(
         return {
             "status": "demo",
             "message": "[DEMO] Would fetch live smart home context",
-            "context": "Living room thermostat: 22°C, humidity 45%. Kitchen light: on.",
+            # ARCHIE-208: covers every sensor type the eval cases ask about
+            "context": (
+                "Living room thermostat: 22°C, target 21°C, humidity 45%. "
+                "Bedroom thermostat: 19°C, target 18°C, humidity 50%. "
+                "Living room light sensor: 320 lx. "
+                "Kitchen light: on. Living room floor lamp: off."
+            ),
         }
 
     arguments: dict[str, Any] = {}
