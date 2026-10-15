@@ -136,7 +136,7 @@ class CronScheduler:
         return _public_job(job)
 
     async def list_jobs(self) -> list[dict[str, Any]]:
-        values = await self.redis.hvals(_JOBS_KEY)
+        values = await self.redis.hvals(_JOBS_KEY)  # type: ignore[misc]
         jobs = [json.loads(value) for value in values]
         jobs.sort(key=lambda job: (job.get("next_run_at") or "~", job["name"]))
         return [_public_job(job) for job in jobs]
@@ -300,11 +300,11 @@ class CronScheduler:
             raise ValueError(f"Invalid arguments for {tool_name}: {exc}") from exc
 
     async def _load(self, job_id: str) -> dict[str, Any] | None:
-        value = await self.redis.hget(_JOBS_KEY, job_id)
+        value = await self.redis.hget(_JOBS_KEY, job_id)  # type: ignore[misc]
         return json.loads(value) if value else None
 
     async def _save(self, job: dict[str, Any]) -> None:
-        await self.redis.hset(_JOBS_KEY, job["id"], json.dumps(job, ensure_ascii=False))
+        await self.redis.hset(_JOBS_KEY, job["id"], json.dumps(job, ensure_ascii=False))  # type: ignore[misc]
 
 
 cron_scheduler = CronScheduler()

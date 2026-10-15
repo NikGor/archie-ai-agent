@@ -4,7 +4,6 @@ import asyncio
 import base64
 import logging
 import os
-from datetime import datetime
 from email.utils import parseaddr, parsedate_to_datetime
 from typing import Any
 from google.oauth2.credentials import Credentials
@@ -38,10 +37,14 @@ class GmailClient:
             )
             raise FileNotFoundError(f"Gmail token file {self.token_file} not found")
         credentials = Credentials.from_authorized_user_file(self.token_file, SCOPES)
-        logger.info(f"gmail_auth_002: Authenticated with token: \033[36m{self.token_file}\033[0m")
+        logger.info(
+            f"gmail_auth_002: Authenticated with token: \033[36m{self.token_file}\033[0m"
+        )
         return build("gmail", "v1", credentials=credentials, cache_discovery=False)
 
-    async def search_messages(self, query: str = "", max_results: int = 5) -> dict[str, Any]:
+    async def search_messages(
+        self, query: str = "", max_results: int = 5
+    ) -> dict[str, Any]:
         """Searches messages with Gmail query syntax; empty query lists the inbox."""
         try:
             return await asyncio.to_thread(self._search_messages, query, max_results)
@@ -63,21 +66,39 @@ class GmailClient:
             request_params["q"] = query
         else:
             request_params["labelIds"] = ["INBOX"]
-        refs = self.service.users().messages().list(**request_params).execute().get("messages", [])
+        refs = (
+            self.service.users()
+            .messages()
+            .list(**request_params)
+            .execute()
+            .get("messages", [])
+        )
         messages = [
             self._format_message(
                 self.service.users()
                 .messages()
-                .get(userId="me", id=ref["id"], format="metadata", metadataHeaders=METADATA_HEADERS)
+                .get(
+                    userId="me",
+                    id=ref["id"],
+                    format="metadata",
+                    metadataHeaders=METADATA_HEADERS,
+                )
                 .execute()
             )
             for ref in refs
         ]
-        logger.info(f"gmail_search_001: Retrieved \033[33m{len(messages)}\033[0m messages")
+        logger.info(
+            f"gmail_search_001: Retrieved \033[33m{len(messages)}\033[0m messages"
+        )
         return {"success": True, "messages": messages, "count": len(messages)}
 
     def _get_message(self, message_id: str) -> dict[str, Any]:
-        raw = self.service.users().messages().get(userId="me", id=message_id, format="full").execute()
+        raw = (
+            self.service.users()
+            .messages()
+            .get(userId="me", id=message_id, format="full")
+            .execute()
+        )
         message = self._format_message(raw)
         message["body"] = self._extract_body(raw.get("payload", {}))[:MAX_BODY_CHARS]
         return {"success": True, "message": message}
@@ -110,7 +131,7 @@ class GmailClient:
     @staticmethod
     def _format_date(date_header: str) -> str:
         try:
-            parsed: datetime = parsedate_to_datetime(date_header)
+            parsed = parsedate_to_datetime(date_header)
         except (TypeError, ValueError):
             return date_header
         return parsed.strftime("%Y-%m-%d %H:%M")
@@ -118,8 +139,12 @@ class GmailClient:
     @staticmethod
     def _extract_body(payload: dict[str, Any]) -> str:
         """Returns the first text/plain body found in the payload tree."""
-        if payload.get("mimeType") == "text/plain" and payload.get("body", {}).get("data"):
-            return base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8", errors="replace")
+        if payload.get("mimeType") == "text/plain" and payload.get("body", {}).get(
+            "data"
+        ):
+            return base64.urlsafe_b64decode(payload["body"]["data"]).decode(
+                "utf-8", errors="replace"
+            )
         for part in payload.get("parts", []):
             body = GmailClient._extract_body(part)
             if body:

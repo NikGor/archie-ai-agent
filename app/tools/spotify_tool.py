@@ -9,6 +9,8 @@ from app.backend.spotify_client import (
     SpotifyAuthError,
     SpotifyClient,
     SpotifyNoActiveDeviceError,
+)
+from app.backend.spotify_client import (
     get_spotify_client as _get_spotify_client,
 )
 from app.config import DEFAULT_MODEL, settings
@@ -34,7 +36,9 @@ class DjCommentResponse(BaseModel):
 class PlaylistSeedQueries(BaseModel):
     """Search queries covering a playlist theme."""
 
-    queries: list[str] = Field(description="5-15 Spotify search queries matching the theme")
+    queries: list[str] = Field(
+        description="5-15 Spotify search queries matching the theme"
+    )
 
 
 class PlaybackRequestClassification(BaseModel):
@@ -86,7 +90,9 @@ def generate_dj_comment(action: str, context: dict[str, Any]) -> str:
             raise ValueError("spotify_tool_error_001: No parsed DJ comment from LLM")
         return result.comment
     except Exception as e:
-        logger.warning(f"spotify_tool_warn_001: DJ comment generation failed: \033[33m{e}\033[0m")
+        logger.warning(
+            f"spotify_tool_warn_001: DJ comment generation failed: \033[33m{e}\033[0m"
+        )
         return _FALLBACK_COMMENTS.get(action, "Enjoy the music.")
 
 
@@ -116,7 +122,9 @@ def classify_playback_request(request: str) -> PlaybackRequestClassification:
         )
         result = response.choices[0].message.parsed
         if result is None:
-            raise ValueError("spotify_tool_error_004: No parsed classification from LLM")
+            raise ValueError(
+                "spotify_tool_error_004: No parsed classification from LLM"
+            )
         return result
     except Exception as e:
         logger.warning(
@@ -126,7 +134,10 @@ def classify_playback_request(request: str) -> PlaybackRequestClassification:
 
 
 async def build_thematic_playlist(
-    theme: str, duration_minutes: int, client: SpotifyClient, playlist_name: str | None = None
+    theme: str,
+    duration_minutes: int,
+    client: SpotifyClient,
+    playlist_name: str | None = None,
 ) -> dict[str, Any]:
     """Builds a themed playlist by generating search queries via LLM and collecting tracks."""
     query_count = min(
@@ -154,7 +165,9 @@ async def build_thematic_playlist(
         result = response.choices[0].message.parsed
         queries = result.queries if result else [theme]
     except Exception as e:
-        logger.warning(f"spotify_tool_warn_002: Playlist query generation failed: \033[33m{e}\033[0m")
+        logger.warning(
+            f"spotify_tool_warn_002: Playlist query generation failed: \033[33m{e}\033[0m"
+        )
         queries = [theme]
 
     seen_uris: set[str] = set()
@@ -175,7 +188,9 @@ async def build_thematic_playlist(
 
     name = playlist_name if playlist_name else f"Archie DJ: {theme}"
     playlist = await client.create_playlist(name=name)
-    await client.add_tracks_to_playlist(playlist["playlist_id"], [t["uri"] for t in tracks])
+    await client.add_tracks_to_playlist(
+        playlist["playlist_id"], [t["uri"] for t in tracks]
+    )
 
     # The user only expressed a mood/theme, not a track to play — so beyond saving
     # the playlist, queue every track for immediate playback ("open" the playlist)
@@ -202,7 +217,7 @@ async def build_thematic_playlist(
     }
 
 
-def _demo_response(
+def _demo_response(  # noqa: PLR0911
     action: str, query: str | None, theme: str | None, playlist_name: str | None = None
 ) -> dict[str, Any]:
     """Returns canned demo data without calling the Spotify API."""
@@ -254,7 +269,11 @@ def _demo_response(
             "dj_comment": _FALLBACK_COMMENTS.get(action, "Enjoy the music."),
         }
     if action in ("save_track", "remove_saved_track", "queue_add"):
-        return {"success": True, "action": action, "message": f"[DEMO] {action} would be executed"}
+        return {
+            "success": True,
+            "action": action,
+            "message": f"[DEMO] {action} would be executed",
+        }
     if action == "get_saved_tracks":
         return {"success": True, "action": action, "tracks": [demo_track]}
     if action in ("get_top_tracks",):
@@ -274,9 +293,18 @@ def _demo_response(
             ],
         }
     if action == "get_queue":
-        return {"success": True, "action": action, "current_track": demo_track, "queue": [demo_track]}
+        return {
+            "success": True,
+            "action": action,
+            "current_track": demo_track,
+            "queue": [demo_track],
+        }
     if action in ("set_volume", "set_shuffle", "set_repeat", "seek"):
-        return {"success": True, "action": action, "message": f"[DEMO] {action} would be executed"}
+        return {
+            "success": True,
+            "action": action,
+            "message": f"[DEMO] {action} would be executed",
+        }
     return {"success": False, "message": f"Unknown action: {action}"}
 
 
@@ -344,7 +372,12 @@ async def spotify_tool(  # noqa: PLR0911, PLR0912
             if not query:
                 return {"success": False, "message": "query is required for 'search'"}
             tracks = await client.search_tracks(query)
-            return {"success": True, "action": "search", "query": query, "tracks": tracks}
+            return {
+                "success": True,
+                "action": "search",
+                "query": query,
+                "tracks": tracks,
+            }
 
         if action == "play":
             played_track = None
@@ -357,12 +390,20 @@ async def spotify_tool(  # noqa: PLR0911, PLR0912
                         classification.normalized_query, duration_minutes, client
                     )
                     return {**playlist_result, "action": "play", "fallback": "theme"}
-                found = await client.search_tracks(classification.normalized_query, limit=1)
+                found = await client.search_tracks(
+                    classification.normalized_query, limit=1
+                )
                 if not found:
                     # Looked like a specific track but nothing matched — build a themed
                     # playlist from the same request instead of just failing outright.
-                    playlist_result = await build_thematic_playlist(query, duration_minutes, client)
-                    return {**playlist_result, "action": "play", "fallback": "no_track_match"}
+                    playlist_result = await build_thematic_playlist(
+                        query, duration_minutes, client
+                    )
+                    return {
+                        **playlist_result,
+                        "action": "play",
+                        "fallback": "no_track_match",
+                    }
                 played_track = found[0]
                 await client.play(track_uris=[played_track["uri"]])
             else:
@@ -398,14 +439,17 @@ async def spotify_tool(  # noqa: PLR0911, PLR0912
             }
 
         if action == "get_current":
-            state = await client.get_playback_state()
-            if state is None:
+            playback = await client.get_playback_state()
+            if playback is None:
                 return {"success": True, "action": "get_current", "is_playing": False}
-            return {"success": True, "action": "get_current", **state}
+            return {"success": True, "action": "get_current", **playback}
 
         if action == "build_playlist":
             if not theme:
-                return {"success": False, "message": "theme is required for 'build_playlist'"}
+                return {
+                    "success": False,
+                    "message": "theme is required for 'build_playlist'",
+                }
             return await build_thematic_playlist(
                 theme, duration_minutes, client, playlist_name=playlist_name
             )
@@ -417,10 +461,16 @@ async def spotify_tool(  # noqa: PLR0911, PLR0912
             elif query:
                 found = await client.search_tracks(query, limit=1)
                 if not found:
-                    return {"success": False, "message": f"No tracks found for: {query}"}
+                    return {
+                        "success": False,
+                        "message": f"No tracks found for: {query}",
+                    }
                 resolved_uri = found[0]["uri"]
             else:
-                return {"success": False, "message": f"track_uri or query is required for '{action}'"}
+                return {
+                    "success": False,
+                    "message": f"track_uri or query is required for '{action}'",
+                }
             track_id = _track_id_from_uri(resolved_uri)
             if action == "save_track":
                 await client.save_tracks([track_id])
@@ -446,10 +496,16 @@ async def spotify_tool(  # noqa: PLR0911, PLR0912
             elif query:
                 found = await client.search_tracks(query, limit=1)
                 if not found:
-                    return {"success": False, "message": f"No tracks found for: {query}"}
+                    return {
+                        "success": False,
+                        "message": f"No tracks found for: {query}",
+                    }
                 queue_uri = found[0]["uri"]
             else:
-                return {"success": False, "message": "track_uri or query is required for 'queue_add'"}
+                return {
+                    "success": False,
+                    "message": "track_uri or query is required for 'queue_add'",
+                }
             await client.add_to_queue(queue_uri)
             return {"success": True, "action": action, "track_uri": queue_uri}
 
@@ -459,13 +515,19 @@ async def spotify_tool(  # noqa: PLR0911, PLR0912
 
         if action == "set_volume":
             if volume_percent is None:
-                return {"success": False, "message": "volume_percent is required for 'set_volume'"}
+                return {
+                    "success": False,
+                    "message": "volume_percent is required for 'set_volume'",
+                }
             await client.set_volume(volume_percent)
             return {"success": True, "action": action, "volume": volume_percent}
 
         if action == "set_shuffle":
             if shuffle is None:
-                return {"success": False, "message": "shuffle is required for 'set_shuffle'"}
+                return {
+                    "success": False,
+                    "message": "shuffle is required for 'set_shuffle'",
+                }
             await client.set_shuffle(shuffle)
             return {"success": True, "action": action, "shuffle": shuffle}
 
@@ -480,9 +542,16 @@ async def spotify_tool(  # noqa: PLR0911, PLR0912
 
         if action == "seek":
             if position_ms is None:
-                return {"success": False, "message": "position_ms is required for 'seek'"}
+                return {
+                    "success": False,
+                    "message": "position_ms is required for 'seek'",
+                }
             await client.seek(position_ms)
-            return {"success": True, "action": action, "progress_seconds": position_ms // 1000}
+            return {
+                "success": True,
+                "action": action,
+                "progress_seconds": position_ms // 1000,
+            }
 
         return {"success": False, "message": f"Unknown action: {action}"}
 

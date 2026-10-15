@@ -204,7 +204,7 @@ async def create_output(
     ):
 
         async def _on_chunk_l2(chunk: str) -> None:
-            await on_stream_event("stream_delta", chunk)  # type: ignore[misc]
+            await on_stream_event("stream_delta", chunk)
 
         usage_out_l2: dict[str, int] = {}
         full_json_l2, ttft_ms_l2 = await stream_and_collect(
@@ -238,14 +238,14 @@ async def create_output(
         await on_stream_event("stream_placeholder", None)
 
         async def _on_chunk_ui(chunk: str) -> None:
-            await on_stream_event("stream_reasoning", chunk)  # type: ignore[misc]
+            await on_stream_event("stream_reasoning", chunk)
 
         extra_extractors_ui = None
         if response_format == "ui_answer":
             _intro_extractor = JsonPathExtractor(["ui_answer", "intro_text", "text"])
 
             async def _on_chunk_intro(chunk: str) -> None:
-                await on_stream_event("stream_delta", chunk)  # type: ignore[misc]
+                await on_stream_event("stream_delta", chunk)
 
             extra_extractors_ui = [(_intro_extractor, _on_chunk_intro)]
 

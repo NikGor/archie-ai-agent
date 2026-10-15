@@ -131,7 +131,7 @@ class SwarmRoster:
         self.redis = get_async_redis()
 
     async def get_enabled_ids(self) -> set[str]:
-        disabled = await self.redis.smembers(_DISABLED_KEY)
+        disabled = await self.redis.smembers(_DISABLED_KEY)  # type: ignore[misc]
         return set(SWARM_AGENTS) - set(disabled)
 
     async def list_agents(self) -> list[SwarmAgentInfo]:
@@ -145,9 +145,9 @@ class SwarmRoster:
         if agent_id not in SWARM_AGENTS:
             raise ValueError(f"Unknown swarm agent: {agent_id}")
         if enabled:
-            await self.redis.srem(_DISABLED_KEY, agent_id)
+            await self.redis.srem(_DISABLED_KEY, agent_id)  # type: ignore[misc]
         else:
-            await self.redis.sadd(_DISABLED_KEY, agent_id)
+            await self.redis.sadd(_DISABLED_KEY, agent_id)  # type: ignore[misc]
         logger.info(
             f"swarm_agents_001: Agent \033[36m{agent_id}\033[0m enabled=\033[35m{enabled}\033[0m"
         )

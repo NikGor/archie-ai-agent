@@ -13,7 +13,7 @@ def clear_card_image_prompts(ui_response: UIResponse) -> None:
     """Clear image_prompt on all Card objects inside CardGrid items."""
     for item in ui_response.ui_answer.items:
         if item.type == "card_grid":
-            for card in item.content.cards:  # type: ignore[union-attr]
+            for card in item.content.cards:
                 if hasattr(card, "image_prompt"):
                     card.image_prompt = None
     logger.info("create_output_008: no_image=True — cleared image_prompt on all cards")
@@ -50,7 +50,7 @@ def sanitize_chart_items(ui_response: UIResponse) -> None:
     for item in list(items):
         if item.type != "chart":
             continue
-        chart_config = item.content.chart_config  # type: ignore[union-attr]
+        chart_config = item.content.chart_config
         try:
             json.loads(chart_config)
             continue
@@ -58,7 +58,7 @@ def sanitize_chart_items(ui_response: UIResponse) -> None:
             pass
         repaired = repair_json_string(chart_config)
         if repaired is not None:
-            item.content.chart_config = repaired  # type: ignore[union-attr]
+            item.content.chart_config = repaired
             logger.warning(
                 "create_output_warning_001: repaired invalid chart_config JSON"
             )
