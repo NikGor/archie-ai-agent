@@ -60,7 +60,8 @@ async def call_with_retry(
             reraise=True,
         ):
             with attempt:
-                return func()
+                # ARCHIE-209: run the blocking call in a thread, not on the event loop
+                return await asyncio.to_thread(func)
     except retryable_exceptions as e:
         logger.error(
             f"retry_utils_003: {context} failed after {max_attempts} attempts: {e}"
