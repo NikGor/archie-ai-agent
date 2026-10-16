@@ -2,248 +2,184 @@
 
 [![CI](https://github.com/NikGor/archie-ai-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/NikGor/archie-ai-agent/actions/workflows/ci.yml)
 
-A sophisticated AI-powered conversational agent built with FastAPI, featuring multiple personas, web search capabilities, and external backend integration.
+The AI core of Archie, a personal home assistant. A FastAPI service that answers in plain text,
+voice-ready text, or generative UI (cards, tables, charts, maps, forms, smart-home widgets),
+controls the home, and runs a multi-agent swarm. It runs in Docker on a Raspberry Pi next to the
+Django web app ([NikGor/homeassistant](https://github.com/NikGor/homeassistant)), which proxies
+requests, stores conversations, and renders the UI.
 
 ## Features
 
-- 🤖 **Multiple AI Personas**: Switch between different conversation styles (business, flirty, futurebot)
-- 🔍 **Web Search Integration**: Real-time web search capabilities through integrated tools
-- 💬 **External Backend Integration**: Works with separate backend service for data persistence
-- 🎵 **Voice Support**: Voice assistant capabilities with audio processing
-- 🚀 **RESTful API**: Modern FastAPI-based REST API with automatic documentation
-- 🐳 **Docker Support**: Containerized deployment with shared network
-- 📊 **Rich Metadata**: Enhanced responses with cards, buttons, and interactive elements
-- 🔧 **Developer-Friendly**: Poetry dependency management, Makefile automation
+- **3-stage SGR pipeline**: Schema-Guided Reasoning with typed Pydantic outputs at each stage
+  (decide → run tools in parallel → format the answer).
+- **Generative UI**: answers as `level2_answer` (text + quick actions), `level3_answer`
+  (text + widget), `ui_answer` (ordered items: cards, tables, Chart.js charts, maps, images,
+  email/event/note forms, light and climate cards), `dashboard` and `widget`.
+  The `ui_answer` schema is trimmed per request by the intents found in Stage 1 to save tokens.
+- **Streaming over WebSocket**: pipeline status events, text chunks, UI deltas, final message.
+- **Multiple LLM providers**: OpenAI (GPT-4.1, GPT-5.x) and OpenRouter (Gemini, Claude, Grok);
+  the model can be set per stage per request. Token cost tracking, prompt caching.
+- **Multimodal input**: attached images (vision models) and documents (PDF, DOCX).
+- **Personas**: `business`, `bro`, `butler`, `flirty`, `futurebot`.
+- **Voice**: `gemini_tts` format with TTS-friendly text; `announce_tool` speaks messages at home.
+- **Smart home**: lights, climate and scenes via the Home Assistant MCP server; Spotify; Android TV
+  with IPTV channels.
+- **Productivity**: Google Calendar events, tasks, notes, read-only Gmail, Google web and places
+  search, document search (OpenAI vector store).
+- **Scheduler**: `cron_tool` defers any tool call (one-shot or cron expression); jobs live in Redis.
+- **Runtime skills**: instruction packs the LLM loads on demand (`football`, `homeassistant-mcp`,
+  `spotify`, `start-my-day`).
+- **Agent swarm**: a group chat of specialist agents (`@light`, `@climate`, `@football`,
+  `@search`, `@voice`) led by a council of personas that discusses, decides and delegates.
+- **Evals**: case catalog with assertions and an LLM-as-judge, run from the Django eval UI with
+  live progress.
+- **Chat monitoring**: an LLM judge grades stored chat turns (red/orange/green) against the rules
+  of their prompt specs; results go to Django and Langfuse.
+- **Tracing**: one Langfuse trace per chat turn (Stage 1 generation, tool observations, output).
+- **Declarative prompts**: YAML prompt specs compiled from JSON rule catalogs.
 
 ## Architecture
 
-This service is part of a microservices architecture:
-
-- **Agent Builder**: Creates AI agents with configurable personas and tools
-- **API Controller**: Handles chat requests and integrates with external backend
-- **External Backend**: Separate service for data persistence and conversation management
-- **Prompt System**: declarative prompt specs (YAML) + rule catalogs (JSON), compiled by `prompt_compiler.py`
-- **Voice Interface**: Audio input/output capabilities
-- **State Management**: Redis-based state storage (planned)
-
-## Prerequisites
-
-- Python 3.10+
-- Poetry (for dependency management)
-- Docker & Docker Compose (optional, for containerized deployment)
-- OpenAI API key
-
-## Installation
-
-### Local Development Setup
-
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd archie-ai-agent
-   ```
-
-2. **Install dependencies using Poetry**:
-   ```bash
-   make install
-   # or manually:
-   poetry install
-   ```
-
-3. **Set up environment variables**:
-   ```bash
-   cp .env.example .env
-   # Edit .env and add your OpenAI API key:
-   # OPENAI_API_KEY=your_api_key_here
-   ```
-
-### Docker Setup
-
-1. **Build and run with Docker Compose**:
-   ```bash
-   make docker-build
-   make docker-run
-   ```
-
-The service will be available at `http://localhost:8001` (Docker) or `http://localhost:8000` (local development).
-
-## Usage
-
-### Starting the Server
-
-**Local development**:
-```bash
-make run          # Production mode
-make dev          # Development mode with auto-reload
+```
+Browser ──WS /ws_chat──────────────────────────► archie-ai-agent :8005
+Browser ──HTTP──► Django ──POST /chat──────────► archie-ai-agent
+                                                    │
+                     Redis (UserState, cron jobs, swarm) ◄─┤
+                     Home Assistant MCP, Google, Spotify, TV ◄─┤
+                     OpenAI / OpenRouter ◄─┤
 ```
 
-**Docker**:
-```bash
-make docker-run   # Start with Docker Compose
-```
+Request flow: `main.py → app/endpoints.py → app/api_controller.py → AgentFactory.arun()`
 
-### API Endpoints
+1. **Stage 1 — Command** (`app/agent/agent_factory.py`, `command_loop.py`): the LLM returns a
+   `DecisionResponse` with `function_call`, `parameters_request` or `final_response`, plus
+   `intents`. Up to `MAX_COMMAND_ITERATIONS` rounds.
+2. **Stage 2 — Execution** (`app/utils/tool_executor.py`): tools run in parallel via
+   `asyncio.gather` and return `ToolResult`.
+3. **Stage 3 — Output** (`app/tools/output/`): the answer is built in the requested
+   `response_format` (`output_models.py`), then post-processed and repaired.
 
-#### Chat Endpoint
+`dashboard` and `widget` skip Stage 1.
+
+Shared request/response models (`ChatRequest`, `ChatMessage`, `Content`, UI elements, `UserState`)
+come from the `archie-shared` package, installed from the Django repo by git tag.
+
+### Project layout
+
+| Path | Contents |
+|------|----------|
+| `app/agent/` | Orchestration, prompt builder and compiler, prompt specs (`prompts/specs`) and rule catalogs (`prompts/rules`) |
+| `app/tools/` | Tools (one file per tool); `output/` — Stage 3 |
+| `app/backend/` | Clients: OpenAI, OpenRouter, Redis, Google Calendar, Gmail, Spotify, Android TV, HA MCP; cron scheduler |
+| `app/models/` | Stage 1/3 models, `ToolResult`, WS events |
+| `app/utils/` | LLM parser, provider routing, intent config and schema filter, tracing, status messages |
+| `app/skills/` | Runtime skills for the LLM |
+| `app/swarm/` | Agent swarm: bus, dispatcher, council, runner, policy |
+| `app/evals/` | Eval engine and API |
+| `app/monitoring/` | Chat monitoring judge and API |
+| `tests/` | Unit and smoke tests |
+| `scripts/` | Developer scripts (not production code) |
+| `docs/` | Guides, e.g. `tools-guide.md` |
+
+## API
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /chat` | One chat turn (`ChatRequest` → `ChatMessage`); used by Django and system calls |
+| `WS /ws_chat` | Streaming chat: one connection per message (send `ChatRequest`, receive `status`, `stream_*`, `final` or `error` events) |
+| `GET /swarm/agents`, `POST /swarm/messages`, `WS /ws_swarm` | Agent swarm chat |
+| `/evals/*` | Eval schema, cases validation, prompts, models, runs (+ WS progress) |
+| `/monitoring/runs` | Start and read chat monitoring runs |
+
+Docs while the server runs:
+- Swagger: `http://localhost:8005/docs`
+- WebSocket protocol: `http://localhost:8005/ws_docs`
+
+Example:
+
 ```bash
-curl -X POST "http://localhost:8000/chat" \
+curl -X POST http://localhost:8005/chat \
   -H "Content-Type: application/json" \
-  -d '{
-    "text": "Hello, how can you help me today?",
-    "role": "user",
-    "conversation_id": "test-conversation"
-  }'
+  -d '{"input": "What is the weather today?", "user_name": "niko", "response_format": "ui_answer"}'
 ```
 
-> **Note**: Conversation management endpoints are now handled by the external backend service.
+## Tools
 
-### Interactive Interfaces
+Registered in `TOOLS_CONFIG` (`app/config.py`) by group; the group decides which tools a response
+format can use.
 
-**Console Chat**:
+| Group | Tools |
+|-------|-------|
+| `smarthome` | `smarthome_control_tool`, `smarthome_status_tool`, `spotify_tool` |
+| `tv` | `tv_tool` |
+| `internet_search` | `google_search_tool`, `google_places_search_tool` |
+| `productivity` | `task_tool`, `notes_tool`, `events_tool`, `gmail_tool`, `cron_tool`, `announce_tool` |
+| `knowledge` | `document_search_tool` |
+| `skills` | `skill_loader_tool` |
+
+How to add a tool: `docs/tools-guide.md`.
+
+## Getting started
+
+Requirements: Python 3.11, Poetry, Redis, Docker (for deployment).
+
 ```bash
-make chat
+make install            # poetry install
+cp .env.example .env    # fill in the keys
+make dev                # uvicorn with reload
 ```
 
-**Voice Assistant**:
+> `make run` / `make dev` listen on port 8000; Docker and `python main.py` use 8005.
+
+Docker (needs the external `shared_network`):
+
 ```bash
-make voice
+docker network create shared_network   # once
+make docker-build
+make docker-run
 ```
 
-### API Documentation
+### Environment variables
 
-Once the server is running, visit:
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+See `.env.example`. Main groups:
 
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file with the following variables:
-
-```env
-OPENAI_API_KEY=your_openai_api_key_here
-DEFAULT_PERSONA=business
-DEFAULT_USER_NAME=User
-REDIS_HOST=redis
-REDIS_PORT=6379
+```
+OPENAI_API_KEY / OPENROUTER_API_KEY / GEMINI_API_KEY / GOOGLE_API_KEY
+REDIS_HOST / REDIS_PORT / REDIS_DB
+HOMEASSISTANT_MCP_URL / HOMEASSISTANT_MCP_TOKEN
+OPENAI_VECTOR_STORE_ID
+TV_HOST / TV_CERT_FILE / TV_KEY_FILE / TV_PLAYLIST_PATH / SHARAVOZ_TOKEN
+CRON_POLL_INTERVAL / CRON_MAX_JOBS_PER_TICK
+DEFAULT_PERSONA / DEFAULT_USER_NAME / DEFAULT_CITY / DEFAULT_LANGUAGE / ...
+LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY / LANGFUSE_BASE_URL / LANGFUSE_TRACING_ENVIRONMENT
+EVAL_DJANGO_URL / EVAL_API_TOKEN
+MONITOR_DJANGO_URL / MONITOR_JUDGE_MODEL
 ```
 
-### Available Personas
-
-The system supports multiple conversation personas:
-
-- **business**: Professional and formal communication style
-- **flirty**: Playful and engaging conversation style  
-- **futurebot**: Forward-thinking, tech-focused personality
-
-Personas are prompt specs in `app/agent/prompts/specs/personas/persona_*.yaml`; their rule texts are in `app/agent/prompts/rules/personas.json`.
+Gmail uses `token_gmail.json`; Spotify auth: `scripts/spotify_auth_setup.py`.
 
 ## Development
 
-### Available Make Commands
-
 ```bash
-make help          # Show all available commands
-make install       # Install dependencies
-make run           # Start production server
-make dev           # Start development server with auto-reload
-make chat          # Start console chat interface
-make voice         # Start voice assistant
-make test          # Run tests (placeholder)
-make clean         # Clean cache and temporary files
-make docker-build  # Build Docker image
-make docker-run    # Run with Docker Compose
-make docker-stop   # Stop Docker containers
-make setup         # Complete development environment setup
-make status        # Check if server is running
-make api-test      # Test API with sample request
+./execute_tests.sh                   # all tests
+./execute_tests.sh -m "not llm"      # unit tests, no API keys
+./execute_tests.sh -m llm            # smoke tests, needs .env
+make check                           # black --check, ruff, mypy
+make fix                             # ruff --fix, format
 ```
 
-### Adding New Personas
+### Prompts and personas
 
-1. Add rules `yourname_*` to `app/agent/prompts/rules/personas.json` and list them in a new spec `app/agent/prompts/specs/personas/persona_yourname.yaml`
-2. Update the `DEFAULT_PERSONA` in your `.env` file if needed
-3. The agent builder will automatically load the new persona
+Prompts are YAML specs in `app/agent/prompts/specs/` (`cmd_prompt`, `assistant_prompt`,
+`formats/format_*`, `personas/persona_*`) that list rules from JSON catalogs in
+`app/agent/prompts/rules/`; `prompt_compiler.py` builds them. Swarm prompts are Jinja2
+(`prompts/swarm/`).
 
-### Extending Functionality
-
-- **Add new tools**: Extend the tools in `app/tools.py`
-- **Modify responses**: Update models in `app/models.py`
-- **Add endpoints**: Extend `app/endpoints.py`
-- **Custom prompts**: Edit specs (`app/agent/prompts/specs/`) and rule catalogs (`app/agent/prompts/rules/`); see the `prompt-edit` skill
-
-## API Response Format
-
-The API returns rich responses with metadata:
-
-```json
-{
-  "message_id": "uuid",
-  "role": "assistant",
-  "text": "Response text",
-  "text_format": "markdown",
-  "metadata": {
-    "cards": [
-      {
-        "title": "Information Card",
-        "text": "Card content",
-        "options": {
-          "buttons": [
-            {
-              "text": "Action Button",
-              "command": "action_command"
-            }
-          ]
-        }
-      }
-    ]
-  },
-  "created_at": "2025-09-28T10:00:00Z",
-  "conversation_id": "conversation_uuid"
-}
-```
-
-## Dependencies
-
-Main dependencies:
-- **FastAPI**: Modern web framework for building APIs
-- **openai-agents**: AI agent framework with OpenAI integration
-- **Jinja2**: Template engine for prompts
-- **Pydantic**: Data validation and settings management
-- **httpx**: HTTP client for external API integration
-- **Poetry**: Dependency management and packaging
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Support
-
-For questions and support:
-- Open an issue on GitHub
-- Check the API documentation at `/docs` when running the server
-- Review the Makefile for available development commands
+To add a persona: add `yourname_*` rules to `rules/personas.json` and a spec
+`specs/personas/persona_yourname.yaml`. Run evals after any prompt change.
 
 ## Roadmap
 
-- [ ] Unit test coverage
 - [ ] Authentication and authorization
-- [ ] WebSocket support for real-time chat
-- [ ] Multi-language support
-- [ ] Enhanced voice capabilities
 - [ ] Plugin system for custom tools
 - [ ] Conversation export/import
-- [ ] Performance monitoring and analytics
-
----
-
-Built with ❤️ using FastAPI, OpenAI, and modern Python tools.
