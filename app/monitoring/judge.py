@@ -255,21 +255,9 @@ def parse_answers(rules: list[SpecRule], answers: dict) -> list[MonitorRuleScore
     return scores
 
 
-async def judge_turn(
-    messages: list[MonitorMessage], index: int, trace: TraceTurn | None, model: str
-) -> JudgeResult:
-    content_format = judged_format(_content(messages[index]))
-    rules = rules_for_turn(content_format, trace is not None)
-    body = {
-        "model": model,
-        "state": build_state(messages, index, trace),
-        "questions": {
-            **build_questions(rules),
-            **build_outcome_questions(
-                ANSWERS, _next_user_message(messages, index) is not None
-            ),
-        },
-    }
+async def _decide(model: str, state: dict, questions: dict) -> dict:
+    """One Decisions API call; raises JudgeError."""
+    body = {"model": model, "state": state, "questions": questions}
     headers = {"Authorization": f"Bearer {settings.openrouter_api_key}"}
     try:
         async with httpx.AsyncClient(timeout=120) as client:
@@ -285,16 +273,64 @@ async def judge_turn(
                     )
             response.raise_for_status()
         data = response.json()
-        answers = data["answers"]
+    except (httpx.HTTPError, ValueError) as exc:
+        raise JudgeError(f"Jev {model} failed: {exc}") from exc
+    if "answers" not in data:
+        raise JudgeError(f"Jev {model} returned no answers: {str(data)[:300]}")
+    return data
+
+
+async def judge_turn(
+    messages: list[MonitorMessage], index: int, trace: TraceTurn | None, model: str
+) -> JudgeResult:
+    content_format = judged_format(_content(messages[index]))
+    rules = rules_for_turn(content_format, trace is not None)
+    data = await _decide(
+        model,
+        build_state(messages, index, trace),
+        {
+            **build_questions(rules),
+            **build_outcome_questions(
+                ANSWERS, _next_user_message(messages, index) is not None
+            ),
+        },
+    )
+    answers = data["answers"]
+    try:
         goal_grade = grade_from_probabilities(
             answers[OUTCOME_GOAL_KEY]["probabilities"]
         )
         scores = parse_outcome(answers, goal_grade) + parse_answers(rules, answers)
-    except (httpx.HTTPError, KeyError, ValueError) as exc:
-        raise JudgeError(f"Jev {model} failed: {exc}") from exc
+    except (KeyError, ValueError) as exc:
+        raise JudgeError(f"Jev {model} returned unexpected answers: {exc}") from exc
     return JudgeResult(
         rules=scores,
         spec_versions=spec_versions(content_format, trace is not None),
         model=data.get("model", model),
         cost=data["usage"].get("cost"),
     )
+
+
+async def judge_rules(
+    messages: list[MonitorMessage], index: int, rule_keys: list[str], model: str
+) -> list[MonitorRuleScore]:
+    """Grades of the given 'spec:rule_id' rules only (eval rules_followed check).
+
+    Without a trace: only rules visible in the response (assistant_prompt and
+    format specs) can be judged; other keys are skipped.
+    """
+    content_format = judged_format(_content(messages[index]))
+    rules = [
+        rule
+        for rule in rules_for_turn(content_format, trace_found=False)
+        if rule.key in rule_keys
+    ]
+    if not rules:
+        return []
+    data = await _decide(
+        model, build_state(messages, index, None), build_questions(rules)
+    )
+    try:
+        return parse_answers(rules, data["answers"])
+    except (KeyError, ValueError) as exc:
+        raise JudgeError(f"Jev {model} returned unexpected answers: {exc}") from exc
