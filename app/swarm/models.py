@@ -46,7 +46,7 @@ class SwarmAgentProfile(BaseModel):
     )
     persona: str | None = Field(
         default=None,
-        description="Persona prompt from persona_prompts/ (e.g. 'bro') for voice and tone",
+        description="Persona spec name without the persona_ prefix (e.g. 'bro') for voice and tone",
     )
     groups: list[str] = Field(
         default_factory=list,

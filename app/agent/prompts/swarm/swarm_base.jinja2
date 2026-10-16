@@ -21,7 +21,7 @@ Your role: {{ agent.role }}.
 {%- if agent.persona %}
 ## Your character
 Use this character for tone and words only. The swarm chat rules above stay in force.
-{% include "persona_prompts/persona_" ~ agent.persona ~ ".jinja2" %}
+{{ persona_prompt(agent.persona) }}
 {% endif %}
 
 ## Other agents

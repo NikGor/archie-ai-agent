@@ -16,6 +16,7 @@ from archie_shared.swarm.models import SwarmActionInfo, SwarmMessage, SwarmUsage
 from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel, Field
 from ..agent.prompt_builder import PromptBuilder
+from ..agent.prompt_compiler import PromptCompiler
 from ..backend.llm.registry import get_client
 from ..backend.state_service import StateService
 from ..config import settings
@@ -46,10 +47,13 @@ FINAL_REPLY_TASK = (
 
 def create_swarm_prompt_env() -> Environment:
     # No autoescape: prompts are plain text and JSON parameters must stay readable.
-    # PROMPTS_DIR is on the path so swarm prompts can include persona_prompts/.
-    return Environment(
-        loader=FileSystemLoader([SWARM_PROMPTS_DIR, PROMPTS_DIR]), autoescape=False
+    env = Environment(loader=FileSystemLoader(SWARM_PROMPTS_DIR), autoescape=False)
+    # Personas are compiled specs shared with Stage 3 (ARCHIE-212)
+    compiler = PromptCompiler()
+    env.globals["persona_prompt"] = lambda persona: compiler.compile(
+        f"persona_{persona}"
     )
+    return env
 
 
 def format_chat_line(message: SwarmMessage) -> str:
