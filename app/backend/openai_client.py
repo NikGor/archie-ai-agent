@@ -3,13 +3,8 @@
 import logging
 from collections.abc import AsyncIterator, Callable
 from typing import Any
-from openai import (
-    APIConnectionError,
-    AsyncOpenAI,
-    InternalServerError,
-    OpenAI,
-    RateLimitError,
-)
+from langfuse.openai import AsyncOpenAI, OpenAI
+from openai import APIConnectionError, InternalServerError, RateLimitError
 from pydantic import BaseModel, ValidationError
 from app.config import settings
 from app.utils.openai_utils import build_openai_args
@@ -68,8 +63,12 @@ class OpenAIClient:
         response_format: type[BaseModel] | None = None,
         previous_response_id: str | None = None,
         tools: list[Callable[..., Any]] | None = None,
+        observation_name: str = "llm-call",
     ) -> Any:
-        """Create a completion using OpenAI API with structured outputs."""
+        """Create a completion using OpenAI API with structured outputs.
+
+        `observation_name` names the Langfuse generation (ARCHIE-211).
+        """
         msg_breakdown = {}
         for msg in messages:
             role = msg.get("role", "unknown")
@@ -93,7 +92,9 @@ class OpenAIClient:
                 )
 
             response = await call_with_retry(
-                lambda: self.client.responses.parse(**openai_args, timeout=60),
+                lambda: self.client.responses.parse(
+                    **openai_args, name=observation_name, timeout=60
+                ),
                 retryable_exceptions=(
                     RateLimitError,
                     APIConnectionError,
