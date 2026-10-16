@@ -72,6 +72,8 @@ EXCLUDED_RULES = frozenset(
         "level3_fill",
         "widget_fill",
         "tts_fill_script",
+        # permissive: "can include multiple widgets" cannot be broken
+        "level3_multiple_widgets",
         # purpose statements, structure descriptions and examples
         "level2_purpose",
         "level3_purpose",
