@@ -10,21 +10,15 @@ one request and are answered in parallel.
 import functools
 import json
 import logging
-import httpx
 from archie_shared.monitoring.models import (
     MonitorGrade,
     MonitorMessage,
     MonitorRuleScore,
 )
 from pydantic import BaseModel, Field
-from tenacity import (
-    AsyncRetrying,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 from app.agent.prompt_builder import PromptBuilder
-from app.config import settings
+from app.backend.llm.decisions import DecisionsError as JudgeError
+from app.backend.llm.decisions import decide as _decide
 from app.evals.prompt_descriptions import PROMPT_DESCRIPTIONS
 from app.tools.tool_factory import ToolFactory
 from app.utils.skill_utils import list_skills
@@ -36,7 +30,6 @@ from .traces import TraceTurn
 
 logger = logging.getLogger(__name__)
 
-DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 GRADE_ORDER: tuple[MonitorGrade, ...] = ("red", "orange", "green")
 FOLLOWED = "followed"
 PARTLY = "partly"
@@ -51,7 +44,6 @@ ANSWERS = {
 # Probability -> grade, calibrated on 58 real turns (ARCHIE-213)
 _RED_FROM = 0.7  # P(violated)
 _ORANGE_FROM = 0.6  # P(violated) + P(partly)
-_HTTP_ATTEMPTS = 3
 _HISTORY_MESSAGES = 6
 _HISTORY_TEXT_CHARS = 400
 _RESPONSE_CHARS = 10000
@@ -63,10 +55,6 @@ _TOOL_ARGUMENT_CHARS = 300
 _SKIPPED_KEYS = {"image_prompt", "image_url", "icon", "color", "palette"}
 # Catalog tool schemas are built for this model's parser; any OpenAI model works
 _CATALOG_MODEL = "gpt-4.1"
-
-
-class JudgeError(RuntimeError):
-    """The decisions call failed or returned an unexpected answer."""
 
 
 class JudgeResult(BaseModel):
@@ -255,31 +243,6 @@ def parse_answers(rules: list[SpecRule], answers: dict) -> list[MonitorRuleScore
             )
         )
     return scores
-
-
-async def _decide(model: str, state: dict, questions: dict) -> dict:
-    """One Decisions API call; raises JudgeError."""
-    body = {"model": model, "state": state, "questions": questions}
-    headers = {"Authorization": f"Bearer {settings.openrouter_api_key}"}
-    try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            async for attempt in AsyncRetrying(
-                stop=stop_after_attempt(_HTTP_ATTEMPTS),
-                wait=wait_exponential(multiplier=1, max=10),
-                retry=retry_if_exception_type(httpx.TransportError),
-                reraise=True,
-            ):
-                with attempt:
-                    response = await client.post(
-                        DECISIONS_URL, json=body, headers=headers
-                    )
-            response.raise_for_status()
-        data = response.json()
-    except (httpx.HTTPError, ValueError) as exc:
-        raise JudgeError(f"Jev {model} failed: {exc}") from exc
-    if "answers" not in data:
-        raise JudgeError(f"Jev {model} returned no answers: {str(data)[:300]}")
-    return data
 
 
 async def judge_turn(

@@ -5,6 +5,10 @@ template hash or the rendered prompt. Key: template file stem.
 """
 
 PROMPT_DESCRIPTIONS: dict[str, str] = {
+    "response_format_router": "Auto: JEV выбирает формат после оркестрации и сбора данных",
+    "response_format_plain": "Auto: критерии выбора простого текста",
+    "response_format_level2_answer": "Auto: критерии выбора форматированного текста",
+    "response_format_ui_answer": "Auto: критерии выбора UI-ответа",
     "cmd_prompt": "Stage 1: решает, ответить сразу, вызвать tools или уточнить; выбирает tools и UI-интенты",
     "assistant_prompt": "Общий контекст Stage 3: профиль пользователя, персона, город, язык, форматы",
     "format_ui_answer": "Stage 3, ui_answer: генеративный UI — карточки, формы, таблицы, быстрые действия",

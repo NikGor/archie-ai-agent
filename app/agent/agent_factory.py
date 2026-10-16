@@ -24,6 +24,7 @@ from .command_loop import CommandLoop
 from .context import ConversationContext
 from .pipeline_metrics import PipelineMetrics
 from .prompt_builder import PromptBuilder
+from .response_format_router import select_response_format
 
 
 logger = logging.getLogger(__name__)
@@ -222,7 +223,9 @@ class AgentFactory:
             command_model=command_model,
             cmd_provider=cmd_provider,
             user_state=user_state,
-            response_format=response_format,
+            response_format=(
+                "ui_answer" if response_format == "auto" else response_format
+            ),
             ctx=conversation_ctx.for_provider(cmd_provider),
             seed_results=persisted_results,
             images=images,
@@ -232,6 +235,24 @@ class AgentFactory:
         await self.tool_result_store.save(
             conversation_id, user_name, loop_result.tool_results
         )
+        if response_format == "auto":
+            await notifier.emit(
+                "response_format", "started", "Choosing response format"
+            )
+            with StepTimer() as format_timer:
+                response_format = await select_response_format(
+                    user_input=user_input,
+                    command_summary=loop_result.command_summary,
+                    tool_results=loop_result.tool_results,
+                    intents=loop_result.ui_intents,
+                    chat_history=chat_history,
+                )
+            metrics.response_format_duration_ms = format_timer.duration_ms
+            if on_stream_event:
+                await on_stream_event("response_format", response_format)
+            await notifier.emit(
+                "response_format", "completed", f"Selected {response_format}"
+            )
         logger.info(
             f"agent_factory_007: Creating final output, intents: \033[35m{loop_result.ui_intents}\033[0m"
         )
@@ -261,6 +282,7 @@ class AgentFactory:
                 on_stream=on_stream,
                 on_stream_event=on_stream_event,
             )
+        final_response.response_format = response_format
         await notifier.emit(
             "output", "completed", "Response ready", detail="Response ready"
         )

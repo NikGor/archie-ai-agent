@@ -1,7 +1,7 @@
 """Models for final response generation phase (Stage 2)."""
 
 from typing import TypeAlias
-from archie_shared.chat.models import Content, LllmTrace, PipelineTrace
+from archie_shared.chat.models import Content, LllmTrace, PipelineTrace, ResponseFormat
 from archie_shared.ui.models import (
     ClimateWidget,
     Dashboard,
@@ -51,6 +51,9 @@ class SGROutput(BaseModel):
 class AgentResponse(BaseModel):
     """Response model for AI agent output"""
 
+    response_format: ResponseFormat | None = Field(
+        default=None, description="Actual output format selected by the pipeline"
+    )
     content: Content | None = Field(
         default=None,
         description="Main content response from the AI agent in the specified response format.",

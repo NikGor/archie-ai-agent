@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     # Chat monitoring: LLM judge grades stored conversations (ARCHIE-213)
     # TypeSafe Jev decision model (OpenRouter Decisions API); the alias tracks the newest Jev
     monitor_judge_model: str = "~typesafe/jev-latest"
+    auto_response_model: str = "~typesafe/jev-latest"
+    auto_response_timeout: float = 5.0
     monitor_concurrency: int = 4
     # Django chat-monitoring API (.../chat-monitoring/api); auth: EVAL_API_TOKEN
     monitor_django_url: str | None = None

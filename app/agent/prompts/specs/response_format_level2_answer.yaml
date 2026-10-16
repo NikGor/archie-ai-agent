@@ -1,0 +1,3 @@
+sections:
+  - style: lines
+    rules: [auto_format_formatted]

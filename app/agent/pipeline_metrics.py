@@ -1,7 +1,7 @@
 """Per-stage timing accumulation for one arun() call."""
 
 from dataclasses import dataclass, field
-from archie_shared.chat.models import LllmTrace, PipelineTrace
+from archie_shared.chat.models import LllmTrace, PipelineTrace, StepTrace
 from ..utils.trace_utils import build_pipeline_trace
 
 
@@ -13,6 +13,7 @@ class PipelineMetrics:
     stage1_duration_ms: int = 0
     stage1_llm_traces: list[LllmTrace] = field(default_factory=list)
     stage2_duration_ms: int = 0
+    response_format_duration_ms: int = 0
 
     def add_stage1(self, duration_ms: int, llm_trace: LllmTrace | None) -> None:
         self.stage1_duration_ms += duration_ms
@@ -29,7 +30,7 @@ class PipelineMetrics:
         stage3_llm_trace: LllmTrace | None,
         stage3_ttft_ms: int | None,
     ) -> PipelineTrace:
-        return build_pipeline_trace(
+        trace = build_pipeline_trace(
             total_ms=total_ms,
             stage3_duration_ms=stage3_duration_ms,
             stage3_llm_trace=stage3_llm_trace,
@@ -38,3 +39,10 @@ class PipelineMetrics:
             stage1_llm_traces=self.stage1_llm_traces,
             stage2_duration_ms=self.stage2_duration_ms,
         )
+        if self.response_format_duration_ms:
+            trace.response_format = StepTrace(
+                duration_ms=self.response_format_duration_ms
+            )
+            if trace.ttft_ms is not None:
+                trace.ttft_ms += self.response_format_duration_ms
+        return trace

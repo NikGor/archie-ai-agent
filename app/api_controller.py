@@ -67,7 +67,7 @@ async def handle_chat(
         role="assistant",
         content=agent_response.content,
         # Stored with the message so monitoring judges it by the right format spec
-        response_format=user_request.response_format,
+        response_format=agent_response.response_format or user_request.response_format,
         conversation_id=user_request.conversation_id,
         previous_message_id=user_request.previous_message_id,
         model=f"{command_model}/{final_output_model}",

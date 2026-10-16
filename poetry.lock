@@ -62,7 +62,7 @@ trio = ["trio (>=0.32.0)"]
 
 [[package]]
 name = "archie-shared"
-version = "0.1.90"
+version = "0.1.91"
 description = "Shared Pydantic models and utilities for Archie ecosystem"
 optional = false
 python-versions = ">=3.11.0rc1,<4.0"
@@ -75,8 +75,8 @@ pydantic = "^2.11.4"
 [package.source]
 type = "git"
 url = "https://github.com/NikGor/homeassistant.git"
-reference = "v0.1.90"
-resolved_reference = "42009b4cf9716faef95c8d3b772796e38c9a600f"
+reference = "v0.1.91"
+resolved_reference = "a55a211e433964282adf2570878cd616f0c04983"
 subdirectory = "archie-shared"
 
 [[package]]
@@ -2935,4 +2935,4 @@ dev = ["pytest", "setuptools"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11.0rc1,<3.13"
-content-hash = "ada5dce26aea58003ad92bc9286f372b51d4f812da5d239f188ad7e9f82bec78"
+content-hash = "b965975ff23cc51b2e5a1edb220318ade60c3b68c9a65c26bc405fc2d778b985"

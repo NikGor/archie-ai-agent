@@ -145,7 +145,8 @@ def trace_chat_turn(
                     # Prompt spec versions that produced the turn: chat monitoring
                     # and prompt fixes compare traces before / after a fix (ARCHIE-213)
                     "spec_versions": spec_versions(
-                        request.response_format, trace_found=True
+                        message.response_format or request.response_format,
+                        trace_found=True,
                     ),
                 },
             )

@@ -1,0 +1,9 @@
+# Post-orchestration Auto response format selection.
+sections:
+  - title: Response format selection
+    rules:
+      - auto_format_task
+      - auto_format_priority
+      - auto_format_plain
+      - auto_format_formatted
+      - auto_format_ui
