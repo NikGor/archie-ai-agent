@@ -11,6 +11,7 @@ from archie_shared.ui.models import (
     LocationCard,
     TextAnswer,
 )
+from langfuse import get_client
 from pydantic import BaseModel
 from ..tools.google_search_tool import google_search_tool
 
@@ -46,7 +47,12 @@ async def validate_and_fix_urls(
     tasks: list[Awaitable[None]] = []
     _collect_tasks(content, tasks, resolved_search_fn)
     if tasks:
-        await asyncio.gather(*tasks)
+        # ARCHIE-211: group replacement searches under one observation, so they
+        # don't show up in the trace as extra turns after the final answer
+        with get_client().start_as_current_observation(
+            as_type="guardrail", name="validate-urls", input={"url_checks": len(tasks)}
+        ):
+            await asyncio.gather(*tasks)
     return content
 
 
