@@ -50,6 +50,10 @@ REACTIONS: dict[str, tuple[str, MonitorGrade, MonitorOutcomeReason | None]] = {
     ),
 }
 
+# Below this probability a rephrase / correction reading is too unsure to grade:
+# a short follow-up like "and in Tbilisi?" was read as a rephrase at 0.37
+_REACTION_MIN_PROBABILITY = 0.5
+
 GOAL_KEY = "outcome_goal"
 GOAL_REASON_KEY = "outcome_goal_reason"
 REACTION_KEY = "outcome_reaction"
@@ -103,13 +107,16 @@ def parse_outcome(
     if REACTION_KEY in answers:
         reaction = answers[REACTION_KEY]
         _, grade, reaction_reason = REACTIONS[reaction["choice"]]
+        probability = max(reaction["probabilities"].values())
+        if grade != "green" and probability < _REACTION_MIN_PROBABILITY:
+            grade, reaction_reason = "green", None
         scores.append(
             MonitorRuleScore(
                 spec=OUTCOME_SPEC,
                 rule_id=REACTION_RULE,
                 text=REACTION_TEXT,
                 grade=grade,
-                probability=round(max(reaction["probabilities"].values()), 3),
+                probability=round(probability, 3),
                 reason=reaction_reason,
             )
         )
