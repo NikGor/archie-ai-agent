@@ -22,6 +22,29 @@ def _extract_current_temperature(live_context: dict[str, Any]) -> float | None:
     return float(match.group(1)) if match else None
 
 
+async def _search_and_play(
+    target: dict[str, Any], search_query: str, media_class: str | None
+) -> dict[str, Any]:
+    """Search a media player and play the best result (HA has no single search-and-play tool). # ARCHIE-214"""
+    player = {f"player_{key}": value for key, value in target.items()}
+    search = await call_tool(
+        "media_player__search_media", {**player, "search_query": search_query}
+    )
+    results = search.get("results", [])
+    if not results:
+        raise HomeAssistantMCPError(f"Nothing found for '{search_query}'")
+    matching = [item for item in results if item.get("media_class") == media_class]
+    item = (matching or results)[0]
+    return await call_tool(
+        "media_player__play_media",
+        {
+            **player,
+            "media_content_id": item["media_content_id"],
+            "media_content_type": item["media_content_type"],
+        },
+    )
+
+
 async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
     action: str,
     device_name: str | None = None,
@@ -182,10 +205,7 @@ async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
                     "status": "error",
                     "message": "search_query is required for action=media_search_and_play",
                 }
-            search_args = {**target, "search_query": search_query}
-            if media_class:
-                search_args["media_class"] = media_class
-            ha_result = await call_tool("HassMediaSearchAndPlay", search_args)
+            ha_result = await _search_and_play(target, search_query, media_class)
         elif action == "broadcast":
             if not message:
                 return {
