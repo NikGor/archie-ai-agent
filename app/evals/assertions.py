@@ -20,16 +20,20 @@ def _failure(key: str, expected: Any, actual: Any) -> EvalAssertionFailure:
 
 
 def check_decision(
-    case: EvalCaseInfo, decision: DecisionResponse
+    case: EvalCaseInfo,
+    decision: DecisionResponse,
+    earlier_tools: list[str] | None = None,
 ) -> list[EvalAssertionFailure]:
-    """Stage 1 assertions."""
+    """Stage 1 assertions. earlier_tools: tools of the skill loading steps."""
     failures = []
     expect = case.expect
     actual_type = decision.sgr.action.type
     if expect.action_type is not None and actual_type != expect.action_type:
         failures.append(_failure("action_type", expect.action_type, actual_type))
     if expect.tools_called is not None:
-        actual_tools = [call.tool_name for call in decision.sgr.tool_calls]
+        actual_tools = (earlier_tools or []) + [
+            call.tool_name for call in decision.sgr.tool_calls
+        ]
         if not set(expect.tools_called) <= set(actual_tools):
             failures.append(_failure("tools_called", expect.tools_called, actual_tools))
     return failures
