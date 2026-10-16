@@ -63,6 +63,15 @@ class Settings(BaseSettings):
     eval_django_url: str | None = None
     eval_api_token: str | None = None
 
+    # Chat monitoring: LLM judge grades stored conversations (ARCHIE-213)
+    monitor_judge_model: str = "typesafe/jev-router"
+    monitor_concurrency: int = 4
+    # Django chat-monitoring API (.../chat-monitoring/api); auth: EVAL_API_TOKEN
+    monitor_django_url: str | None = None
+    # A turn without a message_id match takes the latest session trace that
+    # started at most this long before the stored message
+    monitor_trace_match_seconds: int = 300
+
     # Google integrations
     google_calendar_credentials_file: str = "credentials.json"
     gmail_token_file: str = "token_gmail.json"
