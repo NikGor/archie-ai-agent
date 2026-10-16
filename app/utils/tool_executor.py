@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from typing import Any
+from langfuse import get_client
 from ..models.orchestration_sgr import Parameter, ToolCallRequest
 from ..models.tool_models import ToolResult
 from ..models.ws_models import StatusCallback, StatusNotifier
@@ -30,6 +31,27 @@ async def execute_tool_call(
     tool_call: ToolCallRequest,
     tool_factory: ToolFactory | None = None,
     on_status: StatusCallback = None,
+) -> ToolResult:
+    """Run one tool call inside a Langfuse `tool` observation (ARCHIE-211)."""
+    with get_client().start_as_current_observation(
+        as_type="tool",
+        name=tool_call.tool_name,
+        input=convert_parameters_to_dict(tool_call.arguments),
+        metadata={"reason": tool_call.reason},
+    ) as observation:
+        result = await _run_tool_call(tool_call, tool_factory, on_status)
+        observation.update(
+            output=result.output,
+            level="ERROR" if result.error else "DEFAULT",
+            status_message=result.error,
+        )
+        return result
+
+
+async def _run_tool_call(
+    tool_call: ToolCallRequest,
+    tool_factory: ToolFactory | None,
+    on_status: StatusCallback,
 ) -> ToolResult:
     logger.info(
         f"tool_executor_001: Executing tool: \033[36m{tool_call.tool_name}\033[0m"
