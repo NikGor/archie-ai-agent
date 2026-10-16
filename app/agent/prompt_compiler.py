@@ -204,6 +204,14 @@ class PromptCompiler:
         blocks = self._compile_spec(name, context, seen_rules=set(), stack=())
         return "\n\n".join(blocks)
 
+    def check(self, expression: str | None, **context: object) -> bool:
+        """Value of a spec `when` expression in the context (no expression is true)."""
+        return self._check(expression, context)
+
+    def render_rule(self, rule_id: str, **context: object) -> str:
+        """Text of one rule with its items, as the model reads it in a prompt."""
+        return self._render_rule(self.library.rules[rule_id], context)
+
     def fingerprint(self, name: str) -> str:
         """sha256 of the spec and every rule it uses, to tell prompt versions apart.
 
