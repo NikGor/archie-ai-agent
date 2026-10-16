@@ -143,14 +143,16 @@ def _content(message: MonitorMessage) -> dict:
     return json.loads(message.content_json or "{}")
 
 
-def judged_format(content: dict) -> str:
+def judged_format(content: dict, requested: str | None = None) -> str:
     """The response format the turn was produced in.
 
-    Voice answers are stored as content_format "plain", but were produced by the
-    ssml or gemini_tts format spec; judging them by format_plain flagged their
-    markup as broken rules. The requested format is not stored, so it is
-    recognized from the text.
+    Messages store the requested format since ARCHIE-213; older ones do not.
+    For those it is recognized from the text: voice answers are stored as
+    content_format "plain" but were produced by the ssml or gemini_tts spec, and
+    judging them by format_plain flagged their markup as broken rules.
     """
+    if requested:
+        return requested
     content_format = content.get("content_format", "plain")
     text = (content.get("text") or "").lstrip()
     if content_format == "plain" and text.startswith("<speak"):
@@ -185,7 +187,7 @@ def build_state(
     response = messages[index]
     history = messages[max(0, index - _HISTORY_MESSAGES) : index]
     content = _content(response)
-    content_format = judged_format(content)
+    content_format = judged_format(content, response.response_format)
     purpose = PROMPT_DESCRIPTIONS.get(
         PromptBuilder.format_spec_name(content_format), ""
     )
@@ -283,7 +285,9 @@ async def _decide(model: str, state: dict, questions: dict) -> dict:
 async def judge_turn(
     messages: list[MonitorMessage], index: int, trace: TraceTurn | None, model: str
 ) -> JudgeResult:
-    content_format = judged_format(_content(messages[index]))
+    content_format = judged_format(
+        _content(messages[index]), messages[index].response_format
+    )
     rules = rules_for_turn(content_format, trace is not None)
     data = await _decide(
         model,
