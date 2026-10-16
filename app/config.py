@@ -56,7 +56,9 @@ class Settings(BaseSettings):
     swarm_dry_run: bool = False
 
     # Prompt eval suite (ARCHIE-208)
-    eval_default_model: str = "gpt-4.1-mini"
+    # Prompt autofix (ARCHIE-213): cases run on the model a rule failed on, gpt-4.1
+    # and gpt-5.6-luna; a fix must pass on gpt-5.6-luna
+    eval_default_model: str = "gpt-4.1"
     eval_concurrency: int = 3
     eval_user_name: str = "eval"
     # Django prompt-evals API (.../prompt-evals/api): stores cases and runs
