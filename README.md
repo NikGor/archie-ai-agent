@@ -22,7 +22,7 @@ This service is part of a microservices architecture:
 - **Agent Builder**: Creates AI agents with configurable personas and tools
 - **API Controller**: Handles chat requests and integrates with external backend
 - **External Backend**: Separate service for data persistence and conversation management
-- **Prompt System**: Jinja2-templated prompts for different personas
+- **Prompt System**: declarative prompt specs (YAML) + rule catalogs (JSON), compiled by `prompt_compiler.py`
 - **Voice Interface**: Audio input/output capabilities
 - **State Management**: Redis-based state storage (planned)
 
@@ -137,7 +137,7 @@ The system supports multiple conversation personas:
 - **flirty**: Playful and engaging conversation style  
 - **futurebot**: Forward-thinking, tech-focused personality
 
-Personas are defined in `app/prompts/persona_*.jinja2` files.
+Personas are prompt specs in `app/agent/prompts/specs/personas/persona_*.yaml`; their rule texts are in `app/agent/prompts/rules/personas.json`.
 
 ## Development
 
@@ -162,7 +162,7 @@ make api-test      # Test API with sample request
 
 ### Adding New Personas
 
-1. Create a new prompt template in `app/prompts/persona_yourname.jinja2`
+1. Add rules `yourname_*` to `app/agent/prompts/rules/personas.json` and list them in a new spec `app/agent/prompts/specs/personas/persona_yourname.yaml`
 2. Update the `DEFAULT_PERSONA` in your `.env` file if needed
 3. The agent builder will automatically load the new persona
 
@@ -171,7 +171,7 @@ make api-test      # Test API with sample request
 - **Add new tools**: Extend the tools in `app/tools.py`
 - **Modify responses**: Update models in `app/models.py`
 - **Add endpoints**: Extend `app/endpoints.py`
-- **Custom prompts**: Modify templates in `app/prompts/`
+- **Custom prompts**: Edit specs (`app/agent/prompts/specs/`) and rule catalogs (`app/agent/prompts/rules/`); see the `prompt-edit` skill
 
 ## API Response Format
 
