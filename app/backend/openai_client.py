@@ -5,7 +5,8 @@ from collections.abc import AsyncIterator, Callable
 from typing import Any
 from langfuse.openai import AsyncOpenAI, OpenAI
 from openai import APIConnectionError, InternalServerError, RateLimitError
-from pydantic import BaseModel, ValidationError
+from openai.lib._parsing._responses import type_to_text_format_param
+from pydantic import BaseModel
 from app.config import settings
 from app.utils.openai_utils import build_openai_args
 from app.utils.retry_utils import call_with_retry
@@ -117,9 +118,10 @@ class OpenAIClient:
         response_id_out: list[str] | None = None,
         max_output_tokens: int | None = None,
         usage_out: dict[str, int] | None = None,
+        observation_name: str = "llm-call",
     ) -> AsyncIterator[str]:
         """
-        Stream completion tokens using OpenAI Responses API (responses.stream()).
+        Stream completion tokens using OpenAI Responses API (responses.create(stream=True)).
 
         Yields raw JSON token strings as they arrive. The caller is responsible
         for reassembling and parsing the full response.
@@ -129,6 +131,10 @@ class OpenAIClient:
         (resp_...) will be appended to it from the response.created event. If
         usage_out is provided, token usage is written into it from the
         response.completed event (ARCHIE-180).
+
+        ARCHIE-211: create(stream=True) instead of responses.stream(), because only
+        create() lets langfuse.openai name the generation (`observation_name`).
+        Truncation is detected from the response.incomplete event (ARCHIE-151).
         """
         args = build_openai_args(
             model=model,
@@ -137,31 +143,35 @@ class OpenAIClient:
             previous_response_id=previous_response_id,
             max_output_tokens=max_output_tokens,
         )
+        text_format = args.pop("text_format", None)
+        if text_format:
+            args["text"] = {"format": type_to_text_format_param(text_format)}
         logger.info(f"openai_client_006: Starting stream for \033[36m{model}\033[0m")
         try:
-            async with self.async_client.responses.stream(**args) as stream:
-                async for event in stream:
+            stream = await self.async_client.responses.create(
+                **args, stream=True, name=observation_name
+            )
+            async with stream as events:
+                async for event in events:
                     if event.type == "response.created" and response_id_out is not None:
-                        resp_id = getattr(event.response, "id", None)
-                        if resp_id:
-                            response_id_out.append(resp_id)
+                        response_id_out.append(event.response.id)
                     elif event.type == "response.completed" and usage_out is not None:
-                        usage = getattr(event.response, "usage", None)
+                        usage = event.response.usage
                         if usage:
                             usage_out.update(_openai_usage_to_dict(usage))
-                    elif event.type == "response.output_text.delta" and getattr(
-                        event, "delta", None
-                    ):
+                    elif event.type == "response.incomplete":
+                        details = event.response.incomplete_details
+                        reason = details.reason if details else "unknown"
+                        logger.error(
+                            f"openai_client_error_003: Stream truncated before valid JSON "
+                            f"(reason: {reason}, max_output_tokens={max_output_tokens})"
+                        )
+                        raise RuntimeError(
+                            "LLM response was cut off before completing a valid answer "
+                            "(output too long for the configured token limit)"
+                        )
+                    elif event.type == "response.output_text.delta" and event.delta:
                         yield event.delta
-        except ValidationError as e:
-            logger.error(
-                f"openai_client_error_003: Stream truncated before valid JSON "
-                f"(likely hit max_output_tokens={max_output_tokens}): \033[31m{e!s}\033[0m"
-            )
-            raise RuntimeError(
-                "LLM response was cut off before completing a valid answer "
-                "(output too long for the configured token limit)"
-            ) from e
         except Exception as e:
             logger.error(f"openai_client_error_002: Stream error: \033[31m{e!s}\033[0m")
             raise
