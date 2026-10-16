@@ -21,6 +21,7 @@ class LLMClient(Protocol):
         response_format: type[BaseModel] | None = None,
         previous_response_id: str | None = None,
         tools: Any = None,
+        observation_name: str = "llm-call",
     ) -> Any: ...
 
     def create_completion_stream(
