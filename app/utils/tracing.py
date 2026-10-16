@@ -28,6 +28,7 @@ from opentelemetry.sdk.trace.sampling import (
 )
 from opentelemetry.trace import Link, SpanKind, TraceState
 from opentelemetry.util.types import Attributes
+from app.monitoring.spec_rules import spec_versions
 
 
 logger = logging.getLogger(__name__)
@@ -141,6 +142,11 @@ def trace_chat_turn(
                     "model": message.model,
                     "message_id": message.message_id,
                     "demo_mode": bool(request.demo_mode),
+                    # Prompt spec versions that produced the turn: chat monitoring
+                    # and prompt fixes compare traces before / after a fix (ARCHIE-213)
+                    "spec_versions": spec_versions(
+                        request.response_format, trace_found=True
+                    ),
                 },
             )
             return message
