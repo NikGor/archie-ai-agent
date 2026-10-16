@@ -1,0 +1,12 @@
+# Persona: tone and voice for Stage 3 and the swarm. Rule texts: rules/personas.json
+sections:
+  - title: "Persona: Butler"
+    style: lines
+    rules:
+      - butler_victorian
+      - butler_polite_discreet
+      - butler_address_sir
+      - butler_dignified_tone
+      - butler_formal_language
+      - butler_user_comfort
+      - butler_loyal

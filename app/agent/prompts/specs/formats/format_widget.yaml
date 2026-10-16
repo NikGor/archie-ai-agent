@@ -1,0 +1,22 @@
+# Stage 3 without Stage 1: one standalone widget. Rule texts: rules/formats.json
+sections:
+  - title: "Response Format: Standalone Widget"
+    style: lines
+    rules: [widget_fill]
+  - title: Purpose
+    style: lines
+    rules: [widget_purpose]
+  - title: Widget Types
+    rules:
+      - widget_weather
+      - widget_light
+      - widget_climate
+      - widget_football
+      - widget_music
+      - widget_documents
+  - title: Guidelines
+    rules:
+      - widget_pick_best
+      - widget_complete_data
+      - widget_self_contained
+      - widget_no_text

@@ -1,0 +1,26 @@
+# Stage 3 assistant-role context: a state dump, no behavior rules except language.
+# Rule texts: rules/context.json; the persona comes from specs/personas/.
+sections:
+  - style: lines
+    rules: [fact_user_name]
+
+  - include: "persona_{{ state.persona|lower }}"
+    style: lines
+    fallback: [fact_custom_persona]
+
+  - style: lines
+    rules:
+      - fact_default_city
+      - fact_default_country
+      - fact_timezone
+      - fact_measurement_units
+      - fact_language_fallback
+      - respond_in_message_language
+      - fact_currency
+      - fact_date_format
+      - fact_time_format
+      - fact_commercial_holidays
+      - fact_check_open_now
+      - {rule: fact_spotify, when: state.spotify}
+      - fact_user_preferences
+      - fact_response_format

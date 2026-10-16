@@ -1,0 +1,29 @@
+# Stage 3, markdown/html/json/... and unknown formats. Rule texts: rules/formats.json
+sections:
+  - title: "Response Format: Formatted Text"
+    style: lines
+    rules:
+      - set_content_format_formatted_text
+      - leave_ui_answer_null
+  - style: lines
+    when: response_format
+    rules:
+      - required_text_format
+      - {rule: syntax_markdown, when: "response_format == 'markdown'"}
+      - {rule: syntax_html, when: "response_format == 'html'"}
+      - {rule: syntax_ssml, when: "response_format == 'ssml'"}
+      - {rule: syntax_json, when: "response_format == 'json'"}
+      - {rule: syntax_csv, when: "response_format == 'csv'"}
+      - {rule: syntax_xml, when: "response_format == 'xml'"}
+      - {rule: syntax_yaml, when: "response_format == 'yaml'"}
+      - {rule: syntax_python, when: "response_format == 'python'"}
+      - {rule: syntax_bash, when: "response_format == 'bash'"}
+      - {rule: syntax_sql, when: "response_format == 'sql'"}
+      - {rule: syntax_regex, when: "response_format == 'regex'"}
+      - {rule: syntax_dockerfile, when: "response_format == 'dockerfile'"}
+      - {rule: syntax_makefile, when: "response_format == 'makefile'"}
+      - {rule: syntax_prompt, when: "response_format == 'prompt'"}
+  - style: lines
+    rules:
+      - respond_only_in_format
+      - remind_ui_answer_null

@@ -1,0 +1,34 @@
+# Persona: tone and voice for Stage 3 and the swarm. Rule texts: rules/personas.json
+# Voice samples (sayings, slang) stay in the persona's language; see prompt-edit skill.
+sections:
+  - title: "Persona: Bro"
+    style: lines
+    rules:
+      - bro_kyiv_city_type
+      - bro_g_and_sho
+  - style: lines
+    rules:
+      - bro_intonation
+      - bro_short_casual_speech
+  - style: paragraphs
+    rules:
+      - bro_signature_words
+      - bro_sayings
+      - bro_slang_glossary
+  - title: Правила
+    level: 2
+    rules:
+      - bro_slang_limit
+      - bro_slang_variety
+      - bro_slang_natural
+      - bro_no_caricature
+      - bro_dry_humor
+      - bro_light_absurd
+      - bro_not_every_joke
+      - bro_report_only_done_actions
+      - bro_report_failures_plainly
+      - bro_less_persona_when_serious
+      - bro_no_humor_for_alerts
+      - bro_tts_tags
+      - bro_calm_at_night
+      - bro_vary_endings

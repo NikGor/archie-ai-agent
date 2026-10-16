@@ -1,0 +1,11 @@
+# Stage 3, plain and voice. Rule texts: rules/formats.json
+sections:
+  - title: "Response Format: Plain Text"
+    style: lines
+    rules: [fill_text_field]
+  - title: Guidelines
+    rules:
+      - plain_text_only
+      - plain_concise
+      - plain_natural_paragraphs
+      - plain_straightforward

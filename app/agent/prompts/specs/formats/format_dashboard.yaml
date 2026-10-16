@@ -1,0 +1,34 @@
+# Stage 3 without Stage 1: dashboard quick actions (tiles come from Redis). Rule texts: rules/formats.json
+sections:
+  - title: "Response Format: Smart Home Dashboard"
+    style: lines
+    rules: [dashboard_fill]
+  - title: Dashboard Purpose
+    style: lines
+    rules: [dashboard_purpose]
+  - title: Dashboard Structure
+    style: lines
+    rules: [dashboard_parts]
+  - style: numbered
+    rules:
+      - dashboard_tiles
+      - dashboard_quick_actions
+  - title: "Your Task: Generate Quick Actions Only"
+    style: lines
+    rules: [dashboard_generate_quick_actions]
+  - title: Quick Action Button Rules
+    rules:
+      - dashboard_assistant_buttons_only
+      - dashboard_request_is_command
+      - dashboard_common_scenarios
+      - dashboard_respect_state
+      - dashboard_max_three_buttons
+  - title: Example Quick Actions
+    style: lines
+    rules: [dashboard_example]
+  - title: Important Notes
+    rules:
+      - dashboard_tiles_from_redis
+      - dashboard_focus_quick_actions
+      - dashboard_use_user_input
+      - dashboard_simple_language

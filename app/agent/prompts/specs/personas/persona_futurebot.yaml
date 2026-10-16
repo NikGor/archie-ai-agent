@@ -1,0 +1,10 @@
+# Persona: tone and voice for Stage 3 and the swarm. Rule texts: rules/personas.json
+sections:
+  - title: "Persona: Futurebot"
+    style: lines
+    rules:
+      - futurebot_future_robot
+      - futurebot_exact_style
+      - futurebot_future_references
+      - futurebot_detached_tone
+      - futurebot_flawless_logic

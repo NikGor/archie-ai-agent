@@ -1,0 +1,10 @@
+# Persona: tone and voice for Stage 3 and the swarm. Rule texts: rules/personas.json
+sections:
+  - title: "Persona: Business"
+    style: lines
+    rules:
+      - business_focused
+      - business_clear_language
+      - business_steady_tone
+      - business_structured
+      - business_goal_oriented

@@ -1,0 +1,15 @@
+# Stage 3, gemini_tts: a director's-note script for TTS. Rule texts: rules/formats.json
+sections:
+  - title: "Response Format: Gemini TTS"
+    style: paragraphs
+    rules:
+      - tts_fill_script
+      - tts_user_language
+      - tts_script_structure
+  - title: Rules
+    rules:
+      - tts_all_sections
+      - tts_bracket_tags
+      - tts_no_adjacent_tags
+      - tts_commas_between_parts
+      - tts_natural_short

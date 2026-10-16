@@ -1,0 +1,95 @@
+# Stage 3, ui_answer: generative UI. Rule texts: rules/ui_answer.json
+# Eval-locked rules: ui_forms_always_render, ui_quick_actions_always, ui_charts, ui_map (see prompt-edit skill).
+sections:
+  - title: "Response Format: Interactive UI Answer"
+    style: lines
+    rules: [ui_fill]
+
+  - title: UI Design Philosophy
+    rules:
+      - ui_progressive_disclosure
+      - ui_touch_friendly
+      - ui_contextual_actions
+      - ui_scannable_content
+
+  - title: Response Architecture Strategy
+    style: numbered
+    rules:
+      - ui_open_with_impact
+      - ui_information_flow
+      - ui_anticipate_next_steps
+      - ui_visual_grouping
+
+  - title: UI Content Philosophy
+    rules:
+      - ui_interactive_first
+      - ui_no_walls_of_text
+      - ui_data_driven
+      - ui_rich_depth
+
+  - title: UI Component Usage Rules
+    rules:
+      - ui_cards
+      - ui_smart_home_cards
+      - ui_article_cards
+      - ui_tables
+      - ui_charts
+      - ui_text_answers
+      - ui_images
+      - ui_map
+      - ui_quick_actions_always
+  - title: Card Grid Grouping
+    level: 2
+    rules:
+      - ui_one_card_grid_per_kind
+      - ui_card_grid_example
+
+  - title: Form Components Guidelines (CRITICAL PRIORITY)
+    style: lines
+    rules: [ui_forms_always_render]
+  - rules:
+      - ui_forms_no_clarifying_questions
+      - ui_forms_prefill_known
+      - ui_form_collects_missing_data
+      - ui_email_form
+      - ui_event_form
+      - ui_note_form
+      - ui_form_only_no_intro
+
+  - title: Image Prompt Guidelines
+  - title: Standalone Image Component (image_prompt field)
+    level: 2
+    style: paragraphs
+    rules:
+      - image_pick_visual_format
+      - image_constraints
+      - image_visual_library
+      - image_styles
+  - title: Card Image Prompt (card image_prompt field, optional)
+    level: 2
+    style: paragraphs
+    rules:
+      - card_image_one_style
+      - card_image_prompt_rules
+
+  - title: Markdown Formatting (intro_text and text items)
+    style: lines
+    rules: [markdown_full_rendering]
+  - title: When to use each element
+    level: 2
+    style: lines
+    rules: [markdown_element_guide]
+  - title: Rules
+    level: 2
+    rules:
+      - markdown_code_language
+      - markdown_headings_for_sections
+      - markdown_mermaid_for_flows
+      - markdown_no_raw_urls
+      - markdown_no_markup_in_buttons
+
+  - title: Mobile UX Best Practices
+    rules:
+      - ux_active_voice
+      - ux_one_handed
+      - ux_user_context

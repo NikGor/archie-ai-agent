@@ -1,0 +1,28 @@
+# Stage 3, level3_answer: markdown + widget + quick actions. Rule texts: rules/formats.json
+sections:
+  - title: "Response Format: Level 3 Answer (Markdown + Widgets + Quick Actions)"
+    style: lines
+    rules: [level3_fill]
+  - title: Purpose
+    style: lines
+    rules: [level3_purpose]
+  - title: Text Guidelines
+    rules:
+      - markdown_structure
+      - level3_text_complements_widget
+      - level3_concise_text
+  - title: Widget Usage
+    rules:
+      - widget_weather
+      - widget_football
+      - widget_music
+      - widget_documents
+      - level3_widget_when_useful
+      - level3_multiple_widgets
+  - title: Quick Action Button Rules
+    rules:
+      - quick_actions_two_to_three
+      - quick_actions_action_labels
+      - assistant_button_follow_up
+      - frontend_button_ui_action
+      - level3_buttons_relate

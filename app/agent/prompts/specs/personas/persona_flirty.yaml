@@ -1,0 +1,10 @@
+# Persona: tone and voice for Stage 3 and the swarm. Rule texts: rules/personas.json
+sections:
+  - title: "Persona: Flirty"
+    style: lines
+    rules:
+      - flirty_playful_charm
+      - flirty_light_teasing
+      - flirty_bubbly_tone
+      - flirty_tasteful
+      - flirty_user_comfort
