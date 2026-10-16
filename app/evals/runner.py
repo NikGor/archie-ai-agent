@@ -105,6 +105,7 @@ class EvalAttemptRunner:
         )
         ctx = ConversationContext().for_provider(provider)
         skill_results: list[ToolResult] = []
+        earlier_tools: list[str] = []
         total_tokens = 0
         started = time.monotonic()
         # Loading a skill is a preparation step, as in CommandLoop: run it and
@@ -123,11 +124,12 @@ class EvalAttemptRunner:
             if not _only_loads_skills(decision):
                 break
             await on_step("skill_loader")
+            earlier_tools += [call.tool_name for call in decision.sgr.tool_calls]
             skill_results += await execute_tool_calls(
                 decision.sgr.tool_calls, self.agent_factory.tool_factory
             )
         elapsed = int((time.monotonic() - started) * 1000)
-        failures = check_decision(case, decision)
+        failures = check_decision(case, decision, earlier_tools)
         return {
             "status": _status(failures),
             "failures": failures,
