@@ -1,7 +1,6 @@
 import logging
 import time
 from archie_shared.chat.models import ImageAttachment, LllmTrace
-from langfuse import get_client as get_langfuse_client
 from ..backend.llm.registry import get_client
 from ..backend.state_service import StateService
 from ..backend.tool_result_store import ToolResultStore
@@ -21,7 +20,6 @@ from ..tools.tool_factory import ToolFactory
 from ..utils.llm_parser import parse_llm_response
 from ..utils.provider_utils import get_provider_for_model
 from ..utils.trace_utils import StepTimer
-from ..utils.tracing import content_output
 from .command_loop import CommandLoop
 from .context import ConversationContext
 from .pipeline_metrics import PipelineMetrics
@@ -245,20 +243,8 @@ class AgentFactory:
         )
         output_ctx = conversation_ctx.for_provider(output_provider)
 
-        # STAGE 3: Final output generation. The span groups the LLM call with
-        # postprocessing, so its output is what the frontend receives (ARCHIE-211)
-        with (
-            StepTimer() as stage3_timer,
-            get_langfuse_client().start_as_current_observation(
-                as_type="chain",
-                name="generate-response",
-                input={
-                    "response_format": response_format,
-                    "intents": loop_result.ui_intents,
-                    "command_summary": loop_result.command_summary,
-                },
-            ) as output_observation,
-        ):
+        # STAGE 3: Final output generation
+        with StepTimer() as stage3_timer:
             final_response = await create_output(
                 user_input=user_input,
                 command_summary=loop_result.command_summary,
@@ -275,7 +261,6 @@ class AgentFactory:
                 on_stream=on_stream,
                 on_stream_event=on_stream_event,
             )
-            output_observation.update(output=content_output(final_response.content))
         await notifier.emit(
             "output", "completed", "Response ready", detail="Response ready"
         )
