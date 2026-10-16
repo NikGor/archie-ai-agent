@@ -29,8 +29,9 @@ logger = logging.getLogger(__name__)
 GRADE_ORDER: tuple[MonitorGrade, ...] = ("red", "orange", "green")
 _HISTORY_MESSAGES = 6
 _HISTORY_TEXT_CHARS = 400
-_RESPONSE_CHARS = 6000
-_STRING_CHARS = 600
+_RESPONSE_CHARS = 10000
+# Long strings are cut ever shorter until the response fits; the JSON stays valid
+_STRING_LIMITS = (600, 300, 120)
 _TOOL_ARGUMENT_CHARS = 300
 # Stored UI fields that carry no meaning for the judge; image_prompt may hold
 # base64 image data after the frontend generates the image (ARCHIE-173)
@@ -114,6 +115,7 @@ Rules:
   Then do not lower other grades because tool use is unknown; judge only what the response shows.
 - skill_usage: set grade to null if no listed skill fits the request.
 - A short answer without tools is green for small talk and for facts that do not change.
+- A string that ends with "…" was shortened by the monitor, not by Archie. It is not a defect.
 - Write all comments and the summary in Russian.
 
 Agent catalog
@@ -138,19 +140,29 @@ def _system_prompt() -> str:
     return _SYSTEM_PROMPT.format(tools=tools, skills=skills or "- none")
 
 
-def _compact(value: object) -> object:
-    """Content without empty and visual-only fields, long strings cut."""
+def _compact(value: object, limit: int = _STRING_LIMITS[0]) -> object:
+    """Content without empty and visual-only fields, strings cut to `limit`."""
     if isinstance(value, dict):
         return {
-            key: _compact(item)
+            key: _compact(item, limit)
             for key, item in value.items()
             if key not in _SKIPPED_KEYS and item not in (None, "", [], {})
         }
     if isinstance(value, list):
-        return [_compact(item) for item in value]
-    if isinstance(value, str) and len(value) > _STRING_CHARS:
-        return f"{value[:_STRING_CHARS]}…"
+        return [_compact(item, limit) for item in value]
+    if isinstance(value, str) and len(value) > limit:
+        return f"{value[:limit]}…"
     return value
+
+
+def _response_json(content: dict) -> str:
+    """Valid JSON of the response; never cut mid-structure (ARCHIE-213: a cut
+    JSON made the judge report a broken UI)."""
+    for limit in _STRING_LIMITS:
+        text = json.dumps(_compact(content, limit), ensure_ascii=False)
+        if len(text) <= _RESPONSE_CHARS:
+            break
+    return text
 
 
 def _content(message: MonitorMessage) -> dict:
@@ -186,7 +198,7 @@ def build_turn_prompt(
     purpose = PROMPT_DESCRIPTIONS.get(
         PromptBuilder.format_spec_name(content_format), ""
     )
-    response_json = json.dumps(_compact(content), ensure_ascii=False)[:_RESPONSE_CHARS]
+    response_json = _response_json(content)
     lines = [f"[{m.created_at}] {m.role}: {_short_text(m)}" for m in history]
     return (
         f"Conversation before the response:\n{chr(10).join(lines) or '(empty)'}\n\n"
