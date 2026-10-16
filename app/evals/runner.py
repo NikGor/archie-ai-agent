@@ -46,7 +46,9 @@ async def _judge_case_rules(
             created_at=now,
         ),
     ]
-    return await judge_rules(messages, 1, case.rules, settings.monitor_judge_model)
+    return await judge_rules(
+        messages, 1, case.rules, settings.monitor_judge_model, case.response_format
+    )
 
 
 if TYPE_CHECKING:

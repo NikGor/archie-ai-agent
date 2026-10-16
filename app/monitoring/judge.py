@@ -312,14 +312,20 @@ async def judge_turn(
 
 
 async def judge_rules(
-    messages: list[MonitorMessage], index: int, rule_keys: list[str], model: str
+    messages: list[MonitorMessage],
+    index: int,
+    rule_keys: list[str],
+    model: str,
+    response_format: str,
 ) -> list[MonitorRuleScore]:
     """Grades of the given 'spec:rule_id' rules only (eval rules_followed check).
 
+    `response_format` is the requested format: Content does not keep it (a
+    markdown answer is stored as content_format "plain").
     Without a trace: only rules visible in the response (assistant_prompt and
     format specs) can be judged; other keys are skipped.
     """
-    content_format = judged_format(_content(messages[index]))
+    content_format = response_format
     rules = [
         rule
         for rule in rules_for_turn(content_format, trace_found=False)
