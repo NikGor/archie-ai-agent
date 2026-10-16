@@ -3,10 +3,22 @@ import logging
 from typing import Any
 from google import genai
 from google.genai import types
+from langfuse import get_client
 from app.config import settings
 
 
 logger = logging.getLogger(__name__)
+
+SEARCH_MODEL = "gemini-3-flash-preview"
+
+
+def _usage_details(usage: types.GenerateContentResponseUsageMetadata) -> dict[str, int]:
+    """Map Gemini token counts to Langfuse usage keys; thinking is billed as output."""
+    return {
+        "input": usage.prompt_token_count or 0,
+        "output": (usage.candidates_token_count or 0)
+        + (usage.thoughts_token_count or 0),
+    }
 
 
 async def google_search_tool(query: str) -> dict[str, Any]:
@@ -54,12 +66,20 @@ async def google_search_tool(query: str) -> dict[str, Any]:
         # client.models.generate_content is a blocking (sync) SDK call — running it
         # directly inside this coroutine serializes parallel google_search_tool calls
         # that asyncio.gather() is supposed to run concurrently.
-        response = await asyncio.to_thread(
-            client.models.generate_content,
-            model="gemini-3-flash-preview",
-            contents=query,
-            config=config,
-        )
+        # google-genai has no Langfuse integration: record the generation by hand (ARCHIE-211)
+        with get_client().start_as_current_observation(
+            as_type="generation", name="search-web", model=SEARCH_MODEL, input=query
+        ) as generation:
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model=SEARCH_MODEL,
+                contents=query,
+                config=config,
+            )
+            generation.update(
+                output=response.text,
+                usage_details=_usage_details(response.usage_metadata),
+            )
 
         if not response or not response.candidates:
             logger.warning("google_search_warning_001: Empty response from Gemini")
