@@ -2,34 +2,24 @@
 
 import json
 import logging
-import os
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from archie_shared.chat.models import ImageAttachment
-from jinja2 import Environment, FileSystemLoader, select_autoescape
 from ..models.tool_models import ToolResult
 from ..utils.image_utils import build_user_content
 from ..utils.skill_utils import list_skills
+from .prompt_compiler import PromptCompiler
 
 
 logger = logging.getLogger(__name__)
 
 
 class PromptBuilder:
-    """Builder for constructing prompts from Jinja2 templates."""
+    """Builds the message lists of each stage from compiled prompt specs (ARCHIE-212)."""
 
-    def __init__(self, templates_dir: str | None = None):
-        if templates_dir is None:
-            templates_dir = os.path.join(os.path.dirname(__file__), "prompts")
-        self.templates_dir = templates_dir
-        self.env = Environment(
-            loader=FileSystemLoader(self.templates_dir),
-            autoescape=select_autoescape(enabled_extensions=("jinja2",)),
-        )
-        logger.info(
-            f"prompt_builder_001: Initialized with templates: \033[36m{templates_dir}\033[0m"
-        )
+    def __init__(self, compiler: PromptCompiler | None = None):
+        self.compiler = compiler or PromptCompiler()
 
     def _with_current_datetime(self, state: dict) -> dict:
         """Add the current date/time/weekday to a copy of `state`, computed fresh
@@ -79,8 +69,7 @@ class PromptBuilder:
         history) ahead of the volatile tail (datetime, tool results, query) so
         prompt caching stays valid across turns (ARCHIE-180).
         """
-        cmd_prompt_template = self.env.get_template("cmd_prompt.jinja2")
-        cmd_prompt = cmd_prompt_template.render(state=state)
+        cmd_prompt = self.compiler.compile("cmd_prompt", state=state)
         tools_list = "\n".join(
             [
                 f"- {t['name']}: {t.get('description', '')}\n  Parameters: {json.dumps(t.get('parameters', {}), ensure_ascii=False)}"
@@ -133,17 +122,15 @@ class PromptBuilder:
         state: dict,
         response_format: str,
     ) -> str:
-        """Build assistant context prompt from template."""
+        """Build the assistant context prompt (user state and persona)."""
         logger.info("prompt_builder_003: Building assistant prompt")
-        template = self.env.get_template("assistant_prompt.jinja2")
-        return template.render(
-            state=state,
-            response_format=response_format,
+        return self.compiler.compile(
+            "assistant_prompt", state=state, response_format=response_format
         )
 
     @staticmethod
-    def format_template_name(response_format: str) -> str:
-        """Return the format template path (relative to prompts/) for a response format."""
+    def format_spec_name(response_format: str) -> str:
+        """Return the format spec name for a response format."""
         format_aliases = {"voice": "plain"}
         actual_format = format_aliases.get(response_format, response_format)
         if actual_format in [
@@ -155,22 +142,22 @@ class PromptBuilder:
             "dashboard",
             "widget",
         ]:
-            return f"format_prompts/format_{actual_format}.jinja2"
-        return "format_prompts/format_formatted_text.jinja2"
+            return f"format_{actual_format}"
+        return "format_formatted_text"
 
     def build_format_instructions(
         self, response_format: str, intents: list[str] | None = None
     ) -> str:
         """Build format-specific instructions."""
-        format_template_name = self.format_template_name(response_format)
-        format_template_path = os.path.join(self.templates_dir, format_template_name)
-        if not os.path.exists(format_template_path):
+        spec_name = self.format_spec_name(response_format)
+        if not self.compiler.has_spec(spec_name):
             logger.warning(
-                f"prompt_builder_004: Format template missing: \033[31m{format_template_name}\033[0m"
+                f"prompt_builder_004: Format spec missing: \033[31m{spec_name}\033[0m"
             )
             return ""
         logger.info(
-            f"prompt_builder_005: Loaded format template: \033[36m{format_template_name}\033[0m"
+            f"prompt_builder_005: Compiling format spec: \033[36m{spec_name}\033[0m"
         )
-        template = self.env.get_template(format_template_name)
-        return template.render(response_format=response_format, intents=intents or [])
+        return self.compiler.compile(
+            spec_name, response_format=response_format, intents=intents or []
+        )

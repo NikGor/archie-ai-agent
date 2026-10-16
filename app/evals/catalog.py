@@ -19,13 +19,14 @@ from archie_shared.evals.models import (
 from archie_shared.ui.models import AdvancedAnswerItem
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from app.agent.prompt_builder import PromptBuilder
+from app.agent.prompt_compiler import PromptCompiler
 from app.config import settings
 from app.models.orchestration_sgr import ToolName
 
 
 logger = logging.getLogger(__name__)
 
-PROMPTS_DIR = Path(__file__).resolve().parents[1] / "agent" / "prompts"
+SWARM_PROMPTS_DIR = Path(__file__).resolve().parents[1] / "agent" / "prompts" / "swarm"
 CASE_ID_PATTERN = r"^[a-z0-9_]+(\.[a-z0-9_]+)+$"
 
 # Formats that skip Stage 1 (see AgentFactory.arun)
@@ -77,21 +78,24 @@ def _literal_values(annotation: object) -> list[str]:
     return [value for arg in get_args(annotation) for value in _literal_values(arg)]
 
 
-def prompt_stem(template_path: Path) -> str:
-    return template_path.stem
-
-
-def list_prompt_templates() -> dict[str, Path]:
-    """Prompt name (template file stem) -> template path."""
-    return {prompt_stem(path): path for path in sorted(PROMPTS_DIR.rglob("*.jinja2"))}
-
-
 def compute_prompt_hashes() -> dict[str, str]:
-    """Prompt name -> sha256 of the template source, to tell prompt versions apart."""
-    return {
-        name: hashlib.sha256(path.read_bytes()).hexdigest()
-        for name, path in list_prompt_templates().items()
+    """Prompt name -> sha256 of its current version, to tell prompt versions apart.
+
+    Spec prompts hash the spec and the rules it uses (ARCHIE-212); swarm prompts
+    are still Jinja2 templates and hash their source.
+    """
+    compiler = PromptCompiler()
+    hashes = {name: compiler.fingerprint(name) for name in compiler.library.specs}
+    hashes |= {
+        path.stem: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(SWARM_PROMPTS_DIR.glob("*.jinja2"))
     }
+    return dict(sorted(hashes.items()))
+
+
+def list_prompt_templates() -> list[str]:
+    """Prompt names: spec names and swarm template stems."""
+    return list(compute_prompt_hashes())
 
 
 def get_schema() -> EvalSchema:
@@ -101,7 +105,7 @@ def get_schema() -> EvalSchema:
         response_formats=_literal_values(
             ChatRequest.model_fields["response_format"].annotation
         ),
-        prompts=sorted(list_prompt_templates()),
+        prompts=list_prompt_templates(),
         stages=list(get_args(EvalStage)),
         action_types=_literal_values(EvalExpect.model_fields["action_type"].annotation),
     )
@@ -109,9 +113,7 @@ def get_schema() -> EvalSchema:
 
 def infer_prompts(stage: EvalStage, response_format: str) -> list[str]:
     """Prompt templates a case exercises, from its stage and response format."""
-    format_prompt = prompt_stem(
-        Path(PromptBuilder.format_template_name(response_format))
-    )
+    format_prompt = PromptBuilder.format_spec_name(response_format)
     if stage == "stage1":
         return ["cmd_prompt"]
     if response_format in _DIRECT_OUTPUT_FORMATS:
