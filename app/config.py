@@ -64,7 +64,8 @@ class Settings(BaseSettings):
     eval_api_token: str | None = None
 
     # Chat monitoring: LLM judge grades stored conversations (ARCHIE-213)
-    monitor_judge_model: str = "typesafe/jev-router"
+    # TypeSafe Jev decision model (OpenRouter Decisions API); the alias tracks the newest Jev
+    monitor_judge_model: str = "~typesafe/jev-latest"
     monitor_concurrency: int = 4
     # Django chat-monitoring API (.../chat-monitoring/api); auth: EVAL_API_TOKEN
     monitor_django_url: str | None = None
