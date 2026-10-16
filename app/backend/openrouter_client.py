@@ -164,6 +164,7 @@ class OpenRouterClient:
         response_id_out: list[str] | None = None,  # noqa: ARG002
         max_output_tokens: int | None = None,
         usage_out: dict[str, int] | None = None,
+        observation_name: str = "llm-call",
     ) -> AsyncIterator[str]:
         """
         Stream completion tokens from OpenRouter API.
@@ -182,7 +183,9 @@ class OpenRouterClient:
             f"openrouter_client_006: Starting stream for \033[36m{model}\033[0m"
         )
         try:
-            stream = await self.async_client.chat.completions.create(**create_kwargs)
+            stream = await self.async_client.chat.completions.create(
+                **create_kwargs, name=observation_name
+            )
             async for chunk in stream:
                 usage = getattr(chunk, "usage", None)
                 if usage and usage_out is not None:
