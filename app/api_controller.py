@@ -9,6 +9,7 @@ from .models.ws_models import StatusUpdate, StreamCallback, StreamEventCallback
 from .utils.file_utils import build_input_with_files
 from .utils.general_utils import generate_message_id
 from .utils.provider_utils import supports_vision
+from .utils.tracing import trace_chat_turn
 
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 StatusCallback = Callable[[StatusUpdate], Awaitable[None]] | None
 
 
+@trace_chat_turn
 async def handle_chat(
     user_request: ChatRequest,
     on_status: StatusCallback = None,
