@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 _KEEP_RUNS = 20
 _HTTP_ATTEMPTS = 4
 LANGFUSE_SCORE_NAME = "monitor_grade"
+RULE_SCORE_PREFIX = "rule:"
 
 
 class MonitorBusyError(RuntimeError):
@@ -199,21 +200,41 @@ class MonitorRun:
         )
         await api.post("evaluations", evaluation)
         if trace:
-            get_client().create_score(
-                name=LANGFUSE_SCORE_NAME,
-                # Fixed ID: a re-judged turn updates its score instead of adding one
-                score_id=f"{LANGFUSE_SCORE_NAME}-{trace.trace_id}",
-                value=evaluation.grade,
-                trace_id=trace.trace_id,
-                data_type="CATEGORICAL",
-                # Broken rules, e.g. "format_ui_answer:ui_charts=red"
-                comment=", ".join(
-                    f"{r.spec}:{r.rule_id}={r.grade}"
-                    for r in rules
-                    if r.grade in ("red", "orange")
-                ),
-            )
+            self._score_trace(trace.trace_id, evaluation)
         return evaluation
+
+    @staticmethod
+    def _score_trace(trace_id: str, evaluation: MonitorTurnEvaluation) -> None:
+        """Turn grade plus one score per broken rule, so Langfuse can filter
+        traces by rule ("rule:format_ui_answer:ui_map")."""
+        rules = evaluation.rules
+        client = get_client()
+        for rule in rules:
+            if rule.grade not in ("red", "orange"):
+                continue
+            name = f"{RULE_SCORE_PREFIX}{rule.spec}:{rule.rule_id}"
+            client.create_score(
+                name=name,
+                score_id=f"{name}-{trace_id}",
+                value=rule.grade,
+                trace_id=trace_id,
+                data_type="CATEGORICAL",
+                comment=rule.reason,
+            )
+        client.create_score(
+            name=LANGFUSE_SCORE_NAME,
+            # Fixed ID: a re-judged turn updates its score instead of adding one
+            score_id=f"{LANGFUSE_SCORE_NAME}-{trace_id}",
+            value=evaluation.grade,
+            trace_id=trace_id,
+            data_type="CATEGORICAL",
+            # Broken rules, e.g. "format_ui_answer:ui_charts=red"
+            comment=", ".join(
+                f"{r.spec}:{r.rule_id}={r.grade}"
+                for r in rules
+                if r.grade in ("red", "orange")
+            ),
+        )
 
     async def _count(
         self, grade: str | None, cost: float | None, api: DjangoMonitorApi
