@@ -181,13 +181,14 @@ class MonitorRun:
             result = await judge_turn(
                 conversation.messages, index, trace, self.info.judge_model
             )
-        criteria = result.criteria
+        rules = result.rules
         evaluation = MonitorTurnEvaluation(
             run_id=self.info.run_id,
             conversation_id=conversation.conversation_id,
             message_id=message.message_id,
-            grade=worst_grade(criteria),
-            criteria=criteria,
+            grade=worst_grade(rules),
+            rules=rules,
+            spec_versions=result.spec_versions,
             trace_found=trace is not None,
             trace_id=trace.trace_id if trace else None,
             tool_calls=trace.tool_calls if trace else [],
@@ -205,9 +206,11 @@ class MonitorRun:
                 value=evaluation.grade,
                 trace_id=trace.trace_id,
                 data_type="CATEGORICAL",
-                # Reasons of the red / orange criteria, e.g. "correctness: invented_data"
+                # Broken rules, e.g. "format_ui_answer:ui_charts=red"
                 comment=", ".join(
-                    f"{c.criterion}: {c.reason}" for c in criteria if c.reason
+                    f"{r.spec}:{r.rule_id}={r.grade}"
+                    for r in rules
+                    if r.grade in ("red", "orange")
                 ),
             )
         return evaluation
