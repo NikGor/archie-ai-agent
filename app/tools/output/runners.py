@@ -21,6 +21,7 @@ async def stream_and_collect(
     extra_extractors: (
         Sequence[tuple[Any, Callable[[str], Awaitable[None]]]] | None
     ) = None,
+    observation_name: str = "llm-call",
 ) -> tuple[str, int | None]:
     """Stream LLM response, collect JSON, return (full_json, ttft_ms).
 
@@ -42,6 +43,7 @@ async def stream_and_collect(
         model=model,
         response_format=response_model,
         previous_response_id=previous_response_id,
+        observation_name=observation_name,
         **kwargs,
     ):
         if ttft_ms is None:
