@@ -13,6 +13,7 @@ from app.config import settings  # noqa: E402
 from app.endpoints import router  # noqa: E402
 from app.evals.endpoints import router as evals_router  # noqa: E402
 from app.evals.endpoints import ws_router as evals_ws_router  # noqa: E402
+from app.monitoring.endpoints import router as monitoring_router  # noqa: E402
 from app.swarm.endpoints import router as swarm_router  # noqa: E402
 from app.swarm.service import swarm_service  # noqa: E402
 from app.utils.tracing import init_tracing, shutdown_tracing  # noqa: E402
@@ -54,6 +55,7 @@ app.include_router(ws_docs_router)
 app.include_router(swarm_router)
 app.include_router(evals_router)
 app.include_router(evals_ws_router)
+app.include_router(monitoring_router)
 logger.info("main_001: FastAPI ready")
 
 if __name__ == "__main__":
