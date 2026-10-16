@@ -1,23 +1,34 @@
-"""LLM judge for stored chat turns (ARCHIE-213).
+"""Judge for stored chat turns on TypeSafe Jev (ARCHIE-213).
 
-The judge sees the conversation so far, the judged response, the turn's tool and
-skill calls from Langfuse, and the agent catalog (tools, skills, response format
-purpose), and grades each criterion red / orange / green.
+Jev is a decision model (OpenRouter Decisions API): it gets the turn as state and
+typed questions, and returns typed answers with probabilities — no free text.
+Per criterion it answers a red / orange / green score and picks the main reason
+from a fixed list. Tool and skill criteria are asked only when the turn's
+Langfuse trace is known.
 """
 
 import functools
 import json
 import logging
+from dataclasses import dataclass
 from typing import get_args
+import httpx
 from archie_shared.monitoring.models import (
     MonitorCriterion,
     MonitorCriterionScore,
     MonitorGrade,
     MonitorMessage,
+    MonitorReason,
 )
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
+from tenacity import (
+    AsyncRetrying,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 from app.agent.prompt_builder import PromptBuilder
-from app.backend.llm.registry import get_client
+from app.config import settings
 from app.evals.prompt_descriptions import PROMPT_DESCRIPTIONS
 from app.tools.tool_factory import ToolFactory
 from app.utils.skill_utils import list_skills
@@ -26,7 +37,11 @@ from .traces import TraceTurn
 
 logger = logging.getLogger(__name__)
 
+DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 GRADE_ORDER: tuple[MonitorGrade, ...] = ("red", "orange", "green")
+NO_PROBLEM = "no_problem"
+SKILL_FITS_QUESTION = "skill_fits"
+_HTTP_ATTEMPTS = 3
 _HISTORY_MESSAGES = 6
 _HISTORY_TEXT_CHARS = 400
 _RESPONSE_CHARS = 10000
@@ -41,54 +56,122 @@ _CATALOG_MODEL = "gpt-4.1"
 
 
 class JudgeError(RuntimeError):
-    """The judge call failed or returned an invalid verdict."""
+    """The decisions call failed or returned an unexpected answer."""
 
 
-class CriterionVerdict(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+@dataclass(frozen=True)
+class Criterion:
+    """One judged criterion: the question, the three grade levels and the reasons."""
 
-    grade: MonitorGrade | None = Field(
-        description="null only if the criterion does not apply to this turn"
-    )
-    comment: str = Field(description="One short sentence in Russian")
+    question: str
+    red: str
+    orange: str
+    green: str
+    reasons: dict[MonitorReason, str]
+    # Normalized Jev score (0 red .. 1 green) -> grade. Calibrated per criterion on
+    # 58 real turns against an LLM judge (ARCHIE-213); Jev's score spread differs by question.
+    red_below: float = 0.4
+    orange_below: float = 0.7
+    needs_trace: bool = False
 
 
-class JudgeVerdict(BaseModel):
-    """Structured judge output; field order makes the model reason first."""
+CRITERIA: dict[MonitorCriterion, Criterion] = {
+    "helpfulness": Criterion(
+        question="Did the assistant response solve what the user asked in the last message?",
+        red="The user did not get what they asked for",
+        orange="Partly solved, or solved with extra friction",
+        green="Fully solved",
+        reasons={
+            "helpless_refusal": "Refused or said it cannot, but the tools can serve the request",
+            "needless_question": "Asked back although the request was clear enough to act",
+            "off_topic": "Answered a different question",
+            "partial_answer": "Answered only part of the request",
+            "ignored_context": "Ignored earlier messages of the conversation",
+            "wrong_language": "Answered in a different language than the user",
+        },
+        red_below=0.4,
+        orange_below=0.7,
+    ),
+    "correctness": Criterion(
+        question=(
+            "Is the response free of visible errors? Judge only what the response itself "
+            "shows; do not mark a fact wrong only because you cannot verify it."
+        ),
+        red="A clear factual error, made-up data presented as real, a leaked error or a wrong action",
+        orange="A small inaccuracy",
+        green="Nothing visibly wrong",
+        reasons={
+            "factual_error": "States a fact that is clearly wrong by common knowledge",
+            "invented_data": (
+                "Presents made-up data (names, numbers, results) as real; "
+                "data the user asked to simulate or show as an example is fine"
+            ),
+            "realtime_without_search": (
+                "Gives real-time data (weather, schedules, news, prices) "
+                "although tool_calls show no search or data tool"
+            ),
+            "leaked_error": "Shows an error, stack trace or technical text to the user",
+            "contradiction": "Contradicts itself, the tool results or the conversation",
+            "wrong_action": "Did a different action than asked (for example the wrong device)",
+        },
+        red_below=0.25,
+        orange_below=0.45,
+    ),
+    "tool_choice": Criterion(
+        question="Did the assistant call the right tools with the right arguments (see tool_calls)?",
+        red="A needed tool was not called, or the wrong tool was used",
+        orange="An extra call or slightly wrong arguments",
+        green="Right tools and arguments",
+        reasons={
+            "missing_tool": "A tool the request needs was not called",
+            "wrong_tool": "Called a tool that does not fit the request",
+            "bad_arguments": "Right tool, wrong or poor arguments",
+            "extra_tool": "Called tools the request did not need",
+            "tool_error_ignored": "A tool failed and the response hides or ignores it",
+        },
+        needs_trace=True,
+    ),
+    "skill_usage": Criterion(
+        question=(
+            "A skill from agent_catalog fits this request. Did the assistant load it with "
+            "skill_loader_tool and follow it?"
+        ),
+        red="The fitting skill was not loaded",
+        orange="Loaded, but the response does not follow it well",
+        green="Loaded and followed",
+        reasons={
+            "skill_not_loaded": "The fitting skill was not loaded",
+            "wrong_skill": "Loaded a skill that does not fit",
+            "skill_not_followed": "Loaded the skill but the response ignores its rules",
+        },
+        needs_trace=True,
+    ),
+    "format_fit": Criterion(
+        question=(
+            "Does the response fit its response_format and purpose? A string that ends "
+            "with '…' was shortened by the monitor; it is not a defect."
+        ),
+        red="Broken, empty or wrong format",
+        orange="A minor format issue",
+        green="Fits the format well",
+        reasons={
+            "broken_ui": "UI structure is broken or items are empty",
+            "empty_response": "No useful content",
+            "wrong_element": "A generic UI element where a specific one fits (for example weather_card)",
+            "missing_quick_actions": "No useful quick action buttons where the format expects them",
+            "too_long": "Too long or a wall of text for the format",
+            "wrong_format": "Content does not match the response format",
+        },
+        red_below=0.35,
+        orange_below=0.65,
+    ),
+}
 
-    model_config = ConfigDict(extra="forbid")
 
-    analysis: str = Field(
-        description="What the user wanted, what the assistant did, what went wrong"
-    )
-    helpfulness: CriterionVerdict = Field(
-        description="The response solves the user's request; no helpless refusal"
-    )
-    correctness: CriterionVerdict = Field(
-        description="No wrong facts, invented data, leaked errors or contradictions"
-    )
-    tool_choice: CriterionVerdict = Field(
-        description="Right tools with right arguments; no needed tool skipped, no useless calls"
-    )
-    skill_usage: CriterionVerdict = Field(
-        description="A matching skill was loaded before acting; null if no skill fits"
-    )
-    format_fit: CriterionVerdict = Field(
-        description="Response fits its format and purpose (UI elements, buttons, length)"
-    )
-    summary: str = Field(
-        description="One or two sentences in Russian: the main problem, or why the turn is good"
-    )
-
-    def criteria(self) -> list[MonitorCriterionScore]:
-        return [
-            MonitorCriterionScore(
-                criterion=name,
-                grade=getattr(self, name).grade,
-                comment=getattr(self, name).comment,
-            )
-            for name in get_args(MonitorCriterion)
-        ]
+class JudgeResult(BaseModel):
+    criteria: list[MonitorCriterionScore] = Field(description="Score per criterion")
+    model: str = Field(description="Jev version that answered")
+    cost: float | None = Field(default=None, description="Cost in USD")
 
 
 def worst_grade(scores: list[MonitorCriterionScore]) -> MonitorGrade:
@@ -97,38 +180,20 @@ def worst_grade(scores: list[MonitorCriterionScore]) -> MonitorGrade:
     return next((grade for grade in GRADE_ORDER if grade in grades), "green")
 
 
-_SYSTEM_PROMPT = """\
-You review answers of Archie, a personal AI assistant for a smart home and daily life.
-Archie answers in three stages: Stage 1 picks tools (and loads skills with skill_loader_tool),
-Stage 2 runs the tools, Stage 3 writes the response in the requested format.
+# Reasons that need the turn's tool calls; not offered when the trace is unknown
+_TRACE_REASONS: set[MonitorReason] = {"realtime_without_search"}
 
-Grade each criterion:
-- green: good, nothing to fix.
-- orange: partly good; a minor mistake, an extra or a missing step that hurts the answer a little.
-- red: the user did not get what they asked for; a helpless refusal of a request the tools can serve;
-  wrong or invented facts; a wrong action (for example the wrong device); a leaked error;
-  an empty or broken UI; real-time data (weather, news, schedules, prices) given without a search tool.
 
-Rules:
-- Judge only the last assistant response. Use earlier messages as context.
-- tool_choice and skill_usage: if "Tool calls" says the trace is not available, set grade to null.
-  Then do not lower other grades because tool use is unknown; judge only what the response shows.
-- skill_usage: set grade to null if no listed skill fits the request.
-- A short answer without tools is green for small talk and for facts that do not change.
-- A string that ends with "…" was shortened by the monitor, not by Archie. It is not a defect.
-- Write all comments and the summary in Russian.
-
-Agent catalog
-Tools:
-{tools}
-
-Skills (load with skill_loader_tool):
-{skills}
-"""
+def grade_from_score(score: float, criterion: Criterion) -> MonitorGrade:
+    if score < criterion.red_below:
+        return "red"
+    if score < criterion.orange_below:
+        return "orange"
+    return "green"
 
 
 @functools.cache
-def _system_prompt() -> str:
+def agent_catalog() -> str:
     schemas = ToolFactory().get_tool_schemas(_CATALOG_MODEL, "ui_answer")
     tools = "\n".join(
         f"- {schema['name']}: {schema['description'].strip().splitlines()[0]}"
@@ -137,7 +202,11 @@ def _system_prompt() -> str:
     skills = "\n".join(
         f"- {skill['name']}: {skill['description']}" for skill in list_skills()
     )
-    return _SYSTEM_PROMPT.format(tools=tools, skills=skills or "- none")
+    return (
+        "Archie is a personal AI assistant for a smart home and daily life. "
+        "Stage 1 picks tools and loads skills, Stage 2 runs tools, Stage 3 writes "
+        f"the response.\nTools:\n{tools}\nSkills:\n{skills or '- none'}"
+    )
 
 
 def _compact(value: object, limit: int = _STRING_LIMITS[0]) -> object:
@@ -156,8 +225,8 @@ def _compact(value: object, limit: int = _STRING_LIMITS[0]) -> object:
 
 
 def _response_json(content: dict) -> str:
-    """Valid JSON of the response; never cut mid-structure (ARCHIE-213: a cut
-    JSON made the judge report a broken UI)."""
+    """Valid JSON of the response; never cut mid-structure (a cut JSON made the
+    first judge report a broken UI)."""
     for limit in _STRING_LIMITS:
         text = json.dumps(_compact(content, limit), ensure_ascii=False)
         if len(text) <= _RESPONSE_CHARS:
@@ -177,7 +246,7 @@ def _short_text(message: MonitorMessage) -> str:
 
 def _format_tool_calls(trace: TraceTurn | None) -> str:
     if trace is None:
-        return "Trace is not available for this turn."
+        return "Unknown: no trace for this turn. Do not judge tool use."
     if not trace.tool_calls:
         return "No tools were called."
     return "\n".join(
@@ -187,10 +256,10 @@ def _format_tool_calls(trace: TraceTurn | None) -> str:
     )
 
 
-def build_turn_prompt(
+def build_state(
     messages: list[MonitorMessage], index: int, trace: TraceTurn | None
-) -> str:
-    """User prompt for the assistant message messages[index]."""
+) -> dict[str, str]:
+    """Jev state for the assistant message messages[index]."""
     response = messages[index]
     history = messages[max(0, index - _HISTORY_MESSAGES) : index]
     content = _content(response)
@@ -198,30 +267,106 @@ def build_turn_prompt(
     purpose = PROMPT_DESCRIPTIONS.get(
         PromptBuilder.format_spec_name(content_format), ""
     )
-    response_json = _response_json(content)
-    lines = [f"[{m.created_at}] {m.role}: {_short_text(m)}" for m in history]
-    return (
-        f"Conversation before the response:\n{chr(10).join(lines) or '(empty)'}\n\n"
-        f"Tool calls of this turn:\n{_format_tool_calls(trace)}\n\n"
-        f"Response format: {content_format} — {purpose}\n"
-        f"Assistant response [{response.created_at}] (Content JSON):\n{response_json}"
-    )
-
-
-async def judge_turn(prompt: str, model: str) -> tuple[JudgeVerdict, float | None]:
-    """Verdict and its cost in USD (None if the provider does not report it)."""
-    try:
-        # Jev and other judge models are OpenRouter-only
-        response = await get_client("openrouter").create_completion(
-            messages=[
-                {"role": "system", "content": _system_prompt()},
-                {"role": "user", "content": prompt},
-            ],
-            model=model,
-            response_format=JudgeVerdict,
-            observation_name="monitor-judge",
+    return {
+        "agent_catalog": agent_catalog(),
+        "conversation": "\n".join(
+            f"[{m.created_at}] {m.role}: {_short_text(m)}" for m in history
         )
-        verdict = JudgeVerdict.model_validate_json(response.choices[0].message.content)
-    except Exception as exc:
-        raise JudgeError(f"Judge {model} failed: {exc}") from exc
-    return verdict, getattr(response.usage, "cost", None)
+        or "(empty)",
+        "tool_calls": _format_tool_calls(trace),
+        "response_format": f"{content_format}: {purpose}",
+        "assistant_response": _response_json(content),
+    }
+
+
+def build_questions(trace: TraceTurn | None) -> dict[str, dict]:
+    """Score and reason questions per applicable criterion."""
+    questions: dict[str, dict] = {}
+    for name, criterion in CRITERIA.items():
+        if criterion.needs_trace and trace is None:
+            continue
+        questions[name] = {
+            "type": "score",
+            "instructions": criterion.question,
+            "criteria": [
+                {"value": "red", "description": criterion.red},
+                {"value": "orange", "description": criterion.orange},
+                {"value": "green", "description": criterion.green},
+            ],
+        }
+        reasons = {
+            code: text
+            for code, text in criterion.reasons.items()
+            if trace is not None or code not in _TRACE_REASONS
+        }
+        questions[f"{name}_reason"] = {
+            "type": "choice",
+            "instructions": f"Main problem for this question: {criterion.question}",
+            "criteria": {**reasons, NO_PROBLEM: "No problem"},
+        }
+    if trace is not None:
+        questions[SKILL_FITS_QUESTION] = {
+            "type": "noul",
+            "instructions": "Does a skill from agent_catalog fit the user's request?",
+            "criteria": {
+                "true": "A listed skill fits",
+                "false": "No listed skill fits",
+            },
+        }
+    return questions
+
+
+def parse_answers(answers: dict) -> list[MonitorCriterionScore]:
+    skill_fits = answers.get(SKILL_FITS_QUESTION, {}).get("noul", 0.0) >= 0.5
+    scores = []
+    for name in get_args(MonitorCriterion):
+        answer = answers.get(name)
+        if answer is None or (name == "skill_usage" and not skill_fits):
+            scores.append(MonitorCriterionScore(criterion=name))
+            continue
+        # Jev scores a 3-level scale as a position 0..2
+        score = answer["score"] / (len(GRADE_ORDER) - 1)
+        grade = grade_from_score(score, CRITERIA[name])
+        reason = answers[f"{name}_reason"]["choice"]
+        scores.append(
+            MonitorCriterionScore(
+                criterion=name,
+                grade=grade,
+                reason=None if grade == "green" or reason == NO_PROBLEM else reason,
+                score=round(score, 3),
+            )
+        )
+    return scores
+
+
+async def judge_turn(
+    messages: list[MonitorMessage], index: int, trace: TraceTurn | None, model: str
+) -> JudgeResult:
+    body = {
+        "model": model,
+        "state": build_state(messages, index, trace),
+        "questions": build_questions(trace),
+    }
+    headers = {"Authorization": f"Bearer {settings.openrouter_api_key}"}
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(_HTTP_ATTEMPTS),
+                wait=wait_exponential(multiplier=1, max=10),
+                retry=retry_if_exception_type(httpx.TransportError),
+                reraise=True,
+            ):
+                with attempt:
+                    response = await client.post(
+                        DECISIONS_URL, json=body, headers=headers
+                    )
+            response.raise_for_status()
+        data = response.json()
+        criteria = parse_answers(data["answers"])
+    except (httpx.HTTPError, KeyError, ValueError) as exc:
+        raise JudgeError(f"Jev {model} failed: {exc}") from exc
+    return JudgeResult(
+        criteria=criteria,
+        model=data.get("model", model),
+        cost=data["usage"].get("cost"),
+    )

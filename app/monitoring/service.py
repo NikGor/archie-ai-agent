@@ -20,7 +20,7 @@ from archie_shared.monitoring.models import (
 from langfuse import get_client
 from tenacity import AsyncRetrying, stop_after_attempt, wait_exponential
 from app.config import settings
-from .judge import build_turn_prompt, judge_turn, worst_grade
+from .judge import judge_turn, worst_grade
 from .traces import TraceTurn, fetch_session_turns, match_turn
 
 
@@ -178,24 +178,22 @@ class MonitorRun:
     ) -> MonitorTurnEvaluation:
         message = conversation.messages[index]
         async with self.semaphore:
-            verdict, cost = await judge_turn(
-                build_turn_prompt(conversation.messages, index, trace),
-                self.info.judge_model,
+            result = await judge_turn(
+                conversation.messages, index, trace, self.info.judge_model
             )
-        criteria = verdict.criteria()
+        criteria = result.criteria
         evaluation = MonitorTurnEvaluation(
             run_id=self.info.run_id,
             conversation_id=conversation.conversation_id,
             message_id=message.message_id,
             grade=worst_grade(criteria),
-            summary=verdict.summary,
             criteria=criteria,
             trace_found=trace is not None,
             trace_id=trace.trace_id if trace else None,
             tool_calls=trace.tool_calls if trace else [],
             skills_loaded=trace.skills_loaded if trace else [],
-            judge_model=self.info.judge_model,
-            judge_cost=cost,
+            judge_model=result.model,
+            judge_cost=result.cost,
             evaluated_at=_now(),
         )
         await api.post("evaluations", evaluation)
@@ -207,7 +205,10 @@ class MonitorRun:
                 value=evaluation.grade,
                 trace_id=trace.trace_id,
                 data_type="CATEGORICAL",
-                comment=evaluation.summary,
+                # Reasons of the red / orange criteria, e.g. "correctness: invented_data"
+                comment=", ".join(
+                    f"{c.criterion}: {c.reason}" for c in criteria if c.reason
+                ),
             )
         return evaluation
 
