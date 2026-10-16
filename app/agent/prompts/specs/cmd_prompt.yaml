@@ -6,26 +6,17 @@ sections:
 
   - title: User Context
     rules:
-      - fact_user_name
-      - fact_timezone
-      - fact_default_city
-      - fact_default_country
-      - fact_language_fallback
-      - respond_in_message_language
-      - fact_measurement_units
-      - fact_currency
-      - {rule: fact_spotify, when: state.spotify}
-      - {rule: spotify_status_is_not_library, when: state.spotify}
+      - cmd_fact_user
+      - cmd_fact_timezone
+      - cmd_fact_location
+      - cmd_respond_in_message_language
+      - cmd_fact_measurement_units
+      - cmd_fact_currency
+      - {rule: cmd_fact_spotify, when: state.spotify}
 
   - title: Your Task
     style: lines
     rules: [decide_next_action]
-  - style: numbered
-    rules:
-      - identify_intent
-      - choose_action_type
-      - specify_tool_calls
-      - list_missing_parameters
 
   - title: Decision Types
     rules:

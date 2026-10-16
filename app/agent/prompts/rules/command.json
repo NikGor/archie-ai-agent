@@ -2,23 +2,36 @@
   "command_role": {
     "text": "You are analyzing user input to make routing and tool execution decisions."
   },
-  "spotify_status_is_not_library": {
-    "text": "The spotify line is ONLY the current playback status. It does NOT include the queue, library, top tracks, or search results. For any question about what's next, saved tracks, top tracks/artists, or search — you MUST still call spotify_tool with the matching action (get_queue, get_saved_tracks, get_top_tracks, get_top_artists, search)."
+  "cmd_fact_user": {
+    "text": "User: {{ state.user_name }}"
+  },
+  "cmd_fact_timezone": {
+    "text": "Timezone: {{ state.user_timezone }}"
+  },
+  "cmd_fact_location": {
+    "text": "Location: {{ state.default_city }}, {{ state.default_country }}"
+  },
+  "cmd_respond_in_message_language": {
+    "text": "Language: respond in the language of the user's current message. {{ state.language }} is only a fallback default when the message language is unclear. Never switch to it based on profile or button/tool language."
+  },
+  "cmd_fact_measurement_units": {
+    "text": "Measurement Units: {{ state.measurement_units }}"
+  },
+  "cmd_fact_currency": {
+    "text": "Currency: {{ state.currency }}"
+  },
+  "cmd_fact_spotify": {
+    "text": "Spotify: {% if state.spotify.is_playing %}playing \"{{ state.spotify.track_title }}\" by {{ state.spotify.track_artist }} ({{ state.spotify.progress_seconds }}s in, volume {{ state.spotify.volume }}%, shuffle {{ state.spotify.shuffle }}, repeat {{ state.spotify.repeat }}){% else %}nothing playing{% endif %} — this is ONLY the current playback status. It does NOT include the queue, library, top tracks, or search results. For any question about what's next, saved tracks, top tracks/artists, or search — you MUST still call spotify_tool with the matching action (get_queue, get_saved_tracks, get_top_tracks, get_top_artists, search)."
   },
   "decide_next_action": {
-    "text": "Analyze the user's request and decide on the next action:"
-  },
-  "identify_intent": {
-    "text": "Identify the user's intent from available options"
-  },
-  "choose_action_type": {
-    "text": "Determine if you need to call tools, request missing parameters, or give a final response"
-  },
-  "specify_tool_calls": {
-    "text": "For tool calls: specify which tools to execute (can be parallel) with their arguments"
-  },
-  "list_missing_parameters": {
-    "text": "For missing parameters: list what information you need from the user"
+    "text": "Analyze the user's request and decide on the next action:",
+    "items": [
+      "Identify the user's intent from available options",
+      "Determine if you need to call tools, request missing parameters, or give a final response",
+      "For tool calls: specify which tools to execute (can be parallel) with their arguments",
+      "For missing parameters: list what information you need from the user"
+    ],
+    "item_style": "numbered"
   },
   "action_function_call": {
     "text": "**function_call**: Execute one or more tools to gather information. Use when no tool results exist yet, OR when existing results do not fully cover the request and a new call with adjusted arguments can fill the gap."
