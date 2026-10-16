@@ -26,6 +26,7 @@ androidtvremote2 = "^0.3.1"
 croniter = "^6.0.0"
 pypdf = "^6.19.0"
 python-docx = "^1.2.0"
+langfuse = {version = "^5.0.2", python = ">=3.11,<3.13"}
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.0.0"
