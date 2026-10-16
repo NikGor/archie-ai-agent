@@ -28,6 +28,8 @@ _LEVEL2_STREAMABLE_FORMATS = frozenset({"level2_answer"})
 _UI_STREAMABLE_FORMATS = frozenset(
     {"ui_answer", "dashboard", "widget", "level3_answer"}
 )
+# Langfuse generation name for Stage 3 on every path (ARCHIE-211)
+_OBSERVATION_NAME = "generate-response"
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +181,7 @@ async def create_output(
             model=model,
             response_model=response_model,
             previous_response_id=previous_response_id,
+            observation_name=_OBSERVATION_NAME,
             extractor=JsonPathExtractor(["text"]),
             on_chunk=on_stream,
             response_id_out=response_id_out,
@@ -214,6 +217,7 @@ async def create_output(
             model=model,
             response_model=response_model,
             previous_response_id=previous_response_id,
+            observation_name=_OBSERVATION_NAME,
             extractor=JsonPathExtractor(["level2_answer", "text", "text"]),
             on_chunk=_on_chunk_l2,
             response_id_out=response_id_out_l2,
@@ -260,6 +264,7 @@ async def create_output(
             model=model,
             response_model=response_model,
             previous_response_id=previous_response_id,
+            observation_name=_OBSERVATION_NAME,
             extractor=JsonPathExtractor(["sgr", "reasoning"]),
             on_chunk=_on_chunk_ui,
             response_id_out=response_id_out_ui,
@@ -287,6 +292,7 @@ async def create_output(
         model=model,
         response_format=response_model,
         previous_response_id=previous_response_id,
+        observation_name=_OBSERVATION_NAME,
     )
     parsed = parse_llm_response(
         raw_response=raw_response,
