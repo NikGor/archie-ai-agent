@@ -1,0 +1,175 @@
+{
+  "ui_fill": {
+    "text": "Fill the `ui_answer` object with `intro_text`, `items[]`, and `quick_action_buttons`."
+  },
+  "ui_progressive_disclosure": {
+    "text": "**Progressive Disclosure**: Start with essential information, provide paths to details"
+  },
+  "ui_touch_friendly": {
+    "text": "**Touch-Friendly**: Design for finger navigation with clear tap targets and logical grouping"
+  },
+  "ui_contextual_actions": {
+    "text": "**Contextual Actions**: Every piece of information should suggest relevant next steps"
+  },
+  "ui_scannable_content": {
+    "text": "**Scannable Content**: Use visual hierarchy to support quick decision-making"
+  },
+  "ui_open_with_impact": {
+    "text": "**Open with Impact**: Begin with the most important answer or action the user needs"
+  },
+  "ui_information_flow": {
+    "text": "**Structure Information Flow**:",
+    "items": [
+      "Critical actions → Core information → Supporting details → Alternative options",
+      "Use cards for actionable content, text for explanations, tables for comparisons"
+    ]
+  },
+  "ui_anticipate_next_steps": {
+    "text": "**Anticipate Next Steps**: Always provide 2-3 logical next actions via buttons"
+  },
+  "ui_visual_grouping": {
+    "text": "**Visual Grouping**: Related content should be visually connected, separate concepts should have clear breaks"
+  },
+  "ui_interactive_first": {
+    "text": "**Interactive First**: Your primary goal is to build an interactive response. Do not just return static text results; use UI components to make the answer functional and actionable."
+  },
+  "ui_no_walls_of_text": {
+    "text": "**No Walls of Text**: Avoid long segments of text. Use UI components (Cards, Tables, Charts) to visualize information whenever possible. Text should only support the UI elements."
+  },
+  "ui_data_driven": {
+    "text": "**Data-Driven Design**: Fetch comprehensive data first, then design a UI structure that fully utilizes that data."
+  },
+  "ui_rich_depth": {
+    "text": "**Richness & Depth**: Create full, functional experiences. If listing items, use fully populated Cards, not just bullet points in text."
+  },
+  "ui_cards": {
+    "text": "**Cards**: Use for any actionable information or when user might want to interact. Don't use for specialized purposes listed below. Images are optional — add only if text alone cannot convey the information effectively. **NEVER put code blocks inside cards** — card `text` holds 1-3 plain sentences max; code goes in a `text_answer` item."
+  },
+  "ui_smart_home_cards": {
+    "text": "**Smart Home Device Cards**: For `control_light`/`control_climate` intents, ALWAYS use the specialized type instead of a generic `Card`: `light_card` for a light device, `light_sensor_card` for an illuminance sensor, `climate_card` for a radiator/heating device, `climate_sensor_card` for a temperature/humidity sensor. Each device is its own top-level item in `items[]` with sequential `order` — these types do NOT go inside `card_grid`."
+  },
+  "ui_article_cards": {
+    "text": "**Article Cards**: For `search_article` intent (news, articles, blog posts), ALWAYS use `ArticleCard` inside a `card_grid` — never describe articles in `text_answer`. One `ArticleCard` per article/source; group all articles on the same topic into a single `card_grid`."
+  },
+  "ui_tables": {
+    "text": "**Tables**: For comparing items or structured data. **Never use tables for entities which have specific Card types.** For sequential processes, flows, or interactions between actors, use a `text_answer` with a mermaid diagram instead of a table (see Markdown Formatting)."
+  },
+  "ui_charts": {
+    "text": "**Charts**: MUST use `type: \"chart\"` when: (1) user explicitly asks for a diagram, chart, graph, or visualization of data; (2) response includes numeric trends over time or across categories (e.g. year-by-year stats, growth curves, popularity trends). When a table with such data is already in the response, add a `chart` item alongside it — do not wait for the user to ask. **Never substitute a card_grid or text description for a chart.**"
+  },
+  "ui_text_answers": {
+    "text": "**Text Answers**: For explanations, context, or responses that don't need immediate action. **Use full markdown** — see Markdown Formatting section below."
+  },
+  "ui_images": {
+    "text": "**Images**: Use to add visual context — photo, illustration, schematics, or other creative visuals."
+  },
+  "ui_map": {
+    "text": "**Map**: MUST use `type: \"map\"` when the response shows 2+ places with known coordinates (restaurants, attractions, venues in a city). Add it as the LAST item in the response, after all cards and tables. Self-check before finishing: if `ui_reasoning` says a map was added, `items` MUST actually contain a `map` entry — never describe a map you did not add."
+  },
+  "ui_quick_actions_always": {
+    "text": "**Quick Action Buttons**: ALWAYS provide 2-3 buttons — NEVER leave `quick_action_buttons` empty. Choose based on content:",
+    "items": [
+      "Weather → \"7-day forecast\" / \"Hourly breakdown\" / \"Tomorrow\"",
+      "Locations / restaurants → \"Get directions\" / \"Show on map\" / \"Check reviews\"",
+      "Smart home action confirmed → \"Turn off\" / \"Adjust settings\" / \"All devices\"",
+      "Sports / events → \"Match details\" / \"League table\" / \"Next fixtures\"",
+      "Note or event created → \"Open notes\" / \"Edit\" / \"Add another\"",
+      "Informational / explanation → \"More details\" / \"Related topics\" / \"Save to notes\""
+    ]
+  },
+  "ui_one_card_grid_per_kind": {
+    "text": "Put ALL similar items into ONE `card_grid` — NEVER create separate grids per individual item"
+  },
+  "ui_card_grid_example": {
+    "text": "Example: 5 restaurants → one `card_grid` with 5 `LocationCard`s inside, not 5 separate grids"
+  },
+  "ui_forms_always_render": {
+    "text": "When user intent involves creating emails, events, or notes — **ALWAYS render the appropriate Form component**, even if data is incomplete."
+  },
+  "ui_forms_no_clarifying_questions": {
+    "text": "**DO NOT** ask clarifying questions via text + buttons when a Form exists for that action"
+  },
+  "ui_forms_prefill_known": {
+    "text": "**DO NOT** wait for complete information — pre-fill what you know, leave other fields empty for user input"
+  },
+  "ui_form_collects_missing_data": {
+    "text": "The Form itself is the interaction mechanism for collecting missing data"
+  },
+  "ui_email_form": {
+    "text": "**EmailForm**: For composing emails (recipients, subject, body)"
+  },
+  "ui_event_form": {
+    "text": "**EventForm**: For scheduling events (title, date, time, location, description)"
+  },
+  "ui_note_form": {
+    "text": "**InternalNoteForm**: For creating notes (title, content)"
+  },
+  "ui_form_only_no_intro": {
+    "text": "For form-only responses: **omit `intro_text`** — the form itself is the complete answer"
+  },
+  "image_pick_visual_format": {
+    "text": "Match user request to ONE format from the Visual Library."
+  },
+  "image_constraints": {
+    "text": "**CONSTRAINTS**: No statistical charts (use Chart component). No generic stock photos. Style: clean, professional, informative."
+  },
+  "image_visual_library": {
+    "text": "**Visual Library** (choose ONE):",
+    "items": [
+      "**STRUCTURES & CONNECTIONS**: Mind Map, Flowchart, Tree/Genealogy, Concept Map, Org Chart",
+      "**MAPS & ARCHITECTURE**: Fantasy Map (vintage parchment), Transit Map, Floor Plan, Isometric Section, Landscape Plan",
+      "**ENGINEERING & TECH**: Exploded View, Patent Illustration (B&W line art), Circuit Diagram, Cutaway View, Network Topology",
+      "**SCIENCE & NATURE**: Anatomical Atlas, Botanical Illustration, Chemical Structure, Geological Cross-Section, Educational Poster",
+      "**INSTRUCTIONS & SEQUENCES**: Assembly Instruction (IKEA style), Knolling (top-down 90°), Storyboard, Visual Recipe",
+      "**NEWS & WEATHER**: Infographic, Data Visualization, Political Cartoon, Timeline, Visual Summary",
+      "**CHITCHAT & FUN**: Visual Pun/Wordplay, Character Design Sheet, Memes, Comics"
+    ],
+    "item_style": "numbered"
+  },
+  "image_styles": {
+    "text": "**Styles**: Technical illustration, Vintage map, Blueprint, Isometric vector, Hand-drawn diagram, Whiteboard, Flat design, Minimalist, Realistic rendering with white background"
+  },
+  "card_image_one_style": {
+    "text": "Use only when image adds value beyond text. Apply ONE consistent style across ALL cards in the same response:",
+    "items": [
+      "**Default (most cases)**: Photorealistic render of a single subject, clean white background, soft shadows, even lighting",
+      "**Persons**: Professional headshot, neutral background, soft lighting, natural expression",
+      "**Multi-subject scenes**: Clean photorealistic with balanced composition",
+      "**Chit-chat/Fun**: Memes, comics, or minimalist flat design"
+    ],
+    "item_style": "numbered"
+  },
+  "card_image_prompt_rules": {
+    "text": "Rules: Use yaml-like structure. Describe objects, background, lighting. **No text in images, even in memes.** Try to make the illustration fun, if appropriate for the topic."
+  },
+  "markdown_full_rendering": {
+    "text": "`intro_text` and text-type items support full **marked.js + highlight.js** rendering. Use these capabilities to make content scannable and rich — never output plain prose when structure adds clarity."
+  },
+  "markdown_element_guide": {
+    "text": "| Element | Use when |\n|---------|----------|\n| `## Heading` / `### Subheading` | Structuring multi-section answers |\n| `**bold**` / `*italic*` | Emphasising key terms, labels |\n| `- list` / `1. numbered list` | Steps, options, feature lists |\n| `` `inline code` `` | Commands, values, identifiers |\n| ` ```lang\\n...\\n``` ` | Code blocks — always specify language for syntax highlighting |\n| `| table |` | Comparing values, structured data (if no Card/Chart fits better) |\n| ` ```mermaid\\n...\\n``` ` | Flowcharts, sequences, Gantt, ER diagrams — use instead of text-based diagrams. The `mermaid` tag MUST be on the same line as the opening fence |\n| `[Label](url)` | Links rendered as pill-buttons — use for references, sources, navigation |"
+  },
+  "markdown_code_language": {
+    "text": "**Always** specify language in fenced code blocks: ` ```python`, ` ```bash`, ` ```json`, etc. (~190 languages supported)"
+  },
+  "markdown_headings_for_sections": {
+    "text": "Use `## headings` only when the answer has 3+ distinct sections; skip for short answers"
+  },
+  "markdown_mermaid_for_flows": {
+    "text": "Use mermaid diagrams for processes, flows, or relationships instead of verbose text descriptions"
+  },
+  "markdown_no_raw_urls": {
+    "text": "**Never** output a raw URL — always wrap in `[Label](url)` format"
+  },
+  "markdown_no_markup_in_buttons": {
+    "text": "Do NOT use markdown inside button labels (`quick_action_buttons`) — plain text only"
+  },
+  "ux_active_voice": {
+    "text": "Use active voice and action-oriented language"
+  },
+  "ux_one_handed": {
+    "text": "Design for one-handed use with important actions easily reachable"
+  },
+  "ux_user_context": {
+    "text": "Consider user context: time pressure, mobility, distraction levels"
+  }
+}

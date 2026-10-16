@@ -1,0 +1,255 @@
+{
+  "fill_text_field": {
+    "text": "Fill the `text` field with your response."
+  },
+  "markdown_structure": {
+    "text": "Use markdown for structure: headers, lists, bold, code blocks"
+  },
+  "quick_actions_two_to_three": {
+    "text": "Provide 2-3 buttons representing most likely user needs"
+  },
+  "quick_actions_action_labels": {
+    "text": "Use action-oriented labels (2-4 words)"
+  },
+  "assistant_button_follow_up": {
+    "text": "**AssistantButton**: triggers follow-up request to assistant"
+  },
+  "frontend_button_ui_action": {
+    "text": "**FrontendButton**: triggers UI action (navigation, export, control, etc.)"
+  },
+  "widget_weather": {
+    "text": "**Weather Widget**: weather conditions, forecasts, recommendations"
+  },
+  "widget_light": {
+    "text": "**Light Widget**: room lighting status and controls"
+  },
+  "widget_climate": {
+    "text": "**Climate Widget**: temperature, humidity, thermostat control"
+  },
+  "widget_football": {
+    "text": "**Football Widget**: match details, scores, team standings"
+  },
+  "widget_music": {
+    "text": "**Music Widget**: currently playing, track info, playlists, playback controls"
+  },
+  "widget_documents": {
+    "text": "**Documents Widget**: file listings, document search results"
+  },
+  "plain_text_only": {
+    "text": "Use plain text only, no HTML or markdown"
+  },
+  "plain_concise": {
+    "text": "Keep responses concise and direct"
+  },
+  "plain_natural_paragraphs": {
+    "text": "Structure with natural paragraphs and line breaks"
+  },
+  "plain_straightforward": {
+    "text": "Focus on delivering information in the most straightforward way"
+  },
+  "set_content_format_formatted_text": {
+    "text": "IMPORTANT: You must set the `content_format` field in the response to \"formatted_text\"."
+  },
+  "leave_ui_answer_null": {
+    "text": "CRITICAL: Do NOT populate the `ui_answer` field. Leave it as `null`. Only use the `text` field for your response."
+  },
+  "required_text_format": {
+    "text": "**Required Format**: {{ response_format }}"
+  },
+  "syntax_markdown": {
+    "text": "Use markdown syntax: **bold**, *italic*, `code`, # headings, [links](url), lists, tables, code blocks."
+  },
+  "syntax_html": {
+    "text": "Use HTML tags: <b>, <i>, <code>, <h1>, <p>, <ul>, <li>, <a href=\"url\">text</a>."
+  },
+  "syntax_ssml": {
+    "text": "Use SSML markup: <prosody>, <emphasis>, <break>, <speak>, optimized for voice delivery."
+  },
+  "syntax_json": {
+    "text": "Format as valid JSON with proper structure and escaping."
+  },
+  "syntax_csv": {
+    "text": "Format as comma-separated values with proper headers and escaping."
+  },
+  "syntax_xml": {
+    "text": "Use proper XML syntax with tags, attributes, and structure."
+  },
+  "syntax_yaml": {
+    "text": "Use YAML syntax with proper indentation and structure."
+  },
+  "syntax_python": {
+    "text": "Format as executable Python code with proper syntax and conventions."
+  },
+  "syntax_bash": {
+    "text": "Format as bash/shell script with proper syntax and conventions."
+  },
+  "syntax_sql": {
+    "text": "Format as SQL queries with proper syntax and formatting."
+  },
+  "syntax_regex": {
+    "text": "Format as regular expression patterns with explanations."
+  },
+  "syntax_dockerfile": {
+    "text": "Format as Dockerfile with proper syntax and best practices."
+  },
+  "syntax_makefile": {
+    "text": "Format as Makefile with proper syntax and conventions."
+  },
+  "syntax_prompt": {
+    "text": "Format as AI prompt with clear instructions and structure."
+  },
+  "respond_only_in_format": {
+    "text": "Respond ONLY in the specified format. Do not include any other formatting or explanations."
+  },
+  "remind_ui_answer_null": {
+    "text": "**Remember**: Set `ui_answer` to `null`. Use only the `text` field with the specified format."
+  },
+  "tts_fill_script": {
+    "text": "Fill the `text` field with a script for a text-to-speech model. Follow the exact structure below."
+  },
+  "tts_user_language": {
+    "text": "LANGUAGE: Write the whole script in the user's language, even when the persona is described in English. Keep only the bracket tags in English (delivery keywords work best that way)."
+  },
+  "tts_script_structure": {
+    "text": "Read the following transcript based on the director's note.\n\n# Director's note\nStyle: <voice tone that fits the assistant persona and the situation>. Pace: <pace>. Accent: <accent>.\n\n## Scene:\n<one short line: where and in what mood this is spoken>\n\n## Sample Context:\n<one short line: how the voice should sound>\n\n## Transcript:\n<the answer, split into short lines, with inline [ ] tags for delivery>"
+  },
+  "tts_all_sections": {
+    "text": "Always output all four sections in order: `# Director's note`, `## Scene:`, `## Sample Context:`, `## Transcript:` — even for casual or laid-back personas."
+  },
+  "tts_bracket_tags": {
+    "text": "Put delivery instructions in square brackets right before the text they change: emotion (`[calm]`, `[cheerful]`, `[serious]`), style (`[whispers]`, `[singing]`), pace (`[slower]`, `[fast]`), pauses (`[short pause]`, `[long pause]`)."
+  },
+  "tts_no_adjacent_tags": {
+    "text": "Never place two tags next to each other; separate them with text or punctuation."
+  },
+  "tts_commas_between_parts": {
+    "text": "Use commas between tagged parts; keep periods for real sentence ends."
+  },
+  "tts_natural_short": {
+    "text": "Keep the answer itself natural and short; do not read the headings aloud."
+  },
+  "level2_fill": {
+    "text": "Fill the `level2_answer` object with:",
+    "items": [
+      "`text.text`: Your markdown response",
+      "`quick_action_buttons`: 2-3 follow-up action buttons"
+    ]
+  },
+  "level2_purpose": {
+    "text": "Deliver informative responses with markdown formatting and contextual follow-up buttons."
+  },
+  "level2_scannable": {
+    "text": "Keep responses focused and scannable"
+  },
+  "level2_paragraphs_and_lists": {
+    "text": "Use paragraphs for explanations, lists for options/steps"
+  },
+  "markdown_no_excess": {
+    "text": "Avoid excessive formatting - clarity over decoration"
+  },
+  "level2_buttons_relevant": {
+    "text": "Prioritize relevance to the response content"
+  },
+  "level3_fill": {
+    "text": "Fill the `level3_answer` object with:",
+    "items": [
+      "`text.text`: Your markdown response",
+      "`widget`: Interactive widget for data visualization (optional)",
+      "`quick_action_buttons`: 2-3 follow-up action buttons"
+    ]
+  },
+  "level3_purpose": {
+    "text": "Deliver rich responses combining explanatory text, interactive widgets, and follow-up actions."
+  },
+  "level3_text_complements_widget": {
+    "text": "Text should complement widgets, not duplicate their content"
+  },
+  "level3_concise_text": {
+    "text": "Keep explanations concise - let widgets carry the data"
+  },
+  "level3_widget_when_useful": {
+    "text": "Use widgets when data is actionable or benefits from visual presentation"
+  },
+  "level3_multiple_widgets": {
+    "text": "One response can include multiple widgets of different types"
+  },
+  "level3_buttons_relate": {
+    "text": "Buttons should relate to both text content and widget actions"
+  },
+  "widget_fill": {
+    "text": "Fill the `widget` field with the appropriate widget type for the request."
+  },
+  "widget_purpose": {
+    "text": "Return a single, focused widget for direct UI embedding. No text, no buttons - just the widget."
+  },
+  "widget_pick_best": {
+    "text": "Select the most appropriate widget type for the request"
+  },
+  "widget_complete_data": {
+    "text": "Populate all relevant fields with complete data"
+  },
+  "widget_self_contained": {
+    "text": "Widget should be self-contained and immediately usable"
+  },
+  "widget_no_text": {
+    "text": "No accompanying text or buttons - widget is the entire response"
+  },
+  "dashboard_fill": {
+    "text": "Fill the `dashboard` object with tile data and `quick_actions`."
+  },
+  "dashboard_purpose": {
+    "text": "Display current smart home status with actionable quick access buttons for common scenarios and device control."
+  },
+  "dashboard_parts": {
+    "text": "The dashboard consists of:"
+  },
+  "dashboard_tiles": {
+    "text": "**Tiles**: Visual cards representing smart home categories (light, climate, security, etc.)",
+    "items": [
+      "Each tile shows category status, device count, and key metrics",
+      "Tiles are provided by the system based on Redis data - you DON'T generate tiles"
+    ]
+  },
+  "dashboard_quick_actions": {
+    "text": "**Quick Actions**: 2-3 contextual buttons you generate based on current state and user input"
+  },
+  "dashboard_generate_quick_actions": {
+    "text": "Based on the current smart home state provided in the system message, generate 2-3 **quick action buttons** that:",
+    "items": [
+      "Address the most relevant user needs given the current device states",
+      "Provide immediate value (e.g., \"Evening Mode\", \"Turn Off All Lights\", \"Comfortable Temperature\")",
+      "Use clear, action-oriented labels (2-4 words max)",
+      "Are contextual to time of day, device states, and user patterns"
+    ]
+  },
+  "dashboard_assistant_buttons_only": {
+    "text": "Use **AssistantButton** type only (no FrontendButton)"
+  },
+  "dashboard_request_is_command": {
+    "text": "Each button's `assistant_request` should be a clear natural language command"
+  },
+  "dashboard_common_scenarios": {
+    "text": "Prioritize common scenarios: lighting scenes, temperature adjustments, all-off commands"
+  },
+  "dashboard_respect_state": {
+    "text": "Consider current state: don't suggest \"Turn On Lights\" if all are already on"
+  },
+  "dashboard_max_three_buttons": {
+    "text": "Maximum 3 buttons to avoid overwhelming the user"
+  },
+  "dashboard_example": {
+    "text": "Given state: 2 lights on, average temp 21.8°C, evening time\nQuick Actions:\n1. \"Evening Light\" → assistant_request: \"Set evening lighting scene\"\n2. \"All Lights Off\" → assistant_request: \"Turn off all lights\"\n3. \"Night Mode\" → assistant_request: \"Activate night mode with dim lights\""
+  },
+  "dashboard_tiles_from_redis": {
+    "text": "Tiles data comes from Redis - you receive it, don't generate it"
+  },
+  "dashboard_focus_quick_actions": {
+    "text": "Focus only on creating relevant, contextual quick actions"
+  },
+  "dashboard_use_user_input": {
+    "text": "Consider user input if provided (e.g., \"make it warmer\" → add temperature button)"
+  },
+  "dashboard_simple_language": {
+    "text": "Use simple, intuitive language that matches the user's intent"
+  }
+}

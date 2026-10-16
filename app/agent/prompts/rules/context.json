@@ -1,0 +1,50 @@
+{
+  "fact_user_name": {
+    "text": "user name: {{ state.user_name }}"
+  },
+  "fact_custom_persona": {
+    "text": "your character: {{ state.persona }}"
+  },
+  "fact_default_city": {
+    "text": "default city: {{ state.default_city }}"
+  },
+  "fact_default_country": {
+    "text": "default country: {{ state.default_country }}"
+  },
+  "fact_timezone": {
+    "text": "timezone: {{ state.user_timezone }}"
+  },
+  "fact_measurement_units": {
+    "text": "measurement units: {{ state.measurement_units }}"
+  },
+  "fact_language_fallback": {
+    "text": "language fallback (use ONLY when the user's message language is unclear): {{ state.language }}"
+  },
+  "respond_in_message_language": {
+    "text": "**Always respond in the language of the user's actual message — this governs every visible field (response text, all card and metadata values). Never switch to the fallback or button language based on profile.**"
+  },
+  "fact_currency": {
+    "text": "currency: {{ state.currency }}"
+  },
+  "fact_date_format": {
+    "text": "date format: {{ state.date_format }}"
+  },
+  "fact_time_format": {
+    "text": "time format: {{ state.time_format }}"
+  },
+  "fact_commercial_holidays": {
+    "text": "commercial holidays: {{ state.commercial_holidays }}"
+  },
+  "fact_check_open_now": {
+    "text": "check open now: {{ state.commercial_check_open_now }}"
+  },
+  "fact_spotify": {
+    "text": "spotify: {% if state.spotify.is_playing %}playing \"{{ state.spotify.track_title }}\" by {{ state.spotify.track_artist }} ({{ state.spotify.progress_seconds }}s in, volume {{ state.spotify.volume }}%, shuffle {{ state.spotify.shuffle }}, repeat {{ state.spotify.repeat }}){% else %}nothing playing{% endif %}"
+  },
+  "fact_user_preferences": {
+    "text": "user preferences:\n\ttransport: {{ state.transport_preferences|join(', ') }}\n\tcuisine: {{ state.cuisine_preferences|join(', ') }}"
+  },
+  "fact_response_format": {
+    "text": "response format: {{ response_format }}. Respond according to the specified format."
+  }
+}
