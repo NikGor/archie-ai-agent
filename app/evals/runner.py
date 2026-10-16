@@ -4,6 +4,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from archie_shared.chat.models import PipelineTrace
 from archie_shared.evals.models import (
     EvalAssertionFailure,
@@ -12,16 +13,23 @@ from archie_shared.evals.models import (
 )
 from app.agent.agent_factory import AgentFactory
 from app.agent.context import ConversationContext
-from app.config import settings
+from app.config import MAX_COMMAND_ITERATIONS, settings
+from app.models.orchestration_sgr import DecisionResponse
 from app.models.ws_models import StatusUpdate
 from app.utils.provider_utils import get_provider_for_model
+from app.utils.tool_executor import execute_tool_calls
 from .assertions import check_decision, check_response, find_ui_answer
 from .judge import judge_response
 
 
+if TYPE_CHECKING:
+    from app.models.tool_models import ToolResult
+
 logger = logging.getLogger(__name__)
 
 StepCallback = Callable[[str], Awaitable[None]]
+
+SKILL_LOADER_TOOL = "skill_loader_tool"
 
 
 def _sum_tokens(trace: PipelineTrace | None) -> int | None:
@@ -35,6 +43,15 @@ def _sum_tokens(trace: PipelineTrace | None) -> int | None:
 
 def _status(failures: list[EvalAssertionFailure]) -> str:
     return "failed" if failures else "passed"
+
+
+def _only_loads_skills(decision: DecisionResponse) -> bool:
+    calls = decision.sgr.tool_calls
+    return (
+        decision.sgr.action.type == "function_call"
+        and bool(calls)
+        and all(call.tool_name == SKILL_LOADER_TOOL for call in calls)
+    )
 
 
 class EvalAttemptRunner:
@@ -86,15 +103,29 @@ class EvalAttemptRunner:
         user_state = await self.agent_factory.state_service.get_user_state(
             user_name=settings.eval_user_name, demo_mode=True
         )
+        ctx = ConversationContext().for_provider(provider)
+        skill_results: list[ToolResult] = []
+        total_tokens = 0
         started = time.monotonic()
-        decision, trace = await self.agent_factory._make_command_call(
-            user_input=case.input,
-            model=model,
-            provider=provider,
-            user_state=user_state,
-            response_format=case.response_format,
-            ctx=ConversationContext().for_provider(provider),
-        )
+        # Loading a skill is a preparation step, as in CommandLoop: run it and
+        # check the next decision. The other tools are never executed here.
+        for _ in range(MAX_COMMAND_ITERATIONS):
+            decision, trace = await self.agent_factory._make_command_call(
+                user_input=case.input,
+                model=model,
+                provider=provider,
+                user_state=user_state,
+                response_format=case.response_format,
+                ctx=ctx,
+                previous_results=skill_results or None,
+            )
+            total_tokens += trace.total_tokens if trace else 0
+            if not _only_loads_skills(decision):
+                break
+            await on_step("skill_loader")
+            skill_results += await execute_tool_calls(
+                decision.sgr.tool_calls, self.agent_factory.tool_factory
+            )
         elapsed = int((time.monotonic() - started) * 1000)
         failures = check_decision(case, decision)
         return {
@@ -102,7 +133,7 @@ class EvalAttemptRunner:
             "failures": failures,
             "stage1_ms": elapsed,
             "total_ms": elapsed,
-            "total_tokens": trace.total_tokens if trace else None,
+            "total_tokens": total_tokens or None,
             "output_json": decision.model_dump_json(),
         }
 
