@@ -3,13 +3,8 @@
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
-from openai import (
-    APIConnectionError,
-    AsyncOpenAI,
-    InternalServerError,
-    OpenAI,
-    RateLimitError,
-)
+from langfuse.openai import AsyncOpenAI, OpenAI
+from openai import APIConnectionError, InternalServerError, RateLimitError
 from pydantic import BaseModel
 from app.config import settings
 from app.utils.cache_utils import apply_cache_breakpoints
@@ -118,12 +113,14 @@ class OpenRouterClient:
         response_format: type[BaseModel] | None = None,
         previous_response_id: str | None = None,
         tools: list[dict[str, Any]] | None = None,
+        observation_name: str = "llm-call",
     ) -> Any:
         """
         Create a completion using OpenRouter API with structured outputs.
 
         Note: previous_response_id is accepted for interface compatibility
         but not used (OpenRouter doesn't support it yet).
+        `observation_name` names the Langfuse generation (ARCHIE-211).
         """
         msg_breakdown = {}
         for msg in messages:
@@ -142,7 +139,9 @@ class OpenRouterClient:
                 messages, model, response_format, tools
             )
             response = await call_with_retry(
-                lambda: self.client.chat.completions.create(**create_kwargs),
+                lambda: self.client.chat.completions.create(
+                    **create_kwargs, name=observation_name
+                ),
                 retryable_exceptions=(
                     RateLimitError,
                     APIConnectionError,
