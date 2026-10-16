@@ -143,6 +143,23 @@ def _content(message: MonitorMessage) -> dict:
     return json.loads(message.content_json or "{}")
 
 
+def judged_format(content: dict) -> str:
+    """The response format the turn was produced in.
+
+    Voice answers are stored as content_format "plain", but were produced by the
+    ssml or gemini_tts format spec; judging them by format_plain flagged their
+    markup as broken rules. The requested format is not stored, so it is
+    recognized from the text.
+    """
+    content_format = content.get("content_format", "plain")
+    text = (content.get("text") or "").lstrip()
+    if content_format == "plain" and text.startswith("<speak"):
+        return "ssml"
+    if content_format == "plain" and "# Director's note" in text:
+        return "gemini_tts"
+    return content_format
+
+
 def _short_text(message: MonitorMessage) -> str:
     content = _content(message)
     text = content.get("text") or json.dumps(_compact(content), ensure_ascii=False)
@@ -168,7 +185,7 @@ def build_state(
     response = messages[index]
     history = messages[max(0, index - _HISTORY_MESSAGES) : index]
     content = _content(response)
-    content_format = content.get("content_format", "plain")
+    content_format = judged_format(content)
     purpose = PROMPT_DESCRIPTIONS.get(
         PromptBuilder.format_spec_name(content_format), ""
     )
@@ -241,7 +258,7 @@ def parse_answers(rules: list[SpecRule], answers: dict) -> list[MonitorRuleScore
 async def judge_turn(
     messages: list[MonitorMessage], index: int, trace: TraceTurn | None, model: str
 ) -> JudgeResult:
-    content_format = _content(messages[index]).get("content_format", "plain")
+    content_format = judged_format(_content(messages[index]))
     rules = rules_for_turn(content_format, trace is not None)
     body = {
         "model": model,
