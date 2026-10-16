@@ -29,14 +29,6 @@ ASSISTANT_SPEC = "assistant_prompt"
 # Formats that skip Stage 1, so cmd_prompt did not take part
 DIRECT_FORMATS = frozenset({"dashboard", "widget"})
 
-# The goal is not a spec rule: specs say how to answer, not that the answer helps
-GOAL_SPEC = "goal"
-GOAL_RULE = "solves_request"
-GOAL_TEXT = (
-    "The response solves what the user asked in the last message. A refusal, "
-    "a needless question back or an answer to a different question breaks this rule."
-)
-
 EXCLUDED_RULES = frozenset(
     {
         # cmd_prompt: Stage 1 role, decision mechanics and output schema
@@ -234,8 +226,8 @@ def spec_rules(spec: str, content_format: str) -> tuple[SpecRule, ...]:
 
 
 def rules_for_turn(content_format: str, trace_found: bool) -> list[SpecRule]:
-    """The goal plus every judged rule of the turn's specs."""
-    rules = [SpecRule(spec=GOAL_SPEC, rule_id=GOAL_RULE, text=GOAL_TEXT)]
+    """Every judged rule of the turn's specs (outcome checks live in outcome.py)."""
+    rules: list[SpecRule] = []
     for spec in specs_for_turn(content_format, trace_found):
         rules += spec_rules(spec, content_format)
     return rules

@@ -28,6 +28,8 @@ from app.config import settings
 from app.evals.prompt_descriptions import PROMPT_DESCRIPTIONS
 from app.tools.tool_factory import ToolFactory
 from app.utils.skill_utils import list_skills
+from .outcome import GOAL_KEY as OUTCOME_GOAL_KEY
+from .outcome import build_outcome_questions, parse_outcome
 from .spec_rules import SpecRule, rules_for_turn, spec_versions
 from .traces import TraceTurn
 
@@ -171,6 +173,7 @@ def build_state(
         PromptBuilder.format_spec_name(content_format), ""
     )
     user_messages = [m for m in history if m.role == "user"]
+    next_message = _next_user_message(messages, index)
     return {
         "agent_catalog": agent_catalog(),
         "conversation": "\n".join(
@@ -180,10 +183,19 @@ def build_state(
         # Separate field: with the whole history only, Jev mixed up which message
         # the response answers (e.g. the language of an older message)
         "last_user_message": _short_text(user_messages[-1]) if user_messages else "",
+        "next_user_message": _short_text(next_message) if next_message else "(none)",
         "tool_calls": _format_tool_calls(trace),
         "response_format": f"{content_format}: {purpose}",
         "assistant_response": _response_json(content),
     }
+
+
+def _next_user_message(
+    messages: list[MonitorMessage], index: int
+) -> MonitorMessage | None:
+    """The user's reply to messages[index], if the conversation has one."""
+    following = messages[index + 1 : index + 2]
+    return following[0] if following and following[0].role == "user" else None
 
 
 def _question_key(index: int) -> str:
@@ -234,7 +246,12 @@ async def judge_turn(
     body = {
         "model": model,
         "state": build_state(messages, index, trace),
-        "questions": build_questions(rules),
+        "questions": {
+            **build_questions(rules),
+            **build_outcome_questions(
+                ANSWERS, _next_user_message(messages, index) is not None
+            ),
+        },
     }
     headers = {"Authorization": f"Bearer {settings.openrouter_api_key}"}
     try:
@@ -251,7 +268,11 @@ async def judge_turn(
                     )
             response.raise_for_status()
         data = response.json()
-        scores = parse_answers(rules, data["answers"])
+        answers = data["answers"]
+        goal_grade = grade_from_probabilities(
+            answers[OUTCOME_GOAL_KEY]["probabilities"]
+        )
+        scores = parse_outcome(answers, goal_grade) + parse_answers(rules, answers)
     except (httpx.HTTPError, KeyError, ValueError) as exc:
         raise JudgeError(f"Jev {model} failed: {exc}") from exc
     return JudgeResult(
