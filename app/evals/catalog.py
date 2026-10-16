@@ -22,6 +22,7 @@ from app.agent.prompt_builder import PromptBuilder
 from app.agent.prompt_compiler import PromptCompiler
 from app.config import settings
 from app.models.orchestration_sgr import ToolName
+from app.monitoring.spec_rules import ASSISTANT_SPEC, COMMAND_SPEC, rules_for_turn
 
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,10 @@ class EvalCaseDraft(BaseModel):
         description="Prompt templates tested beyond the inferred ones",
     )
     tags: list[str] = Field(default_factory=list, description="Selection tags")
+    rules: list[str] = Field(
+        default_factory=list,
+        description="Prompt spec rules the case protects, as 'spec:rule_id'",
+    )
     input: str = Field(min_length=1, description="User message")
     response_format: str = Field(default="plain", description="Response format")
     stage: EvalStage = Field(default="full", description="stage1 or full")
@@ -69,6 +74,9 @@ class EvalSchema(BaseModel):
     prompts: list[str] = Field(description="Prompt template names")
     stages: list[str] = Field(description="Case stages")
     action_types: list[str] = Field(description="Stage 1 action types")
+    rules: dict[str, list[str]] = Field(
+        description="Response format -> judged rules ('spec:rule_id') a case can protect"
+    )
 
 
 def _literal_values(annotation: object) -> list[str]:
@@ -108,6 +116,14 @@ def get_schema() -> EvalSchema:
         prompts=list_prompt_templates(),
         stages=list(get_args(EvalStage)),
         action_types=_literal_values(EvalExpect.model_fields["action_type"].annotation),
+        rules={
+            response_format: [
+                rule.key for rule in rules_for_turn(response_format, trace_found=True)
+            ]
+            for response_format in _literal_values(
+                ChatRequest.model_fields["response_format"].annotation
+            )
+        },
     )
 
 
@@ -136,6 +152,8 @@ def build_case(draft: EvalCaseDraft) -> EvalCaseInfo:
         errors.append(f"unknown prompts {sorted(unknown_prompts)}")
     if draft.response_format not in schema.response_formats:
         errors.append(f"unknown response_format {draft.response_format!r}")
+    else:
+        errors += _rule_errors(draft)
     if errors:
         raise CatalogError(f"{draft.id}: " + "; ".join(errors))
     inferred = infer_prompts(draft.stage, draft.response_format)
@@ -143,6 +161,31 @@ def build_case(draft: EvalCaseDraft) -> EvalCaseInfo:
         prompts=inferred + [p for p in draft.extra_prompts if p not in inferred],
         **draft.model_dump(exclude={"extra_prompts"}),
     )
+
+
+def _rule_errors(draft: EvalCaseDraft) -> list[str]:
+    """A case may protect only judged rules of the prompts it runs; rules_followed
+    can check only rules visible in the response (no tool calls in a full run)."""
+    errors = []
+    prompts = set(infer_prompts(draft.stage, draft.response_format)) | {ASSISTANT_SPEC}
+    known = {rule.key: rule for rule in rules_for_turn(draft.response_format, True)}
+    for key in draft.rules:
+        rule = known.get(key)
+        if rule is None or rule.spec not in prompts:
+            errors.append(
+                f"rule {key!r} is not a judged rule of {sorted(prompts)} "
+                f"for {draft.response_format}"
+            )
+    if draft.expect.rules_followed:
+        if draft.stage != "full" or not draft.rules:
+            errors.append("rules_followed needs stage full and at least one rule")
+        stage1_rules = [k for k in draft.rules if k.startswith(f"{COMMAND_SPEC}:")]
+        if stage1_rules:
+            errors.append(
+                f"rules_followed cannot judge Stage 1 rules {stage1_rules}; "
+                "check them with tools_called / action_type"
+            )
+    return errors
 
 
 def parse_catalog(raw_cases: list[dict]) -> list[EvalCaseInfo]:
@@ -184,7 +227,13 @@ def select_cases(
     catalog: list[EvalCaseInfo], request: EvalRunRequest
 ) -> list[EvalCaseInfo]:
     """Cases matching any selector of the request; all cases if no selector is set."""
-    if not (request.case_ids or request.prompts or request.tags or request.suites):
+    if not (
+        request.case_ids
+        or request.prompts
+        or request.tags
+        or request.suites
+        or request.rules
+    ):
         return list(catalog)
     unknown_ids = set(request.case_ids) - {case.id for case in catalog}
     if unknown_ids:
@@ -196,4 +245,5 @@ def select_cases(
         or case.suite in request.suites
         or set(case.prompts) & set(request.prompts)
         or set(case.tags) & set(request.tags)
+        or set(case.rules) & set(request.rules)
     ]

@@ -1,5 +1,6 @@
 """Runs one attempt of one eval case against the agent pipeline."""
 
+import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
@@ -11,15 +12,41 @@ from archie_shared.evals.models import (
     EvalCaseInfo,
     EvalCaseResult,
 )
+from archie_shared.monitoring.models import MonitorMessage, MonitorRuleScore
 from app.agent.agent_factory import AgentFactory
 from app.agent.context import ConversationContext
 from app.config import MAX_COMMAND_ITERATIONS, settings
 from app.models.orchestration_sgr import DecisionResponse
+from app.models.output_models import AgentResponse
 from app.models.ws_models import StatusUpdate
+from app.monitoring.judge import judge_rules
 from app.utils.provider_utils import get_provider_for_model
 from app.utils.tool_executor import execute_tool_calls
-from .assertions import check_decision, check_response, find_ui_answer
+from .assertions import check_decision, check_response, check_rules, find_ui_answer
 from .judge import judge_response
+
+
+async def _judge_case_rules(
+    case: EvalCaseInfo, response: AgentResponse
+) -> list[MonitorRuleScore]:
+    """Grade the case's rules on its response with the monitoring judge (ARCHIE-213),
+    so a prompt fix is verified by the same check that found the problem."""
+    now = datetime.now(UTC).isoformat()
+    messages = [
+        MonitorMessage(
+            message_id="eval-user",
+            role="user",
+            content_json=json.dumps({"content_format": "plain", "text": case.input}),
+            created_at=now,
+        ),
+        MonitorMessage(
+            message_id="eval-assistant",
+            role="assistant",
+            content_json=response.content.model_dump_json(),
+            created_at=now,
+        ),
+    ]
+    return await judge_rules(messages, 1, case.rules, settings.monitor_judge_model)
 
 
 if TYPE_CHECKING:
@@ -161,6 +188,9 @@ class EvalAttemptRunner:
         total_tokens = _sum_tokens(trace)
         total_ms = trace.total_ms if trace else None
         failures = check_response(case, response, total_tokens, total_ms)
+        if case.expect.rules_followed and response.content:
+            await on_step("rules")
+            failures += check_rules(case, await _judge_case_rules(case, response))
         judge = None
         if case.judge and judge_model:
             await on_step("judge")

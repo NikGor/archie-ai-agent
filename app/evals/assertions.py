@@ -3,6 +3,7 @@
 import json
 from typing import Any
 from archie_shared.evals.models import EvalAssertionFailure, EvalCaseInfo
+from archie_shared.monitoring.models import MonitorRuleScore
 from archie_shared.ui.models import UIAnswer
 from app.models.orchestration_sgr import DecisionResponse
 from app.models.output_models import AgentResponse
@@ -37,6 +38,23 @@ def check_decision(
         if not set(expect.tools_called) <= set(actual_tools):
             failures.append(_failure("tools_called", expect.tools_called, actual_tools))
     return failures
+
+
+def check_rules(
+    case: EvalCaseInfo, scores: list[MonitorRuleScore]
+) -> list[EvalAssertionFailure]:
+    """rules_followed: no protected rule graded red by the monitoring judge.
+
+    A protected rule the judge found not applicable counts as broken too: the
+    case input must trigger the rule it protects.
+    """
+    graded = {f"{score.spec}:{score.rule_id}": score.grade for score in scores}
+    broken = {
+        key: graded.get(key) or "not_applicable"
+        for key in case.rules
+        if not key.startswith("cmd_prompt:") and graded.get(key) in ("red", None)
+    }
+    return [_failure("rules_followed", "no red rule", broken)] if broken else []
 
 
 def response_text(response: AgentResponse) -> str:
