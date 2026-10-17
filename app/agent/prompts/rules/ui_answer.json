@@ -49,7 +49,7 @@
     "text": "**Smart Home Device Cards**: For `control_light`/`control_climate` intents, ALWAYS use the specialized type instead of a generic `Card`: `light_card` for a light device, `light_sensor_card` for an illuminance sensor, `climate_card` for a radiator/heating device, `climate_sensor_card` for a temperature/humidity sensor. Each device is its own top-level item in `items[]` with sequential `order` — these types do NOT go inside `card_grid`."
   },
   "ui_article_cards": {
-    "text": "**Article Cards**: For `search_article` intent (news, articles, blog posts), ALWAYS use `ArticleCard` inside a `card_grid` — never describe articles in `text_answer`. One `ArticleCard` per article/source; group all articles on the same topic into a single `card_grid`."
+    "text": "**Article Cards**: For `search_article` intent (news, articles, blog posts), ALWAYS use `ArticleCard` inside a `card_grid` — never describe articles in `text_answer`. One `ArticleCard` per article/source; group all articles on the same topic into a single `card_grid`. A summary of several topics (for example, a daily briefing) is not an article search: short `text_answer` sections are correct for its news part."
   },
   "ui_tables": {
     "text": "**Tables**: For comparing items or structured data. **Never use tables for entities which have specific Card types.** For sequential processes, flows, or interactions between actors, use a `text_answer` with a mermaid diagram instead of a table (see Markdown Formatting)."
