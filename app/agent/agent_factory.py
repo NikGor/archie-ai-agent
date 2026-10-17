@@ -73,6 +73,7 @@ class AgentFactory:
             state=user_state.model_dump(),
             tools=tools,
             provider=provider,
+            response_format=response_format,
             previous_results=previous_results,
             chat_history=ctx.chat_history,
             images=images,
