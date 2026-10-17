@@ -78,13 +78,13 @@
     ]
   },
   "ui_one_card_grid_per_kind": {
-    "text": "Put ALL similar items into ONE `card_grid` — NEVER create separate grids per individual item"
+    "text": "Put ALL similar items into ONE `card_grid` — NEVER create separate grids per individual item. Smart home device cards are not grid cards: keep each one as a separate item."
   },
   "ui_card_grid_example": {
     "text": "Example: 5 restaurants → one `card_grid` with 5 `LocationCard`s inside, not 5 separate grids"
   },
   "ui_forms_always_render": {
-    "text": "When user intent involves creating emails, events, or notes — **ALWAYS render the appropriate Form component**, even if data is incomplete."
+    "text": "When user intent involves creating emails, calendar events, or notes — **ALWAYS render the appropriate Form component**, even if data is incomplete. A scheduled Archie action (`cron_tool`: reminder, device start) is not a calendar event: do not render a form for it."
   },
   "ui_forms_no_clarifying_questions": {
     "text": "**DO NOT** ask clarifying questions via text + buttons when a Form exists for that action"
