@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 from langfuse.openai import AsyncOpenAI, OpenAI
 from openai import APIConnectionError, InternalServerError, RateLimitError
+from openai.lib._pydantic import to_strict_json_schema
 from pydantic import BaseModel
 from app.config import settings
 from app.utils.cache_utils import apply_cache_breakpoints
@@ -82,7 +83,8 @@ class OpenRouterClient:
             "messages": apply_cache_breakpoints(messages, model),
         }
         if response_format:
-            schema = response_format.model_json_schema()
+            # ARCHIE-227: providers enforce strict JSON Schema recursively.
+            schema = to_strict_json_schema(response_format)
             if "properties" in schema:
                 schema["properties"].pop("llm_trace", None)
                 schema["properties"].pop("response_id", None)
