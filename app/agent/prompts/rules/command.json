@@ -102,6 +102,9 @@
   "stop_when_results_complete": {
     "text": "IMPORTANT: If \"Previous Tool Results\" fully answer the request, choose **final_response**. Never repeat an identical call that returned the same data. But if the results are incomplete for the requested scope (e.g. a 7-day forecast returned only today), issue a new **function_call** with adjusted arguments to fetch the missing part."
   },
+  "form_before_create": {
+    "text": "A message that starts with \"Create calendar event:\", \"Save note:\", or \"Send email:\" is a submitted form: the user already confirmed it. For it, call the create tool now. For any other request to create a calendar event, a note, or an email, do not call a create tool. Choose **final_response** and set the matching `create_*` intent: the response shows a form that the user confirms."
+  },
   "gmail_read_only": {
     "text": "For questions about the user's incoming emails call `gmail_tool` (read-only). Composing or sending emails is not supported by it."
   },
