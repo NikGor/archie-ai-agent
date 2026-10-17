@@ -79,7 +79,9 @@ class CommandLoop:
         image_description = ""
         command_history: list[dict] = []
         iteration = 0
-        decision: DecisionResponse | None = None
+        # ARCHIE-220: a final_response iteration often returns intents=[];
+        # keep intents of earlier iterations so Stage 3 still unlocks e.g. map
+        ui_intents: list[str] = []
 
         while iteration < self.max_iterations:
             iteration += 1
@@ -109,6 +111,9 @@ class CommandLoop:
                     previous_results=tool_results if tool_results else None,
                     images=images,
                 )
+            for intent in decision.sgr.intents:
+                if str(intent) not in ui_intents:
+                    ui_intents.append(str(intent))
             if decision.image_description:
                 image_description = decision.image_description
             self.metrics.add_stage1(s1_timer.duration_ms, s1_llm_trace)
@@ -179,7 +184,6 @@ class CommandLoop:
         command_summary = format_command_summary(
             command_history, len(tool_results), image_description
         )
-        ui_intents = [str(i) for i in decision.sgr.intents] if decision else []
         return CommandLoopResult(
             tool_results=tool_results,
             command_summary=command_summary,
