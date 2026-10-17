@@ -59,6 +59,7 @@ class PromptBuilder:
         state: dict,
         tools: list[dict[str, Any]],
         provider: str,
+        response_format: str,
         previous_results: list[ToolResult] | None = None,
         chat_history: str | None = None,
         images: list[ImageAttachment] | None = None,
@@ -69,7 +70,9 @@ class PromptBuilder:
         history) ahead of the volatile tail (datetime, tool results, query) so
         prompt caching stays valid across turns (ARCHIE-180).
         """
-        cmd_prompt = self.compiler.compile("cmd_prompt", state=state)
+        cmd_prompt = self.compiler.compile(
+            "cmd_prompt", state=state, response_format=response_format
+        )
         tools_list = "\n".join(
             [
                 f"- {t['name']}: {t.get('description', '')}\n  Parameters: {json.dumps(t.get('parameters', {}), ensure_ascii=False)}"
