@@ -5,7 +5,7 @@
 The AI core of Archie, a personal home assistant. A FastAPI service that answers in plain text,
 voice-ready text, or generative UI (cards, tables, charts, maps, forms, smart-home widgets),
 controls the home, and runs a multi-agent swarm. It runs in Docker on a Raspberry Pi next to the
-Django web app ([NikGor/homeassistant](https://github.com/NikGor/homeassistant)), which proxies
+Django web app ([NikGor/archie-web](https://github.com/NikGor/archie-web)), which proxies
 requests, stores conversations, and renders the UI.
 
 ## Features
