@@ -142,6 +142,10 @@ def _announce_detail(_args: dict[str, Any]) -> str:
     return "Speaking a reminder"
 
 
+def _agent_task_detail(_args: dict[str, Any]) -> str:
+    return "Running a scheduled task"
+
+
 def _awtrix_detail(args: dict[str, Any]) -> str:
     return (
         "Updating the display"
@@ -166,6 +170,7 @@ _TOOL_DETAIL_MAP: dict[str, Any] = {
     "cron_tool": _cron_detail,
     "announce_tool": _announce_detail,
     "awtrix_tool": _awtrix_detail,
+    "agent_task_tool": _agent_task_detail,
 }
 
 
