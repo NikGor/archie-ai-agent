@@ -210,3 +210,29 @@ async def test_demo_mode_skips_network():
 
     assert result["status"] == "demo"
     send.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Доброе утро ☀️", "Доброе утро"),
+        ("🚀 Лови движ! 🚀", "Лови движ!"),
+        ("Гол ⚽ 2:1 🏆", "Гол 2:1"),
+        ("Bro 👍🏽 ok 👨‍👩‍👧", "Bro ok"),
+        ("21,5° 5 € Привет", "21,5° 5 € Привет"),
+    ],
+)
+async def test_emoji_are_removed_from_text(text, expected):
+    with _patch_send() as send:
+        result = await awtrix_tool("notify", text=text)
+
+    assert result["status"] == "success"
+    assert send.await_args.args[2]["text"] == expected
+
+
+async def test_text_of_only_emoji_is_rejected():
+    with _patch_send() as send:
+        result = await awtrix_tool("notify", text="☀️🔥")
+
+    assert result["status"] == "error"
+    send.assert_not_awaited()
