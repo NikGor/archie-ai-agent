@@ -987,3 +987,77 @@ async def test_failed_call_may_be_repeated_and_watch_reports_no_data():
         draft = await runner.watch(SWARM_AGENTS["home"], "home", [], "task")
     assert executed.await_count == 3
     assert draft.got_data is False
+
+
+async def test_empty_turn_on_a_task_gets_one_nudge():
+    runner = _runner()
+    empty = SwarmTurn(reasoning="r", tool_calls=[], reply="")
+    answer = SwarmTurn(reasoning="r", tool_calls=[], reply="Не нашёл данных")
+    with (
+        patch(
+            "app.swarm.runner.get_client",
+            return_value=MagicMock(create_completion=AsyncMock()),
+        ),
+        patch(
+            "app.swarm.runner.parse_llm_response",
+            side_effect=[_parsed(empty), _parsed(answer)],
+        ),
+    ):
+        draft = await runner.run(
+            SWARM_AGENTS["football"], _message(text="@football счёт?"), []
+        )
+    assert draft.text == "Не нашёл данных"
+
+
+async def test_empty_turn_on_agent_news_gets_no_nudge():
+    runner = _runner()
+    with (
+        patch(
+            "app.swarm.runner.get_client",
+            return_value=MagicMock(create_completion=AsyncMock()),
+        ),
+        patch(
+            "app.swarm.runner.parse_llm_response",
+            return_value=_parsed(SwarmTurn(reasoning="r", tool_calls=[], reply="")),
+        ) as parsed,
+    ):
+        draft = await runner.run(
+            SWARM_AGENTS["voice"], _message(sender="light", text="свет включён"), []
+        )
+    assert draft is None
+    assert parsed.call_count == 1
+
+
+async def test_broken_json_is_retried_once():
+    runner = _runner()
+    with (
+        patch(
+            "app.swarm.runner.get_client",
+            return_value=MagicMock(create_completion=AsyncMock()),
+        ),
+        patch(
+            "app.swarm.runner.parse_llm_response",
+            side_effect=[
+                ValueError("Expecting property name"),
+                _parsed(SwarmTurn(reasoning="r", tool_calls=[], reply="ok")),
+            ],
+        ),
+    ):
+        draft = await runner.run(
+            SWARM_AGENTS["football"], _message(text="@football"), []
+        )
+    assert draft.text == "ok"
+
+
+def test_context_after_midnight_names_yesterday(monkeypatch):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    runner = _runner()
+    night = datetime(2026, 10, 23, 0, 40, tzinfo=ZoneInfo("Europe/Berlin"))
+    monkeypatch.setattr("app.swarm.runner.local_now", lambda _: night)
+    context = runner.build_context(make_user_state(), [], None, [])
+    assert "usually means 22.10.2026" in context
+    noon = night.replace(hour=12)
+    monkeypatch.setattr("app.swarm.runner.local_now", lambda _: noon)
+    assert "after midnight" not in runner.build_context(make_user_state(), [], None, [])
