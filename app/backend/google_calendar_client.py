@@ -4,7 +4,7 @@ import datetime
 import logging
 import os
 from typing import Any
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from app.config import settings
@@ -12,44 +12,36 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-SCOPES = ["https://www.googleapis.com/auth/calendar"]
+SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
 DEFAULT_TIMEZONE = "Europe/Berlin"
 
 
 class GoogleCalendarClient:
     """
     Wrapper for Google Calendar API operations.
-    Uses Service Account for server-to-server communication.
+    Uses the OAuth user token shared with Gmail, so events land in the
+    user's own calendar.
     """
 
     def __init__(
         self,
-        credentials_file: str | None = None,
+        token_file: str | None = None,
         timezone: str = DEFAULT_TIMEZONE,
     ):
-        self.credentials_file = (
-            credentials_file or settings.google_calendar_credentials_file
-        )
+        self.token_file = token_file or settings.gmail_token_file
         self.timezone = timezone
         self.service = self._authenticate()
 
     def _authenticate(self):
-        """Authenticates using the Service Account file."""
-        if not os.path.exists(self.credentials_file):
+        """Authenticates using the saved OAuth token file."""
+        if not os.path.exists(self.token_file):
             logger.error(
-                f"gcal_auth_001: Credentials file not found: "
-                f"\033[31m{self.credentials_file}\033[0m"
+                f"gcal_auth_001: Token file not found: \033[31m{self.token_file}\033[0m"
             )
-            raise FileNotFoundError(
-                f"Credentials file {self.credentials_file} not found"
-            )
-        credentials = service_account.Credentials.from_service_account_file(
-            self.credentials_file,
-            scopes=SCOPES,
-        )
+            raise FileNotFoundError(f"Calendar token file {self.token_file} not found")
+        credentials = Credentials.from_authorized_user_file(self.token_file, SCOPES)
         logger.info(
-            f"gcal_auth_002: Authenticated with credentials: "
-            f"\033[36m{self.credentials_file}\033[0m"
+            f"gcal_auth_002: Authenticated with token: \033[36m{self.token_file}\033[0m"
         )
         return build("calendar", "v3", credentials=credentials)
 
