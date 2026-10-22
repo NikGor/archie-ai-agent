@@ -88,6 +88,20 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
             icon="megaphone",
             color="#7950f2",
         ),
+        SwarmAgentProfile(
+            agent_id="display",
+            display_name="Display",
+            role="action",
+            description="Shows short notices on the LED display at home; does not control devices",
+            tools=["awtrix_tool"],
+            auto_actions=[
+                ActionRule(tool_name="awtrix_tool", allowed_values={"action": ["notify"]})
+            ],
+            references={"awtrix": ["ICONS"]},
+            listens_to=["football", "climate"],
+            icon="monitor",
+            color="#fa5252",
+        ),
         *(
             SwarmAgentProfile(
                 agent_id=persona,
