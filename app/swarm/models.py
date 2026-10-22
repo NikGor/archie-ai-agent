@@ -3,7 +3,7 @@
 Wire-level types (SwarmMessage, WS events) live in archie_shared.swarm.models.
 """
 
-from archie_shared.swarm.models import SwarmAgentInfo, SwarmAgentRole
+from archie_shared.swarm.models import SwarmAgentInfo, SwarmAgentRole, SwarmImportance
 from pydantic import BaseModel, Field
 from ..models.orchestration_sgr import Parameter, ToolName
 
@@ -56,6 +56,10 @@ class SwarmAgentProfile(BaseModel):
         default_factory=list,
         description="Agent IDs whose messages wake this agent without an @mention",
     )
+    tool_result_max_chars: int | None = Field(
+        default=None,
+        description="Tool result size shown to the agent; settings value if empty",
+    )
     icon: str = Field(description="Lucide icon name")
     color: str = Field(description="Accent color as CSS hex")
 
@@ -102,6 +106,44 @@ class SwarmReply(BaseModel):
     )
 
 
+class WatchOutcome(BaseModel):
+    """Extra fields of a spontaneous check (ARCHIE-238)."""
+
+    importance: SwarmImportance = Field(
+        description=(
+            "low: only for the chat; normal: show on the LED display; "
+            "high: needs attention now, also speak aloud"
+        )
+    )
+    today_note: str = Field(
+        description=(
+            "Short note of what you saw now (values, IDs, times), for the next "
+            "check to compare. Write it also if you report nothing"
+        )
+    )
+    quiet_until: str = Field(
+        description=(
+            "Local time HH:MM before which nothing new can happen in your area, "
+            "e.g. the start of the next match; empty if unknown"
+        )
+    )
+
+
+class SwarmWatchTurn(SwarmTurn, WatchOutcome):
+    """First LLM call of a spontaneous check."""
+
+
+class SwarmWatchReply(SwarmReply, WatchOutcome):
+    """Last LLM call of a spontaneous check: the reply is the alert, or empty."""
+
+    reply: str = Field(
+        description=(
+            "Alert for the user, max 200 characters. Empty if nothing is new: "
+            "never write that nothing is new or that all is fine"
+        )
+    )
+
+
 class CouncilDelegation(BaseModel):
     """A task the council gives to a home agent."""
 
@@ -119,6 +161,13 @@ class CouncilDecision(BaseModel):
         description=(
             "Tasks for home agents: only commands the user gave, or data the answer needs. "
             "Empty if you only give advice or offer an action"
+        )
+    )
+    remember: list[str] = Field(
+        description=(
+            "Lasting facts or preferences to keep in long-term memory, one short "
+            "sentence each; only when the user asks to remember or states a "
+            "lasting preference. Usually empty"
         )
     )
 
