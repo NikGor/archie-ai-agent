@@ -1,7 +1,7 @@
 """Time rules of the spontaneous swarm checks (ARCHIE-238): pure functions."""
 
 import random
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from archie_shared.swarm.models import SwarmSettings, SwarmWatchTask
 from ..config import settings as app_settings
@@ -49,6 +49,21 @@ def pick_delay_seconds(swarm_settings: SwarmSettings) -> float:
     return 60 * random.uniform(
         swarm_settings.interval_min_minutes, swarm_settings.interval_max_minutes
     )
+
+
+def plan_delay_seconds(now: datetime, swarm_settings: SwarmSettings) -> float:
+    """Random pause; a check that would fall outside the active hours moves to
+    their next start plus a random part of the shortest pause (ARCHIE-238)."""
+    delay = pick_delay_seconds(swarm_settings)
+    if is_active(now + timedelta(seconds=delay), swarm_settings):
+        return delay
+    start = datetime.combine(
+        now.date(), parse_clock(swarm_settings.active_from), now.tzinfo
+    )
+    if start <= now:
+        start += timedelta(days=1)
+    jitter = random.uniform(0, 60 * swarm_settings.interval_min_minutes)
+    return (start - now).total_seconds() + jitter
 
 
 def parse_quiet_until(value: str, now: datetime) -> datetime | None:
