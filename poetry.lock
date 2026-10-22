@@ -62,7 +62,7 @@ trio = ["trio (>=0.32.0)"]
 
 [[package]]
 name = "archie-shared"
-version = "0.1.91"
+version = "0.1.92"
 description = "Shared Pydantic models and utilities for Archie ecosystem"
 optional = false
 python-versions = ">=3.11.0rc1,<4.0"
@@ -75,8 +75,8 @@ pydantic = "^2.11.4"
 [package.source]
 type = "git"
 url = "https://github.com/NikGor/archie-web.git"
-reference = "v0.1.91"
-resolved_reference = "a55a211e433964282adf2570878cd616f0c04983"
+reference = "v0.1.92"
+resolved_reference = "22140dcc023756324926d24d73f499a42f24c3ef"
 subdirectory = "archie-shared"
 
 [[package]]
@@ -2935,4 +2935,4 @@ dev = ["pytest", "setuptools"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11.0rc1,<3.13"
-content-hash = "da2dad9d366a7a9d98ca11568782a8ec3598fc36580efbdb0064b49a3c39d113"
+content-hash = "bbca061edb77e7591e8979911960bde672b65112ff50c406108bc5348f671ff9"
