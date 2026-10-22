@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     tv_connect_timeout: float = 10.0
     sharavoz_token: str | None = None
 
+    # Scheduled agent tasks (agent_task_tool): more Stage 1 rounds than a chat turn
+    agent_task_max_iterations: int = 6
+
     # AWTRIX NG LED display
     awtrix_host: str | None = None
     awtrix_timeout: float = 15.0
@@ -527,6 +530,7 @@ TOOLS_CONFIG = {
         "cron_tool": "app.tools.cron_tool",
         "announce_tool": "app.tools.announce_tool",
         "awtrix_tool": "app.tools.awtrix_tool",
+        "agent_task_tool": "app.tools.agent_task_tool",
     },
     "knowledge": {
         "document_search_tool": "app.tools.document_search_tool",
