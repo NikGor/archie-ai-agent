@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     monitor_trace_match_seconds: int = 300
 
     # Google integrations
-    google_calendar_credentials_file: str = "credentials.json"
+    # OAuth user token shared by Gmail and Calendar (scripts/google_auth_setup.py)
     gmail_token_file: str = "token_gmail.json"
     google_places_api_key: str | None = None
     google_api_key: str | None = None
