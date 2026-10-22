@@ -16,6 +16,7 @@ ToolName = Literal[
     "gmail_tool",
     "cron_tool",
     "announce_tool",
+    "awtrix_tool",
     "document_search_tool",
     "skill_loader_tool",
 ]
