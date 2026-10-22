@@ -11,13 +11,18 @@ from archie_shared.swarm.models import (
     SwarmAgentInfo,
     SwarmAgentsEvent,
     SwarmClientCommand,
+    SwarmControlEvent,
+    SwarmForgetCommand,
     SwarmHistoryEvent,
     SwarmMessage,
+    SwarmModeCommand,
     SwarmProposalDecisionCommand,
+    SwarmSettingsCommand,
     SwarmToggleAgentCommand,
     SwarmUserMessageCommand,
+    SwarmWatchTask,
 )
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import TypeAdapter, ValidationError
 from .service import swarm_service
 
@@ -37,12 +42,34 @@ async def list_swarm_agents() -> list[SwarmAgentInfo]:
 @router.post("/swarm/messages")
 async def post_swarm_message(command: SwarmUserMessageCommand) -> SwarmMessage:
     """Post a user message to the swarm chat (for Django, HA or scripts)."""
+    if await swarm_service.memory.get_mode() == "stopped":
+        raise HTTPException(status_code=409, detail="The swarm is stopped")
     return await swarm_service.bus.post(sender="user", kind="user", text=command.text)
+
+
+@router.get("/swarm/control")
+async def get_swarm_control() -> SwarmControlEvent:
+    return await swarm_service.ticker.build_control_event()
+
+
+@router.post("/swarm/checks/{task}")
+async def run_swarm_check(task: SwarmWatchTask) -> SwarmControlEvent:
+    """Run one spontaneous check now, outside the schedule (for tests and scripts)."""
+    await swarm_service.ticker.run_check(task)
+    return await swarm_service.ticker.build_control_event()
 
 
 async def _handle_command(command: SwarmClientCommand) -> None:
     if isinstance(command, SwarmUserMessageCommand):
+        if await swarm_service.memory.get_mode() == "stopped":
+            raise ValueError("The swarm is stopped. Press Play or Pause first.")
         await swarm_service.bus.post(sender="user", kind="user", text=command.text)
+    elif isinstance(command, SwarmModeCommand):
+        await swarm_service.ticker.set_mode(command.mode)
+    elif isinstance(command, SwarmSettingsCommand):
+        await swarm_service.ticker.set_settings(command.settings)
+    elif isinstance(command, SwarmForgetCommand):
+        await swarm_service.ticker.forget(command.fact_id)
     elif isinstance(command, SwarmToggleAgentCommand):
         await swarm_service.roster.set_enabled(command.agent_id, command.enabled)
         swarm_service.hub.publish(
@@ -74,6 +101,8 @@ async def ws_swarm(websocket: WebSocket, user_name: str | None = None) -> None:
             agents=await swarm_service.roster.list_agents(),
         )
         await websocket.send_json(history.model_dump(mode="json"))
+        control = await swarm_service.ticker.build_control_event()
+        await websocket.send_json(control.model_dump(mode="json"))
         while True:
             data = await websocket.receive_json()
             try:
