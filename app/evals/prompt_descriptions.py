@@ -29,6 +29,7 @@ PROMPT_DESCRIPTIONS: dict[str, str] = {
     "agent_climate": "Рой, @climate: управление климатом",
     "agent_search": "Рой, @search: веб-поиск — погода, места, новости, факты",
     "agent_voice": "Рой, @voice: решает, что озвучить на колонке",
+    "agent_display": "Рой, @display: решает, что показать на LED-табло",
     "group_council": "Рой, совет: роль участника совета (@bro, @business, @flirty)",
     "council_triage": "Совет: председатель решает, созывать ли совет или ответить сам",
     "council_opinion": "Совет: позиция участника в обсуждении",
