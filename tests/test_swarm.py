@@ -19,6 +19,8 @@ from app.swarm.models import (
     SwarmReply,
     SwarmToolCall,
     SwarmTurn,
+    SwarmWatchReply,
+    SwarmWatchTurn,
 )
 from app.swarm.policy import READ_ONLY_TOOLS, check_tool_call
 from app.swarm.runner import SwarmAgentRunner, SwarmDraft, format_chat_line
@@ -130,6 +132,7 @@ def _dispatcher() -> SwarmDispatcher:
         roster=roster,
         runner=MagicMock(),
         council=MagicMock(run=AsyncMock()),
+        memory=MagicMock(get_mode=AsyncMock(return_value="running")),
     )
 
 
@@ -237,7 +240,17 @@ async def test_council_failure_posts_system_message_and_frees_members():
     assert not dispatcher._running
 
 
-def test_listeners_hear_their_senders_only():
+@pytest.fixture
+def voice_listens(monkeypatch):
+    """The registry has no listeners since ARCHIE-238; the mechanism stays."""
+    monkeypatch.setattr(SWARM_AGENTS["voice"], "listens_to", ["light", "climate"])
+
+
+def test_no_agent_listens_without_mentions():
+    assert all(not profile.listens_to for profile in SWARM_AGENTS.values())
+
+
+def test_listeners_hear_their_senders_only(voice_listens):
     assert SwarmDispatcher.select_listeners(_message(sender="light"), ALL_AGENTS) == [
         "voice"
     ]
@@ -251,17 +264,17 @@ def test_listeners_hear_their_senders_only():
     )
 
 
-async def test_listener_ignores_depth_limit():
+async def test_listener_ignores_depth_limit(voice_listens):
     dispatcher = _dispatcher()
     dispatcher._start = MagicMock()
     await dispatcher.handle(
         _message(sender="climate", text="батареи включены", depth=3)
     )
     started = [call.args[0] for call in dispatcher._start.call_args_list]
-    assert started == ["voice", "display"]
+    assert started == ["voice"]
 
 
-async def test_busy_listener_keeps_latest_event_and_runs_it_after():
+async def test_busy_listener_keeps_latest_event_and_runs_it_after(voice_listens):
     dispatcher = _dispatcher()
     dispatcher._running.add("voice")
     first = _message(sender="light", text="один")
@@ -330,6 +343,7 @@ async def test_simple_request_gets_decision_in_one_call():
         convene=False,
         reply="Выключаю.",
         delegations=[CouncilDelegation(agent_id="light", task="выключи свет")],
+        remember=[],
     )
     council = _council("business", [triage])
     await council.run(_message(text="выключи свет"), COUNCIL, force=False)
@@ -343,10 +357,14 @@ async def test_convened_council_posts_opinions_then_one_decision():
     council = _council(
         "flirty",
         [
-            CouncilTriage(reasoning="r", convene=True, reply="", delegations=[]),
+            CouncilTriage(
+                reasoning="r", convene=True, reply="", delegations=[], remember=[]
+            ),
             SwarmReply(reply="Ехать"),
             SwarmReply(reply="Остаться"),
-            CouncilDecision(reply="Решили: едем в субботу.", delegations=[]),
+            CouncilDecision(
+                reply="Решили: едем в субботу.", delegations=[], remember=[]
+            ),
         ],
     )
     await council.run(_message(text="ехать или нет?"), COUNCIL, force=False)
@@ -372,11 +390,15 @@ async def test_force_convenes_even_if_chair_has_an_answer():
         "business",
         [
             CouncilTriage(
-                reasoning="r", convene=False, reply="Сразу ответ", delegations=[]
+                reasoning="r",
+                convene=False,
+                reply="Сразу ответ",
+                delegations=[],
+                remember=[],
             ),
             SwarmReply(reply="a"),
             SwarmReply(reply="b"),
-            CouncilDecision(reply="Итог", delegations=[]),
+            CouncilDecision(reply="Итог", delegations=[], remember=[]),
         ],
     )
     await council.run(_message(text="@council?"), COUNCIL, force=True)
@@ -390,12 +412,22 @@ async def test_force_convenes_even_if_chair_has_an_answer():
 # --- runner ---
 
 
+def _memory(facts=None, notes=None) -> MagicMock:
+    memory = MagicMock()
+    memory.list_facts = AsyncMock(return_value=facts or [])
+    memory.get_day_notes = AsyncMock(return_value=notes or [])
+    return memory
+
+
 def _runner() -> SwarmAgentRunner:
     state_service = MagicMock()
     state_service.get_user_state = AsyncMock(return_value=make_user_state())
     roster = MagicMock(get_owner=AsyncMock(return_value="Niko"))
     runner = SwarmAgentRunner(
-        tool_factory=ToolFactory(), state_service=state_service, roster=roster
+        tool_factory=ToolFactory(),
+        state_service=state_service,
+        roster=roster,
+        memory=_memory(),
     )
     runner.build_system_prompt = MagicMock(return_value="system")
     return runner
@@ -521,13 +553,6 @@ def test_display_prompt_has_job_rules_and_may_only_notify():
     assert check_tool_call(SWARM_AGENTS["voice"], notify) == "block"
 
 
-def test_display_hears_football_but_not_light():
-    football = _message(sender="football")
-    assert "display" in SwarmDispatcher.select_listeners(football, ALL_AGENTS)
-    light = _message(sender="light")
-    assert "display" not in SwarmDispatcher.select_listeners(light, ALL_AGENTS)
-
-
 def test_chat_line_marks_replies():
     line = format_chat_line(
         _message(sender="light", text="ok").model_copy(update={"reply_to": "1-0"})
@@ -562,6 +587,7 @@ async def test_offer_with_at_sign_does_not_delegate():
         convene=False,
         reply="Могу попросить @light включить торшер.",
         delegations=[],
+        remember=[],
     )
     council = _council("bro", [triage])
     await council.run(_message(text="какой свет включить?"), COUNCIL, force=False)
@@ -580,6 +606,7 @@ async def test_delegations_become_mentions_and_skip_unknown_or_council_agents():
             CouncilDelegation(agent_id="flirty", task="x"),
             CouncilDelegation(agent_id="nobody", task="x"),
         ],
+        remember=[],
     )
     council = _council("bro", [triage])
     await council.run(_message(text="приглуши свет"), COUNCIL, force=False)
@@ -676,7 +703,17 @@ async def test_runner_stops_tools_after_max_rounds():
         ),
         patch(
             "app.swarm.runner.parse_llm_response",
-            side_effect=[_parsed(loop), _parsed(loop), _parsed(SwarmReply(reply="ok"))],
+            side_effect=[
+                _parsed(loop),
+                _parsed(
+                    loop.model_copy(
+                        update={
+                            "tool_calls": [_call("smarthome_status_tool", query="y")]
+                        }
+                    )
+                ),
+                _parsed(SwarmReply(reply="ok")),
+            ],
         ),
         patch(
             "app.swarm.runner.execute_tool_calls",
@@ -688,6 +725,83 @@ async def test_runner_stops_tools_after_max_rounds():
         draft = await runner.run(SWARM_AGENTS["light"], _message(text="@light"), [])
     assert executed.await_count == 2
     assert draft.text == "ok"
+
+
+async def test_runner_does_not_repeat_the_same_call():
+    runner = _runner()
+    loop = SwarmTurn(
+        reasoning="again",
+        tool_calls=[_call("smarthome_status_tool", query="x")],
+        reply="",
+    )
+    with (
+        patch(
+            "app.swarm.runner.get_client",
+            return_value=MagicMock(create_completion=AsyncMock()),
+        ),
+        patch(
+            "app.swarm.runner.parse_llm_response",
+            side_effect=[_parsed(loop), _parsed(loop), _parsed(SwarmReply(reply="ok"))],
+        ),
+        patch(
+            "app.swarm.runner.execute_tool_calls",
+            AsyncMock(
+                return_value=[ToolResult(tool_name="smarthome_status_tool", output={})]
+            ),
+        ) as executed,
+    ):
+        draft = await runner.run(SWARM_AGENTS["light"], _message(text="@light"), [])
+    assert executed.await_count == 1
+    assert draft.text == "ok"
+
+
+async def test_runner_drops_arguments_without_name():
+    runner = _runner()
+    turn = SwarmTurn(
+        reasoning="r",
+        tool_calls=[
+            SwarmToolCall(
+                tool_name="smarthome_status_tool",
+                arguments=[
+                    Parameter(name="query", value="x"),
+                    Parameter(name="", value=":"),
+                ],
+            )
+        ],
+        reply="",
+    )
+    executed = AsyncMock(
+        return_value=[ToolResult(tool_name="smarthome_status_tool", output={})]
+    )
+    with (
+        patch(
+            "app.swarm.runner.get_client",
+            return_value=MagicMock(create_completion=AsyncMock()),
+        ),
+        patch(
+            "app.swarm.runner.parse_llm_response",
+            side_effect=[
+                _parsed(turn),
+                _parsed(SwarmTurn(reasoning="r", tool_calls=[], reply="ok")),
+            ],
+        ),
+        patch("app.swarm.runner.execute_tool_calls", executed),
+    ):
+        await runner.run(SWARM_AGENTS["light"], _message(text="@light"), [])
+    sent = executed.await_args.kwargs["tool_calls"][0].arguments
+    assert [p.name for p in sent] == ["query"]
+
+
+def test_blocked_call_explains_allowed_arguments():
+    from app.swarm.policy import block_reason
+
+    display = SWARM_AGENTS["display"]
+    assert block_reason(display, _call("awtrix_tool")) == (
+        "wrong arguments (action must be one of: notify)"
+    )
+    assert block_reason(SWARM_AGENTS["football"], _call("announce_tool")) == (
+        "this tool is not yours"
+    )
 
 
 def test_light_prompt_reads_state_before_relative_change():
@@ -834,3 +948,42 @@ def test_fallback_reply_shows_action_arguments():
         SwarmAgentRunner._describe_action(action)
         == "announce_tool (success): Ужин готов"
     )
+
+
+async def test_failed_call_may_be_repeated_and_watch_reports_no_data():
+    runner = _runner()
+    broken = SwarmWatchTurn(
+        reasoning="r",
+        tool_calls=[_call("smarthome_status_tool")],
+        reply="",
+        importance="low",
+        today_note="",
+        quiet_until="",
+    )
+    final = SwarmWatchReply(reply="OK", importance="low", today_note="", quiet_until="")
+    executed = AsyncMock(
+        return_value=[
+            ToolResult(
+                tool_name="smarthome_status_tool", output={}, success=False, error="x"
+            )
+        ]
+    )
+    with (
+        patch(
+            "app.swarm.runner.get_client",
+            return_value=MagicMock(create_completion=AsyncMock()),
+        ),
+        patch(
+            "app.swarm.runner.parse_llm_response",
+            side_effect=[
+                _parsed(broken),
+                _parsed(broken),
+                _parsed(broken),
+                _parsed(final),
+            ],
+        ),
+        patch("app.swarm.runner.execute_tool_calls", executed),
+    ):
+        draft = await runner.watch(SWARM_AGENTS["home"], "home", [], "task")
+    assert executed.await_count == 3
+    assert draft.got_data is False

@@ -10,6 +10,7 @@ every turn small.
 import json
 import logging
 import os
+from datetime import timedelta
 from typing import Any
 from archie_shared.chat.models import LllmTrace
 from archie_shared.swarm.models import (
@@ -49,6 +50,9 @@ from .schedule import local_now
 
 logger = logging.getLogger(__name__)
 
+# Before this hour, "today" in the user's words means the evening that just ended.
+LATE_NIGHT_END_HOUR = 5
+
 # Day memory lines in a prompt: notes of the own check, or alerts of all checks.
 DAY_NOTES_IN_PROMPT = 10
 
@@ -62,6 +66,10 @@ FINAL_REPLY_TASK = (
 )
 REPEATED_CALLS_TASK = (
     "You already called these tools with the same arguments and have the results. "
+)
+EMPTY_TASK_TURN = (
+    "You got a task from the user or the council and returned nothing. "
+    "Do the task now: call your tools, or say why you cannot do it."
 )
 WATCH_TOOLS_TASK = (
     "You did not call your tools. Call them now to get fresh data. "
@@ -187,8 +195,18 @@ class SwarmAgentRunner:
     ) -> str:
         """Volatile tail: time, compact user context, memory and recent chat lines."""
         state_dict = state.model_dump()
+        now = local_now(state.user_timezone)
+        late_night = (
+            [
+                'It is after midnight: "today" or "tonight" in the user\'s words '
+                f"usually means {(now - timedelta(days=1)):%d.%m.%Y}."
+            ]
+            if now.hour < LATE_NIGHT_END_HOUR
+            else []
+        )
         lines = [
             self.prompt_builder.build_datetime_note(state_dict),
+            *late_night,
             f"User city: {state.default_city}, user language: {state.language}",
             *memory_lines,
             "Recent chat:",
@@ -279,8 +297,15 @@ class SwarmAgentRunner:
             history,
             f"React to this message:\n{format_chat_line(trigger)}",
         )
+        # A task from the user or the council must not end in an empty turn.
+        is_task = trigger.sender == "user" or trigger.kind == "decision"
         turn, actions, traces, _ = await self._loop(
-            profile, model, messages, SwarmTurn, SwarmReply
+            profile,
+            model,
+            messages,
+            SwarmTurn,
+            SwarmReply,
+            empty_task=EMPTY_TASK_TURN if is_task else None,
         )
         reply = turn.reply.strip()
         if not reply and not actions:
@@ -331,11 +356,13 @@ class SwarmAgentRunner:
         reply_schema: type[SwarmReply],
         final_task: str = FINAL_REPLY_TASK,
         first_task: str | None = None,
+        empty_task: str | None = None,
     ) -> tuple[SwarmTurn | SwarmReply, list[SwarmActionInfo], list[LllmTrace], int]:
         """Tool rounds until the agent replies. Also returns the number of
         successful tool calls. Several rounds let an agent read
         the state, then change it. `first_task`: the agent must call a tool
-        first; if it does not, it gets this task once."""
+        first; if it does not, it gets this task once. `empty_task`: the agent
+        gets it once if it returns neither tools nor a reply (ARCHIE-238)."""
         provider = get_provider_for_model(model)
         client = get_client(provider)
         traces: list[LllmTrace] = []
@@ -343,11 +370,15 @@ class SwarmAgentRunner:
         turn: SwarmTurn | SwarmReply = await self._call(
             client, provider, model, messages, turn_schema, traces
         )
-        if first_task and isinstance(turn, SwarmTurn) and not turn.tool_calls:
+        no_tools = isinstance(turn, SwarmTurn) and not turn.tool_calls
+        nudge = first_task if no_tools else None
+        if no_tools and not turn.reply.strip():
+            nudge = nudge or empty_task
+        if nudge:
             logger.info(
                 f"swarm_runner_003: \033[36m{profile.agent_id}\033[0m answered without tools"
             )
-            messages.append({"role": "user", "content": first_task})
+            messages.append({"role": "user", "content": nudge})
             turn = await self._call(
                 client, provider, model, messages, turn_schema, traces
             )
@@ -428,14 +459,25 @@ class SwarmAgentRunner:
         schema: type[BaseModel],
         traces: list[LllmTrace],
     ) -> Any:
-        raw = await client.create_completion(
-            messages=messages, model=model, response_format=schema
-        )
-        parsed = parse_llm_response(
-            raw_response=raw, provider=provider, expected_type=schema
-        )
-        traces.append(parsed.llm_trace)
-        return parsed.parsed_content
+        for attempt in (1, 2):
+            raw = await client.create_completion(
+                messages=messages, model=model, response_format=schema
+            )
+            try:
+                parsed = parse_llm_response(
+                    raw_response=raw, provider=provider, expected_type=schema
+                )
+            except ValueError as exc:
+                # Cheap models sometimes loop into broken JSON: try once more (ARCHIE-238).
+                if attempt == 2:
+                    raise
+                logger.warning(
+                    f"swarm_runner_warning_001: Broken {schema.__name__} from "
+                    f"\033[36m{model}\033[0m, retrying: {str(exc)[:120]}"
+                )
+                continue
+            traces.append(parsed.llm_trace)
+            return parsed.parsed_content
 
     async def _execute(
         self, profile: SwarmAgentProfile, tool_calls: list[SwarmToolCall]
