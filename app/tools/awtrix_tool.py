@@ -26,6 +26,12 @@ _APP_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 _COLOR_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
 _BUILTIN_APPS = frozenset({"Time", "Date", "Temperature", "Humidity", "Battery"})
 
+# The display font has no emoji: each one would show as "?".
+_EMOJI_PATTERN = re.compile(
+    "[\U0001f000-\U0001faff\u2300-\u23ff\u2600-\u27bf\u2b00-\u2bff"
+    "\ufe0f\u200d\u20e3\U000e0020-\U000e007f]+"
+)
+
 _ICON_SIZE = 8
 _ICONS_DIR = "/ICONS"
 _ICON_EXTENSIONS = (".gif", ".jpg")
@@ -53,8 +59,9 @@ def _build_payload(
     duration_seconds: int | None,
     duration_key: str,
 ) -> dict[str, Any]:
+    text = " ".join(_EMOJI_PATTERN.sub(" ", text or "").split())
     if not text:
-        raise ValueError("text is required")
+        raise ValueError("text is required (emoji are not shown on the display)")
     payload: dict[str, Any] = {"text": text}
     if icon:
         payload["icon"] = icon
@@ -187,7 +194,8 @@ async def awtrix_tool(
     Use it for proactive notices, usually scheduled through cron_tool, for
     example a football match starting soon. The display is 32x8 pixels: keep
     the text under about 20 characters, numbers matter more than words. It
-    cannot show emoji: use plain letters, digits and punctuation only.
+    cannot show emoji: they are removed from the text, so pass an icon instead
+    (see the awtrix skill).
     notify shows the text once on top of everything. push adds a named app to
     the display loop until removed. remove deletes a pushed app.
 
