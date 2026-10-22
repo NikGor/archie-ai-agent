@@ -131,7 +131,7 @@ def _dispatcher() -> SwarmDispatcher:
         bus=MagicMock(post=AsyncMock()),
         roster=roster,
         runner=MagicMock(),
-        council=MagicMock(run=AsyncMock()),
+        council=MagicMock(run=AsyncMock(), pop_relay=MagicMock(return_value=[])),
         memory=MagicMock(get_mode=AsyncMock(return_value="running")),
     )
 
@@ -1058,6 +1058,76 @@ def test_context_after_midnight_names_yesterday(monkeypatch):
     monkeypatch.setattr("app.swarm.runner.local_now", lambda _: night)
     context = runner.build_context(make_user_state(), [], None, [])
     assert "usually means 22.10.2026" in context
+    assert '"tomorrow" means 23.10.2026' in context
     noon = night.replace(hour=12)
     monkeypatch.setattr("app.swarm.runner.local_now", lambda _: noon)
     assert "after midnight" not in runner.build_context(make_user_state(), [], None, [])
+
+
+async def test_display_waits_for_the_data_agent():
+    council = _council(
+        "bro",
+        [
+            CouncilTriage(
+                reasoning="r",
+                convene=False,
+                reply="Выведу погоду.",
+                delegations=[
+                    CouncilDelegation(agent_id="search", task="погода на 23.10.2026"),
+                    CouncilDelegation(agent_id="display", task="покажи погоду"),
+                ],
+                remember=[],
+            )
+        ],
+    )
+    council.bus.post = AsyncMock(return_value=_message(sender="bro", text="d"))
+    await council.run(_message(text="покажи на табло погоду"), COUNCIL, force=False)
+    assert council.bus.post.await_args.kwargs["mentions"] == ["search"]
+    assert council.relays == {"1-0": ["display"]}
+    reply = _message(sender="search", text="9–13 °C").model_copy(
+        update={"reply_to": "1-0"}
+    )
+    assert council.pop_relay(reply) == ["display"]
+    assert council.relays == {}
+
+    dispatcher = _dispatcher()
+    dispatcher.council = council
+    council.relays["1-0"] = ["display"]
+    dispatcher._start = MagicMock()
+    await dispatcher.handle(reply)
+    agent_id, trigger = dispatcher._start.call_args.args
+    assert agent_id == "display"
+    assert trigger.mentions == ["display"]
+    assert format_chat_line(trigger).startswith(
+        "[1-0] @search (reply to [1-0]) (to @display)"
+    )
+
+
+async def test_display_alone_is_not_delayed():
+    council = _council(
+        "bro",
+        [
+            CouncilTriage(
+                reasoning="r",
+                convene=False,
+                reply="Показываю.",
+                delegations=[
+                    CouncilDelegation(agent_id="display", task="Бавария 20:30")
+                ],
+                remember=[],
+            )
+        ],
+    )
+    council.bus.post = AsyncMock(return_value=_message(sender="bro", text="d"))
+    await council.run(_message(text="покажи Бавария 20:30"), COUNCIL, force=False)
+    assert council.bus.post.await_args.kwargs["mentions"] == ["display"]
+    assert council.relays == {}
+
+
+async def test_relayed_agent_mentioned_again_gets_no_busy_note():
+    dispatcher = _dispatcher()
+    dispatcher.council.pop_relay = MagicMock(return_value=["display"])
+    reply = _message(sender="search", text="13° дождь, @display выводи")
+    await dispatcher.handle(reply)
+    assert _skip_notes(dispatcher) == []
+    assert "display" in dispatcher._running
