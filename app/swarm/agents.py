@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 _DISABLED_KEY = "archie:swarm:disabled"
 _OWNER_KEY = "archie:swarm:owner"
 
+# Agents that read the whole home at once need the full state
+WHOLE_HOME_MAX_CHARS = 16000
+
 SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
     profile.agent_id: profile
     for profile in [
@@ -77,6 +80,36 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
             color="#15aabf",
         ),
         SwarmAgentProfile(
+            agent_id="home",
+            display_name="Home",
+            role="state",
+            description="Watches the whole home: windows, air, temperature, devices left on; does not control devices",
+            tools=["smarthome_status_tool"],
+            references={"homeassistant-mcp": ["apartment_map"]},
+            # The whole home state is about 11k characters (ARCHIE-238)
+            tool_result_max_chars=WHOLE_HOME_MAX_CHARS,
+            icon="house",
+            color="#868e96",
+        ),
+        SwarmAgentProfile(
+            agent_id="mail",
+            display_name="Mail",
+            role="state",
+            description="Reads the user's Gmail inbox; cannot send or delete mail",
+            tools=["gmail_tool"],
+            icon="mail",
+            color="#e64980",
+        ),
+        SwarmAgentProfile(
+            agent_id="calendar",
+            display_name="Calendar",
+            role="state",
+            description="Reads the user's Google Calendar: today's and upcoming events; cannot change them",
+            tools=["events_tool"],
+            icon="calendar",
+            color="#5c7cfa",
+        ),
+        SwarmAgentProfile(
             agent_id="voice",
             display_name="Voice",
             role="action",
@@ -84,7 +117,7 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
             tools=["smarthome_status_tool", "announce_tool"],
             auto_actions=[ActionRule(tool_name="announce_tool")],
             references={"homeassistant-mcp": ["apartment_map"]},
-            listens_to=["light", "climate", "football"],
+            tool_result_max_chars=WHOLE_HOME_MAX_CHARS,
             icon="megaphone",
             color="#7950f2",
         ),
@@ -95,10 +128,11 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
             description="Shows short notices on the LED display at home; does not control devices",
             tools=["awtrix_tool"],
             auto_actions=[
-                ActionRule(tool_name="awtrix_tool", allowed_values={"action": ["notify"]})
+                ActionRule(
+                    tool_name="awtrix_tool", allowed_values={"action": ["notify"]}
+                )
             ],
             references={"awtrix": ["ICONS"]},
-            listens_to=["football", "climate"],
             icon="monitor",
             color="#fa5252",
         ),
