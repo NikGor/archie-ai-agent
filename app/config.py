@@ -40,7 +40,8 @@ class Settings(BaseSettings):
 
     # Agent swarm chat (ARCHIE-199)
     swarm_enabled: bool = True
-    swarm_model: str = "gpt-5.4-nano"
+    # Cheap and strong in agentic tasks; structured output tested in ARCHIE-227 (ARCHIE-238)
+    swarm_model: str = "deepseek/deepseek-v4.1-flash-1017"
     # The council decides and delegates, so it gets a stronger model than the workers
     swarm_council_model: str = "gpt-5.4-mini"
     # The council takes one hop itself: user -> decision -> agent -> agent
@@ -318,8 +319,8 @@ MODEL_TOKEN_PRICES: dict[str, dict[str, float]] = {
     "mistralai/mistral-medium-3-5": {"input": 1.5, "output": 7.5},
     "sakana/fugu-ultra-v2": {"input": 5.0, "output": 30.0, "cached": 0.5},
     "deepseek/deepseek-v4.1-flash-1017": {
-        "input": 0.15,
-        "output": 0.6,
+        "input": 0.07,
+        "output": 0.5,
         "cached": 0.003,
     },
     "qwen/qwen3.8-27b": {"input": 0.24, "output": 2.2, "cached": 0.05},
