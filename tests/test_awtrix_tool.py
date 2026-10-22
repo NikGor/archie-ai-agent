@@ -236,3 +236,29 @@ async def test_text_of_only_emoji_is_rejected():
 
     assert result["status"] == "error"
     send.assert_not_awaited()
+
+
+async def test_send_retries_once_after_a_timeout():
+    ok = httpx.Response(200, json={})
+    request = AsyncMock(side_effect=[httpx.ReadTimeout("t"), ok])
+    with (
+        patch("app.tools.awtrix_tool._RETRY_DELAY_SECONDS", 0),
+        patch("httpx.AsyncClient.request", new=request),
+    ):
+        result = await awtrix_tool("notify", text="x")
+
+    assert result["status"] == "success"
+    assert request.await_count == 2
+
+
+async def test_send_gives_up_after_two_attempts():
+    request = AsyncMock(side_effect=httpx.ConnectTimeout("t"))
+    with (
+        patch("app.tools.awtrix_tool._RETRY_DELAY_SECONDS", 0),
+        patch("httpx.AsyncClient.request", new=request),
+    ):
+        result = await awtrix_tool("notify", text="x")
+
+    assert result["status"] == "error"
+    assert "unreachable" in result["message"]
+    assert request.await_count == 2
