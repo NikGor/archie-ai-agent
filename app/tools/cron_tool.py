@@ -77,6 +77,9 @@ async def cron_tool(  # noqa: PLR0912
         Voice reminder: schedule_name="Match reminder", tool_name="announce_tool",
         arguments_json='{"prompt":"remind me the match starts in an hour"}',
         cron_expression="0 19 * * 6", timezone="Europe/Berlin".
+        Work that needs the agent itself (search, calendar, more jobs): tool_name="agent_task_tool",
+        arguments_json='{"prompt":"Plan today football matches","user_name":"Niko"}',
+        cron_expression="0 8 * * *", timezone="Europe/Berlin".
 
     Args:
         action: One of: create, list, get, pause, resume, delete, run_now; defaults to create
