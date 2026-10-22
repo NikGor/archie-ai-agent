@@ -98,6 +98,10 @@ class Settings(BaseSettings):
     tv_connect_timeout: float = 10.0
     sharavoz_token: str | None = None
 
+    # AWTRIX NG LED display
+    awtrix_host: str | None = None
+    awtrix_timeout: float = 5.0
+
     # OpenAI vector store (document search)
     openai_vector_store_id: str | None = None
 
@@ -522,6 +526,7 @@ TOOLS_CONFIG = {
         "gmail_tool": "app.tools.gmail_tool",
         "cron_tool": "app.tools.cron_tool",
         "announce_tool": "app.tools.announce_tool",
+        "awtrix_tool": "app.tools.awtrix_tool",
     },
     "knowledge": {
         "document_search_tool": "app.tools.document_search_tool",
