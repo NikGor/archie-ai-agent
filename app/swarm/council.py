@@ -29,6 +29,9 @@ logger = logging.getLogger(__name__)
 
 COUNCIL_GROUP = "council"
 DEFAULT_CHAIR = "business"
+# Agents that deliver data to the user; they wait for the agents that find it.
+OUTPUT_AGENTS = frozenset({"display", "voice"})
+RELAYS_MAX = 20
 
 
 def merge_usage(first: SwarmUsage, second: SwarmUsage) -> SwarmUsage:
@@ -47,6 +50,19 @@ class SwarmCouncil:
         self.runner = runner
         # Called after the council saves long-term memory (the UI shows it).
         self.on_memory_change: Callable[[], Awaitable[None]] | None = None
+        # Decision ID -> output agents that wait for the first data reply to it
+        self.relays: dict[str, list[str]] = {}
+
+    def pop_relay(self, message: SwarmMessage) -> list[str]:
+        """Output agents waiting for this message: the first reply of a home
+        agent to a decision that also gave them a task (ARCHIE-240)."""
+        if message.reply_to not in self.relays:
+            return []
+        if message.sender not in SWARM_AGENTS or message.sender in OUTPUT_AGENTS:
+            return []
+        if message.kind not in ("report", "action"):
+            return []
+        return self.relays.pop(message.reply_to)
 
     async def choose_chair(self, members: list[str]) -> str:
         """The member whose persona the user picked chairs the council."""
@@ -127,14 +143,22 @@ class SwarmCouncil:
         await self._remember(decision.remember)
         lines = [decision.reply.replace("@", "").strip()]
         lines += [f"→ @{d.agent_id}: {d.task}" for d in delegations]
-        await self._post(
+        mentions = list(dict.fromkeys(d.agent_id for d in delegations))
+        outputs = [a for a in mentions if a in OUTPUT_AGENTS]
+        sources = [a for a in mentions if a not in OUTPUT_AGENTS]
+        message = await self._post(
             chair,
             "decision",
             "\n".join(line for line in lines if line),
             trigger,
             usage,
-            mentions=list(dict.fromkeys(d.agent_id for d in delegations)),
+            # Display and voice start after the data arrives, not before it.
+            mentions=sources if outputs and sources else mentions,
         )
+        if outputs and sources:
+            self.relays[message.message_id] = outputs
+            while len(self.relays) > RELAYS_MAX:
+                self.relays.pop(next(iter(self.relays)))
 
     async def _remember(self, facts: list[str]) -> None:
         saved = [f for f in facts if await self.runner.memory.add_fact(f)]
@@ -149,8 +173,8 @@ class SwarmCouncil:
         trigger: SwarmMessage,
         usage: SwarmUsage,
         mentions: list[str] | None = None,
-    ) -> None:
-        await self.bus.post(
+    ) -> SwarmMessage:
+        return await self.bus.post(
             sender=agent_id,
             kind=kind,
             text=text,
