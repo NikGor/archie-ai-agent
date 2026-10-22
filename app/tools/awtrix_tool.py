@@ -69,7 +69,8 @@ async def awtrix_tool(
 
     Use it for proactive notices, usually scheduled through cron_tool — for
     example, a football match starting soon. The display is 32x8 pixels: keep
-    the text under about 20 characters, numbers matter more than words.
+    the text under about 20 characters, numbers matter more than words. The
+    display cannot show emoji: use plain letters, digits and punctuation only.
     notify shows the text once on top of everything. push adds a named app to
     the display loop until removed. remove deletes a pushed app.
 
