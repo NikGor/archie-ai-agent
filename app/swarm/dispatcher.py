@@ -96,6 +96,14 @@ class SwarmDispatcher:
         enabled = await self.roster.get_enabled_ids()
         if self.wants_council(message):
             await self._start_council(message, enabled)
+        relays = [a for a in self.council.pop_relay(message) if a in enabled]
+        for agent_id in relays:
+            # The data for a display or voice task arrived (ARCHIE-240).
+            relayed = message.model_copy(update={"mentions": [agent_id]})
+            if agent_id in self._running:
+                self._pending[agent_id] = relayed
+            else:
+                self._start(agent_id, relayed)
         targets = self.select_targets(message, enabled)
         if self.is_human_intent(message):
             # A user command or council decision must not be lost to a busy agent.
@@ -103,7 +111,8 @@ class SwarmDispatcher:
                 self._pending[agent_id] = message
         for agent_id in targets:
             self._start(agent_id, message)
-        await self._report_skipped(message, enabled, targets)
+        # A relayed agent already got this message: no "busy" note for it.
+        await self._report_skipped(message, enabled, targets + relays)
         for agent_id in self.select_listeners(message, enabled):
             if agent_id in targets:
                 continue
