@@ -39,6 +39,7 @@ async def test_notify_posts_payload_with_color_and_duration():
             icon="ball",
             color="#00FF00",
             duration_seconds=6,
+            repeat=1,
         )
 
     assert result == {"status": "success", "action": "notify"}
@@ -52,6 +53,22 @@ async def test_notify_posts_payload_with_color_and_duration():
             "durationMs": 6000,
         },
     )
+
+
+async def test_notify_shows_message_three_times_by_default():
+    with _patch_send() as send:
+        result = await awtrix_tool("notify", text="Bayern 20:30")
+
+    assert result["status"] == "success"
+    assert send.await_count == 3
+
+
+async def test_notify_stops_repeating_after_display_error():
+    with _patch_send(code=500) as send:
+        result = await awtrix_tool("notify", text="x")
+
+    assert result["status"] == "error"
+    send.assert_awaited_once()
 
 
 async def test_push_puts_named_app_with_lifetime():
@@ -245,7 +262,7 @@ async def test_send_retries_once_after_a_timeout():
         patch("app.tools.awtrix_tool._RETRY_DELAY_SECONDS", 0),
         patch("httpx.AsyncClient.request", new=request),
     ):
-        result = await awtrix_tool("notify", text="x")
+        result = await awtrix_tool("notify", text="x", repeat=1)
 
     assert result["status"] == "success"
     assert request.await_count == 2
