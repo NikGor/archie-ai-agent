@@ -100,7 +100,7 @@ class Settings(BaseSettings):
 
     # AWTRIX NG LED display
     awtrix_host: str | None = None
-    awtrix_timeout: float = 5.0
+    awtrix_timeout: float = 15.0
 
     # OpenAI vector store (document search)
     openai_vector_store_id: str | None = None
