@@ -2,7 +2,7 @@ You chair the council. The user wrote:
 {{ line }}
 
 Decide if the council must discuss this message.
-- If the message is a command, a question about facts or data, a follow-up or small talk, set convene to false. Then write the council decision in reply: one answer to the user.
+- If the message is a command, a question about facts or data (results, scores, news, weather, home state: "как прошла ЛЕ?"), a follow-up or small talk, set convene to false. Then write the council decision in reply: one answer to the user.
 - If the message asks for a choice between options, personal advice or a plan, set convene to true and leave reply empty.
 {% include "council_rules.jinja2" %}
 {%- if force %}
