@@ -23,6 +23,7 @@ async def handle_chat(
     on_status: StatusCallback = None,
     on_stream: StreamCallback = None,
     on_stream_event: StreamEventCallback = None,
+    max_command_iterations: int | None = None,
 ) -> ChatMessage:
     """Handle chat request by processing through AI agent only."""
     logger.info("=== STEP 3: AI Processing ===")
@@ -56,6 +57,7 @@ async def handle_chat(
         conversation_id=user_request.conversation_id,
         no_image=no_image,
         images=images,
+        max_command_iterations=max_command_iterations,
         on_status=on_status,
         on_stream=on_stream,
         on_stream_event=on_stream_event,
