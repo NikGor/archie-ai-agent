@@ -20,6 +20,7 @@ from ..config import settings
 from .agents import SWARM_AGENTS, SWARM_GROUPS, SwarmRoster, get_group_members
 from .bus import SwarmBus, SwarmHub
 from .council import COUNCIL_GROUP, SwarmCouncil
+from .memory import SwarmMemory
 from .runner import SwarmAgentRunner
 
 
@@ -36,8 +37,10 @@ class SwarmDispatcher:
         roster: SwarmRoster,
         runner: SwarmAgentRunner,
         council: SwarmCouncil,
+        memory: SwarmMemory,
     ) -> None:
         self.hub = hub
+        self.memory = memory
         self.bus = bus
         self.roster = roster
         self.runner = runner
@@ -61,6 +64,21 @@ class SwarmDispatcher:
                     await task
         logger.info("swarm_dispatcher_002: Dispatcher stopped")
 
+    async def reset(self) -> None:
+        """Cancel all running turns and drop queued ones (Stop, ARCHIE-238)."""
+        tasks = list(self._tasks)
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        self._pending.clear()
+        self._running.clear()
+        self._last_run.clear()
+        for agent_id in SWARM_AGENTS:
+            self.hub.publish(SwarmTypingEvent(agent_id=agent_id, active=False))
+        logger.info("swarm_dispatcher_007: All turns cancelled")
+
     async def _listen(self, queue: asyncio.Queue) -> None:
         while True:
             event = await queue.get()
@@ -72,6 +90,9 @@ class SwarmDispatcher:
                 logger.exception("swarm_dispatcher_error_001: Failed to handle message")
 
     async def handle(self, message: SwarmMessage) -> None:
+        if await self.memory.get_mode() == "stopped":
+            logger.info("swarm_dispatcher_006: Swarm is stopped, message ignored")
+            return
         enabled = await self.roster.get_enabled_ids()
         if self.wants_council(message):
             await self._start_council(message, enabled)
