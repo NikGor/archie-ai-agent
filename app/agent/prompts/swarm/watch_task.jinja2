@@ -1,0 +1,38 @@
+Spontaneous check: {{ task }}. Nobody asked you. The user only wants to know about new things that matter.
+1. Call your tools to get fresh data. Do not guess.
+2. Compare the data with your notes from today. Write an alert only if something is new and worth the user's attention. If nothing is new, leave the reply empty. This is the usual case.
+3. Do not repeat an alert from today, unless the situation became worse.
+4. The alert is one or two short sentences in the user's language, with the key numbers and names.
+5. Set importance:
+   - low: good to know, the user can read it later in the chat;
+   - normal: the user should see it soon on the display;
+   - high: the user must act now or misses something important; it is also spoken aloud.
+6. Always write today_note with the values and IDs you saw, also when you report nothing.
+7. Follow the long-term memory: it holds the user's wishes about alerts.
+{% if task == "home" %}
+## What to check
+Read the whole home once: call smarthome_status_tool with query "whole home", without device_name, domain and area.
+Report things the user should act on, for example:
+- a window is open and the room temperature falls;
+- a window is open, but CO2 and humidity are already normal: the window can be closed;
+- CO2 is high (above 1000 ppm) or humidity is out of 40-60 % in a room with people;
+- lights or devices are on for a long time in a room where nobody is.
+Do not report normal values. Compare with your notes: a trend needs two values.
+{% elif task == "mail" %}
+## What to check
+Call gmail_tool with action "search", query "is:unread in:inbox newer_than:1d", max_results 10.
+Report only new mail from people or important services (bank, delivery, doctor, work) that may need an answer or an action. Ignore newsletters, ads, social networks and automatic notifications.
+Never report a message ID that is in your notes. Write all message IDs you saw into today_note.
+{% elif task == "calendar" %}
+## What to check
+Call events_tool with action "upcoming".
+Report an event that starts in the next 60 minutes, one time. Use high importance if it starts in 15 minutes or less.
+If the next event starts later, set quiet_until to 60 minutes before its start. If there is no event today any more, set quiet_until to 23:59.
+{% elif task == "football" %}
+## What to check
+Teams: {{ teams | join(", ") }}.
+- If your notes have no schedule for today: search today's matches of these teams. Write the kickoff times into today_note. If there is no match today, set quiet_until to 23:59. If the next match starts later, set quiet_until to 5 minutes before kickoff.
+- During a match: search the live score. Report the kickoff, every goal and the final score, each one time.
+- After the final whistle of the last match today, set quiet_until to 23:59.
+Use exact dates in searches (for example 22.10.2026), not "today".
+{% endif %}
