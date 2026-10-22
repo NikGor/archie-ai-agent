@@ -36,7 +36,7 @@ from .schedule import (
     is_active,
     local_now,
     parse_quiet_until,
-    pick_delay_seconds,
+    plan_delay_seconds,
     pick_task,
     voice_allowed,
 )
@@ -139,7 +139,10 @@ class SwarmTicker:
             self._changed.clear()
             delay = None
             if await self.memory.get_mode() == "running":
-                delay = pick_delay_seconds(await self.memory.get_settings())
+                state = await self.runner.get_user_state()
+                delay = plan_delay_seconds(
+                    local_now(state.user_timezone), await self.memory.get_settings()
+                )
                 self.next_run_at = datetime.now(UTC) + timedelta(seconds=delay)
             else:
                 self.next_run_at = None
