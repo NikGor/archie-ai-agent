@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from archie_shared.swarm.models import (
     SWARM_TEXT_MAX_LENGTH,
     SwarmActionInfo,
+    SwarmImportance,
     SwarmMessage,
     SwarmMessageEvent,
     SwarmMessageKind,
@@ -83,6 +84,7 @@ class SwarmBus:
         actions: list[SwarmActionInfo] | None = None,
         usage: SwarmUsage | None = None,
         mentions: list[str] | None = None,
+        importance: SwarmImportance | None = None,
     ) -> SwarmMessage:
         """`mentions` overrides the mentions parsed from the text (council delegations)."""
         text = clip_text(text)
@@ -100,6 +102,7 @@ class SwarmBus:
             reply_to=reply_to,
             depth=depth,
             actions=actions or [],
+            importance=importance,
             usage=usage,
         )
         data = message.model_dump_json(exclude={"message_id"})
@@ -116,6 +119,11 @@ class SwarmBus:
         )
         self.hub.publish(SwarmMessageEvent(message=message))
         return message
+
+    async def clear(self) -> None:
+        """Delete the whole chat history (Stop, ARCHIE-238)."""
+        await self.redis.delete(_STREAM_KEY)
+        logger.info("swarm_bus_002: Chat history cleared")
 
     async def get_history(self, count: int) -> list[SwarmMessage]:
         """Return the last `count` messages, oldest first."""
