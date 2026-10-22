@@ -157,6 +157,7 @@ class AgentFactory:
         conversation_id: str | None = None,
         no_image: bool = False,
         images: list[ImageAttachment] | None = None,
+        max_command_iterations: int | None = None,
         on_status: StatusCallback = None,
         on_stream: StreamCallback = None,
         on_stream_event: StreamEventCallback = None,
@@ -217,7 +218,9 @@ class AgentFactory:
             conversation_id, user_name
         )
         metrics = PipelineMetrics()
-        command_loop = CommandLoop(self.tool_factory, metrics, MAX_COMMAND_ITERATIONS)
+        command_loop = CommandLoop(
+            self.tool_factory, metrics, max_command_iterations or MAX_COMMAND_ITERATIONS
+        )
         loop_result = await command_loop.run(
             make_command_call=self._make_command_call,
             user_input=user_input,
