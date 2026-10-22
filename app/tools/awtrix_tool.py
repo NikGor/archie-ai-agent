@@ -39,6 +39,9 @@ _EMOJI_PATTERN = re.compile(
 )
 
 _ICON_SIZE = 8
+# ARCHIE-233: a notice is shown 3 times so the user does not miss it; the
+# display queues notifications and plays them one after the other.
+_NOTIFY_REPEAT = 3
 # The clock sits on weak Wi-Fi and sometimes drops a request: try twice.
 _SEND_ATTEMPTS = 2
 _RETRY_DELAY_SECONDS = 1.0
@@ -162,6 +165,7 @@ async def _run_action(
     icon_pixels: str | None,
     color: str | None,
     duration_seconds: int | None,
+    repeat: int,
 ) -> tuple[httpx.Response, dict[str, Any]]:
     """Send one action to the display; return its response and extra result fields."""
     if action == "notify":
@@ -172,7 +176,11 @@ async def _run_action(
             duration_seconds,
             "durationMs",
         )
-        return await _send("POST", "/notifications", payload), {}
+        for _ in range(max(1, repeat)):
+            response = await _send("POST", "/notifications", payload)
+            if not response.is_success:
+                break
+        return response, {}
     if action == "push":
         payload = _build_payload(
             text,
@@ -206,6 +214,7 @@ async def awtrix_tool(
     icon_pixels: str | None = None,
     color: str | None = None,
     duration_seconds: int | None = None,
+    repeat: int = _NOTIFY_REPEAT,
     demo_mode: bool = False,
 ) -> dict[str, Any]:
     """
@@ -216,7 +225,8 @@ async def awtrix_tool(
     the text under about 20 characters, numbers matter more than words. It
     cannot show emoji: they are removed from the text, so pass an icon instead
     (see the awtrix skill).
-    notify shows the text once on top of everything. push adds a named app to
+    notify shows the text on top of everything, 3 times in a row by default:
+    call it once, do not repeat the call. push adds a named app to
     the display loop until removed. remove deletes a pushed app.
 
     Icons (8x8). First call list_icons and reuse a fitting icon by its ID in
@@ -239,6 +249,7 @@ async def awtrix_tool(
         icon_pixels: Drawn 8x8 icon, rows joined by '/'; required for save_icon
         color: Optional text color as #RRGGBB
         duration_seconds: notify - how long to show it; push - when the app removes itself
+        repeat: notify only - how many times in a row the message is shown (default 3)
 
     Returns:
         dict[str, Any]: Delivery status; list_icons also returns the icon IDs
@@ -251,7 +262,7 @@ async def awtrix_tool(
 
     try:
         response, extra = await _run_action(
-            action, text, name, icon, icon_pixels, color, duration_seconds
+            action, text, name, icon, icon_pixels, color, duration_seconds, repeat
         )
     except ValueError as exc:
         logger.warning(f"awtrix_tool_warning_001: Invalid arguments: {exc}")
