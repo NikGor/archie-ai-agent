@@ -9,6 +9,7 @@ single council decision. A decision delegates work to home agents with
 """
 
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 from archie_shared.swarm.models import (
     SwarmMessage,
@@ -44,6 +45,8 @@ class SwarmCouncil:
         self.hub = hub
         self.bus = bus
         self.runner = runner
+        # Called after the council saves long-term memory (the UI shows it).
+        self.on_memory_change: Callable[[], Awaitable[None]] | None = None
 
     async def choose_chair(self, members: list[str]) -> str:
         """The member whose persona the user picked chairs the council."""
@@ -121,6 +124,7 @@ class SwarmCouncil:
             for d in decision.delegations
             if d.agent_id in SWARM_AGENTS and not SWARM_AGENTS[d.agent_id].groups
         ]
+        await self._remember(decision.remember)
         lines = [decision.reply.replace("@", "").strip()]
         lines += [f"→ @{d.agent_id}: {d.task}" for d in delegations]
         await self._post(
@@ -131,6 +135,11 @@ class SwarmCouncil:
             usage,
             mentions=list(dict.fromkeys(d.agent_id for d in delegations)),
         )
+
+    async def _remember(self, facts: list[str]) -> None:
+        saved = [f for f in facts if await self.runner.memory.add_fact(f)]
+        if saved and self.on_memory_change:
+            await self.on_memory_change()
 
     async def _post(
         self,
