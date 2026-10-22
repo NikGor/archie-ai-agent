@@ -199,7 +199,8 @@ class SwarmAgentRunner:
         late_night = (
             [
                 'It is after midnight: "today" or "tonight" in the user\'s words '
-                f"usually means {(now - timedelta(days=1)):%d.%m.%Y}."
+                f"usually means {(now - timedelta(days=1)):%d.%m.%Y}, "
+                f'"tomorrow" means {now:%d.%m.%Y}.'
             ]
             if now.hour < LATE_NIGHT_END_HOUR
             else []
