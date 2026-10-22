@@ -17,6 +17,12 @@ import re
 from typing import Any, Literal
 import httpx
 from PIL import Image
+from tenacity import (
+    AsyncRetrying,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_fixed,
+)
 from app.config import settings
 
 
@@ -33,6 +39,9 @@ _EMOJI_PATTERN = re.compile(
 )
 
 _ICON_SIZE = 8
+# The clock sits on weak Wi-Fi and sometimes drops a request: try twice.
+_SEND_ATTEMPTS = 2
+_RETRY_DELAY_SECONDS = 1.0
 _ICONS_DIR = "/ICONS"
 _ICON_EXTENSIONS = (".gif", ".jpg")
 # '.' is off: a dark pixel of the LED matrix. Bright values read well on LEDs.
@@ -131,7 +140,18 @@ async def _send(
 ) -> httpx.Response:
     url = f"http://{settings.awtrix_host}/api/v1{path}"
     async with httpx.AsyncClient(timeout=settings.awtrix_timeout) as client:
-        return await client.request(method, url, json=payload, files=files)
+        async for attempt in AsyncRetrying(
+            stop=stop_after_attempt(_SEND_ATTEMPTS),
+            wait=wait_fixed(_RETRY_DELAY_SECONDS),
+            retry=retry_if_exception_type(httpx.TransportError),
+            before_sleep=lambda state: logger.warning(
+                f"awtrix_tool_warning_002: Retrying after {state.outcome.exception()!r}"
+            ),
+            reraise=True,
+        ):
+            with attempt:
+                return await client.request(method, url, json=payload, files=files)
+    raise AssertionError("unreachable: AsyncRetrying always yields an attempt")
 
 
 async def _run_action(
