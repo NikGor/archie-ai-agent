@@ -12,7 +12,12 @@ import logging
 import os
 from typing import Any
 from archie_shared.chat.models import LllmTrace
-from archie_shared.swarm.models import SwarmActionInfo, SwarmMessage, SwarmUsage
+from archie_shared.swarm.models import (
+    SwarmActionInfo,
+    SwarmMessage,
+    SwarmUsage,
+    SwarmWatchTask,
+)
 from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel, Field
 from ..agent.prompt_builder import PromptBuilder
@@ -29,11 +34,23 @@ from ..utils.provider_utils import get_provider_for_model
 from ..utils.skill_utils import load_skill, load_skill_references
 from ..utils.tool_executor import execute_tool_calls
 from .agents import SWARM_AGENTS, SWARM_GROUPS, SwarmRoster
-from .models import SwarmAgentProfile, SwarmReply, SwarmToolCall, SwarmTurn
-from .policy import READ_ONLY_TOOLS, check_tool_call
+from .memory import DayNote, SwarmMemory
+from .models import (
+    SwarmAgentProfile,
+    SwarmReply,
+    SwarmToolCall,
+    SwarmTurn,
+    SwarmWatchReply,
+    SwarmWatchTurn,
+)
+from .policy import block_reason, check_tool_call, is_read_only
+from .schedule import local_now
 
 
 logger = logging.getLogger(__name__)
+
+# Day memory lines in a prompt: notes of the own check, or alerts of all checks.
+DAY_NOTES_IN_PROMPT = 10
 
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "agent", "prompts")
 SWARM_PROMPTS_DIR = os.path.join(PROMPTS_DIR, "swarm")
@@ -42,6 +59,17 @@ SWARM_PROMPTS_DIR = os.path.join(PROMPTS_DIR, "swarm")
 FINAL_REPLY_TASK = (
     "Write your chat reply now. You must reply: say what you did, "
     "or say that you could not do the task and why."
+)
+REPEATED_CALLS_TASK = (
+    "You already called these tools with the same arguments and have the results. "
+)
+WATCH_TOOLS_TASK = (
+    "You did not call your tools. Call them now to get fresh data. "
+    "Do not answer from your notes."
+)
+WATCH_FINAL_TASK = (
+    "Write the outcome of the check now. Write an alert only if something is "
+    "new for the user. Else leave the reply empty: do not write that nothing is new."
 )
 
 
@@ -59,7 +87,17 @@ def create_swarm_prompt_env() -> Environment:
 def format_chat_line(message: SwarmMessage) -> str:
     sender = "user" if message.sender == "user" else f"@{message.sender}"
     reply = f" (reply to [{message.reply_to}])" if message.reply_to else ""
-    return f"[{message.message_id}] {sender}{reply}: {message.text}"
+    # Alerts address agents without "@" in the text (ARCHIE-238).
+    hidden = [m for m in message.mentions if f"@{m}" not in message.text]
+    to = f" (to {', '.join(f'@{m}' for m in hidden)})" if hidden else ""
+    tag = f" [{message.importance} alert]" if message.importance else ""
+    return f"[{message.message_id}] {sender}{reply}{to}{tag}: {message.text}"
+
+
+def clean_arguments(call: SwarmToolCall) -> SwarmToolCall:
+    """Drop arguments without a name: cheap models sometimes add them (ARCHIE-238)."""
+    call.arguments = [p for p in call.arguments if p.name.strip()]
+    return call
 
 
 class SwarmDraft(BaseModel):
@@ -70,6 +108,22 @@ class SwarmDraft(BaseModel):
     usage: SwarmUsage = Field(description="Summed LLM usage of the turn")
 
 
+class SwarmWatchDraft(BaseModel):
+    """Result of a spontaneous check."""
+
+    outcome: SwarmWatchReply = Field(description="Alert, importance and notes")
+    usage: SwarmUsage = Field(description="Summed LLM usage of the check")
+    got_data: bool = Field(
+        description="At least one tool call succeeded; without data the check failed"
+    )
+
+
+def format_day_note(note: DayNote) -> str:
+    if note.reported:
+        return f"{note.time} {note.task}, reported: {note.reported}"
+    return f"{note.time} {note.task}: {note.note}"
+
+
 class SwarmAgentRunner:
     def __init__(
         self,
@@ -77,6 +131,7 @@ class SwarmAgentRunner:
         state_service: StateService | None = None,
         prompt_builder: PromptBuilder | None = None,
         roster: SwarmRoster | None = None,
+        memory: SwarmMemory | None = None,
     ) -> None:
         self.tool_factory = tool_factory or ToolFactory()
         # Dry run: tools with side effects run in demo mode, reads stay real.
@@ -86,6 +141,7 @@ class SwarmAgentRunner:
         self.state_service = state_service or StateService()
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.roster = roster or SwarmRoster()
+        self.memory = memory or SwarmMemory()
         self.env = create_swarm_prompt_env()
 
     async def get_user_state(self) -> UserState:
@@ -123,38 +179,66 @@ class SwarmAgentRunner:
         )
 
     def build_context(
-        self, state: UserState, history: list[SwarmMessage], trigger: SwarmMessage
+        self,
+        state: UserState,
+        history: list[SwarmMessage],
+        trigger_id: str | None,
+        memory_lines: list[str],
     ) -> str:
-        """Volatile tail: time, compact user context and recent chat lines."""
+        """Volatile tail: time, compact user context, memory and recent chat lines."""
         state_dict = state.model_dump()
         lines = [
             self.prompt_builder.build_datetime_note(state_dict),
             f"User city: {state.default_city}, user language: {state.language}",
+            *memory_lines,
             "Recent chat:",
-            *(
-                format_chat_line(m)
-                for m in history
-                if m.message_id != trigger.message_id
-            ),
+            *(format_chat_line(m) for m in history if m.message_id != trigger_id),
         ]
         return "\n".join(lines)
+
+    async def build_memory_lines(
+        self, state: UserState, watch_task: SwarmWatchTask | None
+    ) -> list[str]:
+        """Long-term facts, then today's notes: a check sees its own notes,
+        every other agent sees today's alerts (ARCHIE-238)."""
+        facts = await self.memory.list_facts()
+        notes = await self.memory.get_day_notes(local_now(state.user_timezone).date())
+        if watch_task:
+            notes = [n for n in notes if n.task == watch_task]
+        else:
+            notes = [n for n in notes if n.reported]
+        lines: list[str] = []
+        if facts:
+            lines += ["Long-term memory:", *(f"- {f.text}" for f in facts)]
+        if notes:
+            title = "Your notes today:" if watch_task else "Alerts today:"
+            lines += [
+                title,
+                *(f"- {format_day_note(n)}" for n in notes[-DAY_NOTES_IN_PROMPT:]),
+            ]
+        return lines
 
     async def build_messages(
         self,
         profile: SwarmAgentProfile,
         model: str,
-        trigger: SwarmMessage,
+        trigger_id: str | None,
         history: list[SwarmMessage],
         task: str,
+        watch_task: SwarmWatchTask | None = None,
     ) -> list[dict[str, Any]]:
         state = await self.get_user_state()
+        memory_lines = await self.build_memory_lines(state, watch_task)
         return [
             {
                 "role": "system",
                 "content": self.build_system_prompt(profile, model),
                 "cacheable": True,
             },
-            {"role": "system", "content": self.build_context(state, history, trigger)},
+            {
+                "role": "system",
+                "content": self.build_context(state, history, trigger_id, memory_lines),
+            },
             {"role": "user", "content": task},
         ]
 
@@ -172,7 +256,9 @@ class SwarmAgentRunner:
         """One structured call without tools, for council steps."""
         model = profile.model or settings.swarm_model
         provider = get_provider_for_model(model)
-        messages = await self.build_messages(profile, model, trigger, history, task)
+        messages = await self.build_messages(
+            profile, model, trigger.message_id, history, task
+        )
         traces: list[LllmTrace] = []
         content = await self._call(
             get_client(provider), provider, model, messages, schema, traces
@@ -186,58 +272,16 @@ class SwarmAgentRunner:
         history: list[SwarmMessage],
     ) -> SwarmDraft | None:
         model = profile.model or settings.swarm_model
-        provider = get_provider_for_model(model)
-        client = get_client(provider)
         messages = await self.build_messages(
             profile,
             model,
-            trigger,
+            trigger.message_id,
             history,
             f"React to this message:\n{format_chat_line(trigger)}",
         )
-        traces: list[LllmTrace] = []
-        actions: list[SwarmActionInfo] = []
-        turn: SwarmTurn | SwarmReply = await self._call(
-            client, provider, model, messages, SwarmTurn, traces
+        turn, actions, traces, _ = await self._loop(
+            profile, model, messages, SwarmTurn, SwarmReply
         )
-        rounds = 0
-        # Several tool rounds let an agent read the state, then change it.
-        while isinstance(turn, SwarmTurn) and turn.tool_calls:
-            rounds += 1
-            logger.info(
-                f"swarm_runner_001: \033[36m{profile.agent_id}\033[0m round {rounds} tools="
-                f"{[tc.tool_name for tc in turn.tool_calls]} reasoning: \033[33m{turn.reasoning}\033[0m"
-            )
-            results, new_actions = await self._execute(profile, turn.tool_calls)
-            actions.extend(new_actions)
-            messages.append(
-                {
-                    "role": "system",
-                    "content": self._format_results(results, new_actions),
-                }
-            )
-            # After a successful side effect only the reply is left: no repeated actions.
-            last_round = rounds >= settings.swarm_max_tool_rounds or any(
-                a.status == "success" for a in new_actions
-            )
-            messages.append(
-                {
-                    "role": "user",
-                    "content": (
-                        FINAL_REPLY_TASK
-                        if last_round
-                        else f"Call more tools if you still need them. Else: {FINAL_REPLY_TASK}"
-                    ),
-                }
-            )
-            turn = await self._call(
-                client,
-                provider,
-                model,
-                messages,
-                SwarmReply if last_round else SwarmTurn,
-                traces,
-            )
         reply = turn.reply.strip()
         if not reply and not actions:
             logger.info(
@@ -249,6 +293,131 @@ class SwarmAgentRunner:
         return SwarmDraft(
             text=reply, actions=actions, usage=self._sum_usage(model, traces)
         )
+
+    async def watch(
+        self,
+        profile: SwarmAgentProfile,
+        watch_task: SwarmWatchTask,
+        history: list[SwarmMessage],
+        task: str,
+    ) -> SwarmWatchDraft:
+        """One spontaneous check: read fresh data, compare with today's notes,
+        return an alert or an empty reply (ARCHIE-238)."""
+        model = profile.model or settings.swarm_model
+        messages = await self.build_messages(
+            profile, model, None, history, task, watch_task
+        )
+        turn, _, traces, succeeded = await self._loop(
+            profile,
+            model,
+            messages,
+            SwarmWatchTurn,
+            SwarmWatchReply,
+            WATCH_FINAL_TASK,
+            first_task=WATCH_TOOLS_TASK,
+        )
+        return SwarmWatchDraft(
+            outcome=SwarmWatchReply.model_validate(turn.model_dump()),
+            usage=self._sum_usage(model, traces),
+            got_data=succeeded > 0,
+        )
+
+    async def _loop(
+        self,
+        profile: SwarmAgentProfile,
+        model: str,
+        messages: list[dict[str, Any]],
+        turn_schema: type[SwarmTurn],
+        reply_schema: type[SwarmReply],
+        final_task: str = FINAL_REPLY_TASK,
+        first_task: str | None = None,
+    ) -> tuple[SwarmTurn | SwarmReply, list[SwarmActionInfo], list[LllmTrace], int]:
+        """Tool rounds until the agent replies. Also returns the number of
+        successful tool calls. Several rounds let an agent read
+        the state, then change it. `first_task`: the agent must call a tool
+        first; if it does not, it gets this task once."""
+        provider = get_provider_for_model(model)
+        client = get_client(provider)
+        traces: list[LllmTrace] = []
+        actions: list[SwarmActionInfo] = []
+        turn: SwarmTurn | SwarmReply = await self._call(
+            client, provider, model, messages, turn_schema, traces
+        )
+        if first_task and isinstance(turn, SwarmTurn) and not turn.tool_calls:
+            logger.info(
+                f"swarm_runner_003: \033[36m{profile.agent_id}\033[0m answered without tools"
+            )
+            messages.append({"role": "user", "content": first_task})
+            turn = await self._call(
+                client, provider, model, messages, turn_schema, traces
+            )
+        done: set[str] = set()
+        rounds = 0
+        while isinstance(turn, SwarmTurn) and turn.tool_calls:
+            new_calls = [
+                clean_arguments(c)
+                for c in turn.tool_calls
+                if clean_arguments(c).model_dump_json() not in done
+            ]
+            if not new_calls:
+                # Cheap models repeat a call they already have results for (ARCHIE-238).
+                logger.info(
+                    f"swarm_runner_004: \033[36m{profile.agent_id}\033[0m repeats its calls"
+                )
+                messages.append(
+                    {"role": "user", "content": REPEATED_CALLS_TASK + final_task}
+                )
+                turn = await self._call(
+                    client, provider, model, messages, reply_schema, traces
+                )
+                break
+            turn.tool_calls = new_calls
+            rounds += 1
+            logger.info(
+                f"swarm_runner_001: \033[36m{profile.agent_id}\033[0m round {rounds} tools="
+                f"{[(tc.tool_name, {p.name: p.value for p in tc.arguments}) for tc in turn.tool_calls]} "
+                f"reasoning: \033[33m{turn.reasoning}\033[0m"
+            )
+            results, new_actions, succeeded = await self._execute(
+                profile, turn.tool_calls
+            )
+            # Only a successful call must not repeat; a failed one may be fixed.
+            done.update(c.model_dump_json() for c in succeeded)
+            actions.extend(new_actions)
+            messages.append(
+                {
+                    "role": "system",
+                    "content": self._format_results(
+                        results,
+                        new_actions,
+                        profile.tool_result_max_chars
+                        or settings.swarm_tool_result_max_chars,
+                    ),
+                }
+            )
+            # After a successful side effect only the reply is left: no repeated actions.
+            last_round = rounds >= settings.swarm_max_tool_rounds or any(
+                a.status == "success" for a in new_actions
+            )
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        final_task
+                        if last_round
+                        else f"Call more tools if you still need them. Else: {final_task}"
+                    ),
+                }
+            )
+            turn = await self._call(
+                client,
+                provider,
+                model,
+                messages,
+                reply_schema if last_round else turn_schema,
+                traces,
+            )
+        return turn, actions, traces, len(done)
 
     async def _call(
         self,
@@ -270,7 +439,9 @@ class SwarmAgentRunner:
 
     async def _execute(
         self, profile: SwarmAgentProfile, tool_calls: list[SwarmToolCall]
-    ) -> tuple[list[ToolResult], list[SwarmActionInfo]]:
+    ) -> tuple[list[ToolResult], list[SwarmActionInfo], list[SwarmToolCall]]:
+        """Run the allowed calls. Returns the results, the side effects and
+        the calls that succeeded."""
         allowed: list[SwarmToolCall] = []
         actions: list[SwarmActionInfo] = []
         for call in tool_calls:
@@ -278,22 +449,23 @@ class SwarmAgentRunner:
                 allowed.append(call)
             else:
                 actions.append(
-                    self._action_info(call, "blocked", "Not allowed for this agent")
+                    self._action_info(call, "blocked", block_reason(profile, call))
                 )
-        reads = [c for c in allowed if c.tool_name in READ_ONLY_TOOLS]
-        writes = [c for c in allowed if c.tool_name not in READ_ONLY_TOOLS]
+        reads = [c for c in allowed if is_read_only(c)]
+        writes = [c for c in allowed if not is_read_only(c)]
         results = await self._run_calls(
             profile, reads, self.tool_factory
         ) + await self._run_calls(profile, writes, self.action_factory)
         allowed = reads + writes
         for call, result in zip(allowed, results, strict=True):
-            if call.tool_name not in READ_ONLY_TOOLS:
+            if not is_read_only(call):
                 actions.append(
                     self._action_info(
                         call, "success" if result.success else "error", result.error
                     )
                 )
-        return results, actions
+        succeeded = [c for c, r in zip(allowed, results, strict=True) if r.success]
+        return results, actions, succeeded
 
     @staticmethod
     async def _run_calls(
@@ -336,16 +508,16 @@ class SwarmAgentRunner:
 
     @staticmethod
     def _format_results(
-        results: list[ToolResult], actions: list[SwarmActionInfo]
+        results: list[ToolResult], actions: list[SwarmActionInfo], limit: int
     ) -> str:
-        limit = settings.swarm_tool_result_max_chars
         lines = ["Tool results:"]
         for result in results:
             output = json.dumps(result.output, ensure_ascii=False, default=str)[:limit]
             status = "ok" if result.success else f"error: {result.error}"
             lines.append(f"- {result.tool_name} ({status}): {output}")
         lines.extend(
-            f"- {a.tool_name}: BLOCKED. You may not do this. Ask the right agent or the user."
+            f"- {a.tool_name}: BLOCKED, {a.summary}. Fix the arguments, "
+            "or ask the right agent or the user."
             for a in actions
             if a.status == "blocked"
         )
