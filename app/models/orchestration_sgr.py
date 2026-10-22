@@ -17,6 +17,7 @@ ToolName = Literal[
     "cron_tool",
     "announce_tool",
     "awtrix_tool",
+    "agent_task_tool",
     "document_search_tool",
     "skill_loader_tool",
 ]
