@@ -257,7 +257,7 @@ class SwarmAgentRunner:
         schema: type[BaseModel],
     ) -> tuple[Any, SwarmUsage]:
         """One structured call without tools, for council steps."""
-        model = profile.model or settings.swarm_model
+        model = await self.roster.get_model(profile)
         provider = get_provider_for_model(model)
         messages = await self.build_messages(
             profile, model, trigger.message_id, history, task
@@ -274,7 +274,7 @@ class SwarmAgentRunner:
         trigger: SwarmMessage,
         history: list[SwarmMessage],
     ) -> SwarmDraft | None:
-        model = profile.model or settings.swarm_model
+        model = await self.roster.get_model(profile)
         messages = await self.build_messages(
             profile,
             model,
@@ -306,7 +306,7 @@ class SwarmAgentRunner:
     ) -> SwarmWatchDraft:
         """One spontaneous check: read fresh data, compare with today's notes,
         return an alert or an empty reply (ARCHIE-238)."""
-        model = profile.model or settings.swarm_model
+        model = await self.roster.get_model(profile)
         messages = await self.build_messages(
             profile, model, None, history, task, watch_task
         )
