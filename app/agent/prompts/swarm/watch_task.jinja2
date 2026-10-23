@@ -30,7 +30,11 @@ Report an event that starts in the next 60 minutes, one time. Use high importanc
 If the next event starts later, set quiet_until to 60 minutes before its start. If there is no event today any more, set quiet_until to 23:59.
 {% elif task == "football" %}
 ## What to check
+{%- if teams %}
 Teams: {{ teams | join(", ") }}.
+{%- else %}
+Teams: the favourite teams and the matches to follow from your skill.
+{%- endif %}
 - If your notes have no schedule for today: search today's matches of these teams. Write the kickoff times into today_note. If there is no match today, set quiet_until to 23:59. If the next match starts later, set quiet_until to 5 minutes before kickoff.
 - During a match: search the live score. Report the kickoff, every goal and the final score, each one time.
 - After the final whistle of the last match today, set quiet_until to 23:59.
