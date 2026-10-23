@@ -49,7 +49,7 @@ async def smarthome_status_tool(
     Args:
         query: Original user question, used for logging/context only
         device_name: Filter by entity name or alias (case-insensitive), e.g. "Гостиная термостат"
-        domain: Filter by domain: light, climate, sensor, binary_sensor, todo
+        domain: Filter by domain: light, climate, sensor, binary_sensor, todo, vacuum
         area: Filter by area/room name, e.g. "Гостиная"
 
     Returns:
