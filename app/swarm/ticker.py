@@ -15,7 +15,7 @@ import asyncio
 import contextlib
 import logging
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from archie_shared.swarm.models import (
     SwarmControlEvent,
     SwarmHistoryEvent,
@@ -51,6 +51,7 @@ WATCH_AGENTS: dict[SwarmWatchTask, str] = {
     "mail": "mail",
     "calendar": "calendar",
     "football": "football",
+    "weather": "weather",
 }
 # Checks whose next event has a known time; home and mail can change any time.
 QUIET_TASKS: frozenset[str] = frozenset({"calendar", "football"})
@@ -130,7 +131,12 @@ class SwarmTicker:
             next_run_at=self.next_run_at.isoformat() if self.next_run_at else None,
             last_run=await self.memory.get_last_run(),
             memory=await self.memory.list_facts(),
+            today=await self.memory.get_today_facts(await self.local_date()),
         )
+
+    async def local_date(self) -> date:
+        state = await self.runner.get_user_state()
+        return local_now(state.user_timezone).date()
 
     async def publish_control(self) -> None:
         self.hub.publish(await self.build_control_event())
@@ -237,6 +243,8 @@ class SwarmTicker:
                 task, parse_quiet_until(outcome.quiet_until, now)
             )
         alert = outcome.reply.replace("@", "").strip()
+        # The check itself decides what the swarm keeps for today (ARCHIE-246)
+        await self.memory.add_today_facts(now.date(), outcome.remember_today)
         if outcome.today_note.strip() or alert:
             await self.memory.add_day_note(
                 now.date(),
