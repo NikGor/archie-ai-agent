@@ -9,6 +9,7 @@ import contextlib
 import logging
 from archie_shared.swarm.models import (
     SwarmAgentInfo,
+    SwarmAgentModelCommand,
     SwarmAgentsEvent,
     SwarmClientCommand,
     SwarmControlEvent,
@@ -24,6 +25,7 @@ from archie_shared.swarm.models import (
 )
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import TypeAdapter, ValidationError
+from .agents import SELECTABLE_MODELS
 from .service import swarm_service
 
 
@@ -76,6 +78,11 @@ async def _handle_command(command: SwarmClientCommand) -> None:
         swarm_service.hub.publish(
             SwarmAgentsEvent(agents=await swarm_service.roster.list_agents())
         )
+    elif isinstance(command, SwarmAgentModelCommand):
+        await swarm_service.roster.set_model(command.agent_id, command.model)
+        swarm_service.hub.publish(
+            SwarmAgentsEvent(agents=await swarm_service.roster.list_agents())
+        )
     elif isinstance(command, SwarmProposalDecisionCommand):
         logger.warning("swarm_ws_warning_001: Proposals are not supported yet")
 
@@ -102,6 +109,7 @@ async def ws_swarm(websocket: WebSocket, user_name: str | None = None) -> None:
                 _HISTORY_SIZE, with_checks=True
             ),
             agents=await swarm_service.roster.list_agents(),
+            models=SELECTABLE_MODELS,
         )
         await websocket.send_json(history.model_dump(mode="json"))
         control = await swarm_service.ticker.build_control_event()
