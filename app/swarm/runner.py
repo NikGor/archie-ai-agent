@@ -201,7 +201,9 @@ class SwarmAgentRunner:
         """Long-term facts, then today's notes: a check sees its own notes,
         every other agent sees today's alerts (ARCHIE-238)."""
         facts = await self.memory.list_facts()
-        notes = await self.memory.get_day_notes(local_now(state.user_timezone).date())
+        today = local_now(state.user_timezone).date()
+        today_facts = await self.memory.get_today_facts(today)
+        notes = await self.memory.get_day_notes(today)
         if watch_task:
             notes = [n for n in notes if n.task == watch_task]
         else:
@@ -209,6 +211,8 @@ class SwarmAgentRunner:
         lines: list[str] = []
         if facts:
             lines += ["Long-term memory:", *(f"- {f.text}" for f in facts)]
+        if today_facts:
+            lines += ["Today's memory:", *(f"- {fact}" for fact in today_facts)]
         if notes:
             title = "Your notes today:" if watch_task else "Alerts today:"
             lines += [
