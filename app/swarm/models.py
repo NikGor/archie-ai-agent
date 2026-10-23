@@ -5,6 +5,7 @@ Wire-level types (SwarmMessage, WS events) live in archie_shared.swarm.models.
 
 from archie_shared.swarm.models import SwarmAgentInfo, SwarmAgentRole, SwarmImportance
 from pydantic import BaseModel, Field
+from ..config import settings
 from ..models.orchestration_sgr import Parameter, ToolName
 
 
@@ -50,7 +51,11 @@ class SwarmAgentProfile(BaseModel):
     )
     groups: list[str] = Field(
         default_factory=list,
-        description="Groups; an '@group' mention wakes the members one after another",
+        description="Groups; an '@group' mention starts a discussion of the members",
+    )
+    chair: bool = Field(
+        default=False,
+        description="The consul of the group: leads the discussion and gives tasks",
     )
     listens_to: list[str] = Field(
         default_factory=list,
@@ -63,7 +68,11 @@ class SwarmAgentProfile(BaseModel):
     icon: str = Field(description="Lucide icon name")
     color: str = Field(description="Accent color as CSS hex")
 
-    def to_info(self, enabled: bool) -> SwarmAgentInfo:
+    @property
+    def default_model(self) -> str:
+        return self.model or settings.swarm_model
+
+    def to_info(self, enabled: bool, model: str) -> SwarmAgentInfo:
         return SwarmAgentInfo(
             agent_id=self.agent_id,
             display_name=self.display_name,
@@ -73,6 +82,9 @@ class SwarmAgentProfile(BaseModel):
             color=self.color,
             enabled=enabled,
             groups=self.groups,
+            model=model,
+            default_model=self.default_model,
+            chair=self.chair,
         )
 
 
@@ -148,52 +160,66 @@ class SwarmWatchReply(SwarmReply, WatchOutcome):
     )
 
 
-class CouncilDelegation(BaseModel):
-    """A task the council gives to a home agent."""
+class CouncilStep(BaseModel):
+    """One step of the consul's plan: a task for one home agent (ARCHIE-249)."""
 
     agent_id: str = Field(description="ID of the home agent, without @")
     task: str = Field(description="Short task for the agent, in the user's language")
+    wait: bool = Field(
+        description=(
+            "True if the next step needs the result of this step (get data, then "
+            "show or say it); the next step then starts after this agent replies"
+        )
+    )
 
 
-class CouncilDecision(BaseModel):
-    """The single council answer to the user."""
+_REPLY_DESCRIPTION = "Answer to the user, max 200 characters, without any @mention"
+_STEPS_DESCRIPTION = (
+    "Tasks for home agents in the order they run: only commands the user gave, "
+    "or data the answer needs. Empty if you only give advice or offer an action"
+)
+_REMEMBER_DESCRIPTION = (
+    "Lasting facts or preferences to keep in long-term memory, one short "
+    "sentence each; only when the user asks to remember or states a "
+    "lasting preference. Usually empty"
+)
+_REMEMBER_TODAY_DESCRIPTION = (
+    "Facts from the chat that the swarm may need later today only, one "
+    "short sentence each (e.g. a plan of the user for today). Usually empty"
+)
 
+
+class ConsulDecision(BaseModel):
+    """The single council answer to the user and the plan for home agents."""
+
+    reasoning: str = Field(description="One short sentence: why you decide this way")
+    reply: str = Field(description=_REPLY_DESCRIPTION)
+    steps: list[CouncilStep] = Field(description=_STEPS_DESCRIPTION)
+    remember: list[str] = Field(description=_REMEMBER_DESCRIPTION)
+    remember_today: list[str] = Field(description=_REMEMBER_TODAY_DESCRIPTION)
+
+
+class ConsulTurn(BaseModel):
+    """The consul after a discussion round: one more round, or the decision.
+
+    Same fields as ConsulDecision; next_round and remark come first, so the
+    model chooses before it writes the decision."""
+
+    reasoning: str = Field(description="One short sentence: is the discussion complete")
+    next_round: bool = Field(
+        description="True if the members must discuss one more round before the decision"
+    )
+    remark: str = Field(
+        description=(
+            "Only if next_round is true: your words to the members for the next "
+            "round, max 200 characters, without any @mention. Else empty"
+        )
+    )
     reply: str = Field(
-        description="Answer to the user, max 200 characters, without any @mention"
+        description=_REPLY_DESCRIPTION + ". Empty if next_round is true"
     )
-    delegations: list[CouncilDelegation] = Field(
-        description=(
-            "Tasks for home agents: only commands the user gave, or data the answer needs. "
-            "Empty if you only give advice or offer an action"
-        )
+    steps: list[CouncilStep] = Field(
+        description=_STEPS_DESCRIPTION + ". Empty if next_round is true"
     )
-    remember: list[str] = Field(
-        description=(
-            "Lasting facts or preferences to keep in long-term memory, one short "
-            "sentence each; only when the user asks to remember or states a "
-            "lasting preference. Usually empty"
-        )
-    )
-    remember_today: list[str] = Field(
-        description=(
-            "Facts from the chat that the swarm may need later today only, one "
-            "short sentence each (e.g. a plan of the user for today). Usually empty"
-        )
-    )
-
-
-class CouncilAlertDecision(CouncilDecision):
-    """Chair's decision on an alert of a spontaneous check (ARCHIE-245)."""
-
-    reasoning: str = Field(
-        description="One short sentence: does the user need this now, and can a home agent or a chat help"
-    )
-
-
-class CouncilTriage(CouncilDecision):
-    """Council chair's first call: decide now or convene the council."""
-
-    reasoning: str = Field(description="One short sentence")
-    convene: bool = Field(
-        description="True if the council must discuss before the decision"
-    )
+    remember: list[str] = Field(description=_REMEMBER_DESCRIPTION)
+    remember_today: list[str] = Field(description=_REMEMBER_TODAY_DESCRIPTION)
