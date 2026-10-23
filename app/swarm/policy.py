@@ -16,6 +16,7 @@ READ_ONLY_TOOLS: frozenset[str] = frozenset(
         "document_search_tool",
         "skill_loader_tool",
         "gmail_tool",
+        "weather_tool",
     }
 )
 
