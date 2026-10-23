@@ -40,10 +40,10 @@ class Settings(BaseSettings):
 
     # Agent swarm chat (ARCHIE-199)
     swarm_enabled: bool = True
-    # Cheap and strong in agentic tasks; structured output tested in ARCHIE-227 (ARCHIE-238)
-    swarm_model: str = "deepseek/deepseek-v4.1-flash-1017"
-    # The council decides and delegates, so it gets a stronger model than the workers
-    swarm_council_model: str = "gpt-5.4-mini"
+    # DeepSeek V4.1 Flash broke tool calls and looped to 131k output tokens on
+    # the Pi (ARCHIE-241); GPT-6 Luna ran the same checks cleanly and cheaper
+    swarm_model: str = "openai/gpt-6-luna"
+    swarm_council_model: str = "openai/gpt-6-luna"
     # The council takes one hop itself: user -> decision -> agent -> agent
     swarm_max_depth: int = 4
     swarm_cooldown_seconds: int = 20
@@ -271,7 +271,8 @@ VISION_MODELS: frozenset[str] = frozenset(
 # Time-based/provider overrides are preserved in docs/model-catalog; estimates use base rates.
 # Models not listed return 0.0 from calculate_token_cost() in llm_parser.py
 MODEL_TOKEN_PRICES: dict[str, dict[str, float]] = {
-    "gpt-5.6-luna": {"input": 1.0, "output": 6.0},
+    # OpenAI cut the Luna price by 80% on 30.07.2026
+    "gpt-5.6-luna": {"input": 0.2, "output": 1.2},
     "gpt-4.1": {"input": 2.0, "output": 8.0},
     "gpt-4.1-mini": {"input": 0.4, "output": 1.6},
     "gpt-4.1-nano": {"input": 0.1, "output": 0.4},
