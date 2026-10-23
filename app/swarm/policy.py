@@ -23,6 +23,7 @@ READ_ONLY_TOOLS: frozenset[str] = frozenset(
 # Tools whose listed actions only read data; their other actions have side effects.
 READ_ONLY_ACTIONS: dict[str, frozenset[str]] = {
     "events_tool": frozenset({"list", "read", "today", "upcoming"}),
+    "cron_tool": frozenset({"list", "get"}),
 }
 
 PolicyDecision = Literal["allow", "block"]
