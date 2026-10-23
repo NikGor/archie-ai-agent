@@ -12,11 +12,7 @@ Spontaneous check: {{ task }}. Nobody asked you. The user only wants to know abo
 {% if task == "home" %}
 ## What to check
 Read the whole home once: call smarthome_status_tool with query "whole home", without device_name, domain and area.
-Report things the user should act on, for example:
-- a window is open and the room temperature falls;
-- a window is open, but CO2 and humidity are already normal: the window can be closed;
-- CO2 is high (above 1000 ppm) or humidity is out of 40-60 % in a room with people;
-- lights or devices are on for a long time in a room where nobody is.
+Report what the user would want to know or change now: something unusual, wasteful, unsafe or uncomfortable in the home. Think about the time of day, the weather outside and whether somebody is at home.
 Do not report normal values. Compare with your notes: a trend needs two values.
 {% elif task == "mail" %}
 ## What to check
