@@ -21,7 +21,7 @@ from pydantic import BaseModel
 from ..config import settings
 from .agents import SWARM_AGENTS
 from .bus import SwarmBus, SwarmHub
-from .models import CouncilDecision, CouncilTriage, SwarmReply
+from .models import CouncilAlertDecision, CouncilDecision, CouncilTriage, SwarmReply
 from .runner import SwarmAgentRunner, format_chat_line
 
 
@@ -75,6 +75,9 @@ class SwarmCouncil:
     async def run(self, trigger: SwarmMessage, members: list[str], force: bool) -> None:
         chair = await self.choose_chair(members)
         line = format_chat_line(trigger)
+        if trigger.kind == "alert":
+            await self._review_alert(chair, trigger, line)
+            return
         triage, triage_usage = await self._ask(
             chair,
             trigger,
@@ -104,6 +107,19 @@ class SwarmCouncil:
         await self._post_decision(
             chair, decision, trigger, merge_usage(triage_usage, usage)
         )
+
+    async def _review_alert(self, chair: str, trigger: SwarmMessage, line: str) -> None:
+        """The chair decides if the home acts on an alert by itself (ARCHIE-245)."""
+        decision, usage = await self._ask(
+            chair, trigger, "council_alert.jinja2", CouncilAlertDecision, line=line
+        )
+        logger.info(
+            f"swarm_council_002: alert from \033[36m{trigger.sender}\033[0m: "
+            f"delegations={[d.agent_id for d in decision.delegations]} "
+            f"reasoning: \033[33m{decision.reasoning}\033[0m"
+        )
+        if decision.delegations:
+            await self._post_decision(chair, decision, trigger, usage)
 
     async def _ask(
         self,
