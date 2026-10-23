@@ -87,8 +87,12 @@ class SwarmBus:
         usage: SwarmUsage | None = None,
         mentions: list[str] | None = None,
         importance: SwarmImportance | None = None,
+        paired: bool = True,
     ) -> SwarmMessage:
-        """`mentions` overrides the mentions parsed from the text (council delegations)."""
+        """`mentions` overrides the mentions parsed from the text (council
+        delegations). `paired` adds the paired outputs (voice -> display)."""
+        if mentions is None:
+            mentions = parse_mentions(text)
         text = clip_text(text)
         message = SwarmMessage(
             message_id="",
@@ -98,9 +102,7 @@ class SwarmBus:
             text=text,
             mentions=[
                 m
-                for m in add_paired_outputs(
-                    mentions if mentions is not None else parse_mentions(text)
-                )
+                for m in (add_paired_outputs(mentions) if paired else mentions)
                 if m != sender
             ],
             reply_to=reply_to,
