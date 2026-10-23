@@ -1,9 +1,9 @@
 """Swarm dispatcher: wakes agents for new chat messages, with loop guards.
 
-Routing: a user message without @mentions, or any '@council' mention, goes to
-the council (see council.py). Other @mentions wake the named agents directly.
-listens_to subscribers hear their senders without mentions. Council opinions
-wake nobody.
+Routing: a user message without @mentions, any '@council' mention, or a check
+alert goes to the council discussion (see council.py). Other @mentions wake the
+named agents directly; consul plan steps are such mentions. listens_to
+subscribers hear their senders without mentions. Council opinions wake nobody.
 
 Guards: hop depth limit, no self-wake, one running turn per agent, and a
 cooldown between agent-to-agent wake-ups.
@@ -19,7 +19,7 @@ from archie_shared.swarm.models import SwarmMessage, SwarmMessageEvent, SwarmTyp
 from ..config import settings
 from .agents import SWARM_AGENTS, SWARM_GROUPS, SwarmRoster, get_group_members
 from .bus import SwarmBus, SwarmHub
-from .council import COUNCIL_GROUP, SwarmCouncil
+from .council import COUNCIL_GROUP, CouncilPlan, SwarmCouncil
 from .memory import SwarmMemory
 from .runner import SwarmAgentRunner
 
@@ -101,14 +101,6 @@ class SwarmDispatcher:
         enabled = await self.roster.get_enabled_ids()
         if self.wants_council(message):
             await self._start_council(message, enabled)
-        relays = [a for a in self.council.pop_relay(message) if a in enabled]
-        for agent_id in relays:
-            # The data for a display or voice task arrived (ARCHIE-240).
-            relayed = message.model_copy(update={"mentions": [agent_id]})
-            if agent_id in self._running:
-                self._pending[agent_id] = relayed
-            else:
-                self._start(agent_id, relayed)
         targets = self.select_targets(message, enabled)
         if self.is_human_intent(message):
             # A user command or council decision must not be lost to a busy agent.
@@ -116,8 +108,7 @@ class SwarmDispatcher:
                 self._pending[agent_id] = message
         for agent_id in targets:
             self._start(agent_id, message)
-        # A relayed agent already got this message: no "busy" note for it.
-        await self._report_skipped(message, enabled, targets + relays)
+        await self._report_skipped(message, enabled, targets)
         for agent_id in self.select_listeners(message, enabled):
             if agent_id in targets:
                 continue
@@ -140,9 +131,9 @@ class SwarmDispatcher:
 
     @staticmethod
     def is_human_intent(message: SwarmMessage) -> bool:
-        """User messages, council decisions and check alerts must be delivered:
+        """User messages, consul plan steps and check alerts must be delivered:
         no cooldown, a busy agent gets them later (alerts: ARCHIE-242)."""
-        return message.sender == "user" or message.kind in ("decision", "alert")
+        return message.sender == "user" or message.kind in ("decision", "task", "alert")
 
     def _mentioned(self, message: SwarmMessage, enabled: set[str]) -> list[str]:
         if message.kind == "opinion":
@@ -204,15 +195,14 @@ class SwarmDispatcher:
             self._pending[_council_key(message)] = message
             return
         self._running.update(members)
-        # Only the user can force a discussion; agents get a chair triage.
-        force = message.sender == "user" and COUNCIL_GROUP in message.mentions
-        self._track(self._run_council(message, members, force))
+        self._track(self._run_council(message, members))
 
-    async def _run_council(
-        self, trigger: SwarmMessage, members: list[str], force: bool
-    ) -> None:
+    async def _run_council(self, trigger: SwarmMessage, members: list[str]) -> None:
         try:
-            await self.council.run(trigger, members, force)
+            plan = await self.council.discuss(trigger, members)
+            if plan and plan.steps:
+                # The steps can wait minutes for agents: the council is free meanwhile.
+                self._track(self._run_plan(plan))
         except Exception as exc:
             logger.exception("swarm_dispatcher_error_003: Council failed")
             await self._post_failure(COUNCIL_GROUP, trigger, exc)
@@ -223,6 +213,13 @@ class SwarmDispatcher:
             if pending:
                 await self._start_council(pending, await self.roster.get_enabled_ids())
                 return
+
+    async def _run_plan(self, plan: CouncilPlan) -> None:
+        try:
+            await self.council.execute(plan)
+        except Exception as exc:
+            logger.exception("swarm_dispatcher_error_004: Plan failed")
+            await self._post_failure(plan.consul, plan.decision, exc)
 
     def _start(self, agent_id: str, trigger: SwarmMessage) -> None:
         self._running.add(agent_id)
@@ -272,6 +269,8 @@ class SwarmDispatcher:
                     depth=trigger.depth + 1,
                     actions=draft.actions,
                     usage=draft.usage,
+                    # The consul gives the next plan step, not the agent (ARCHIE-249)
+                    mentions=[] if trigger.kind == "task" else None,
                 )
         except Exception as exc:
             logger.exception(f"swarm_dispatcher_error_002: Agent {agent_id} failed")
