@@ -32,7 +32,7 @@ def add_brightness_percent(context: str) -> str:
 
 
 async def smarthome_status_tool(
-    query: str = "",
+    query: str,
     device_name: str | None = None,
     domain: str | None = None,
     area: str | None = None,
