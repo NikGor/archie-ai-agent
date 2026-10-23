@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 MAX_COMMAND_ITERATIONS = 3
 
-DEFAULT_MODEL = "gpt-5.6-luna"
+DEFAULT_MODEL = "gpt-6-luna"
 
 # gpt-5.6-luna supports up to 128000 output tokens; verbose UI answers (e.g. multi-month
 # weather breakdowns) can exceed the previous 16000 cap and get truncated mid-JSON.
@@ -40,10 +40,12 @@ class Settings(BaseSettings):
 
     # Agent swarm chat (ARCHIE-199)
     swarm_enabled: bool = True
-    # DeepSeek V4.1 Flash broke tool calls and looped to 131k output tokens on
-    # the Pi (ARCHIE-241); GPT-6 Luna ran the same checks cleanly and cheaper
-    swarm_model: str = "openai/gpt-6-luna"
-    swarm_council_model: str = "openai/gpt-6-luna"
+    # DeepSeek V4.1 Flash broke tool calls and looped to 131k output tokens
+    # (ARCHIE-241); GPT-6 Luna via OpenRouter returned several JSON objects in one
+    # answer and made up tool results (ARCHIE-243). GPT-5.6 Luna runs on the
+    # OpenAI API with strict structured output.
+    swarm_model: str = "gpt-5.6-luna"
+    swarm_council_model: str = "gpt-5.6-luna"
     # The council takes one hop itself: user -> decision -> agent -> agent
     swarm_max_depth: int = 4
     swarm_cooldown_seconds: int = 20
@@ -149,6 +151,9 @@ DEFAULT_STATE_CONFIG = {
 
 MODEL_PROVIDERS = {
     "openai": [
+        "gpt-6-luna",
+        "gpt-6",
+        "gpt-6.1",
         "gpt-5.6-luna",
         "gpt-4.1",
         "gpt-4.1-mini",
@@ -241,6 +246,9 @@ VISION_MODELS: frozenset[str] = frozenset(
         "gpt-5.4-nano",
         "gpt-5.4-pro",
         "gpt-5.6-luna",
+        "gpt-6",
+        "gpt-6-luna",
+        "gpt-6.1",
         "meta/muse-spark-open",
         "meta/muse-wonder",
         "minimax/minimax-m3",
