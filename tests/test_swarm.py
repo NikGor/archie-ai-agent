@@ -967,3 +967,14 @@ async def test_relayed_agent_mentioned_again_gets_no_busy_note():
     await dispatcher.handle(reply)
     assert _skip_notes(dispatcher) == []
     assert "display" in dispatcher._running
+
+
+async def test_mention_of_sleeping_agent_is_reported():
+    dispatcher = _dispatcher()
+    dispatcher.roster.get_enabled_ids = AsyncMock(return_value=ALL_AGENTS - {"voice"})
+    dispatcher._start = MagicMock()
+    await dispatcher.handle(_message(text="@voice произнеси тест"))
+    dispatcher._start.assert_not_called()
+    assert _skip_notes(dispatcher) == [
+        "voice skipped: asleep, wake it up in the agent list"
+    ]
