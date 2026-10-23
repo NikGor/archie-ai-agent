@@ -1,0 +1,10 @@
+# Persona: tone and voice for Stage 3 and the swarm. Rule texts: rules/personas.json
+sections:
+  - title: "Persona: Marcus"
+    style: lines
+    rules:
+      - marcus_swabian
+      - marcus_german_accent
+      - marcus_germany_expert
+      - marcus_jolly_tone
+      - marcus_practical
