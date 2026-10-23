@@ -213,14 +213,6 @@ class SwarmTicker:
             )
         finally:
             self.hub.publish(SwarmTypingEvent(agent_id=agent_id, active=False))
-        if not draft.got_data:
-            # An alert without fresh data is a guess (ARCHIE-238).
-            logger.warning(
-                f"swarm_ticker_warning_001: \033[36m{task}\033[0m got no data, "
-                f"reply dropped: {draft.outcome.reply}"
-            )
-            await self._finish(task, "failed")
-            return
         outcome = draft.outcome
         if task in QUIET_TASKS:
             await self.memory.set_quiet_until(
