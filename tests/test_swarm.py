@@ -4,19 +4,23 @@ import asyncio
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
-from archie_shared.swarm.models import SwarmMessage, SwarmSettings, SwarmUsage
+from archie_shared.swarm.models import (
+    SwarmMessage,
+    SwarmMessageEvent,
+    SwarmSettings,
+    SwarmUsage,
+)
 from app.config import settings
 from app.models.orchestration_sgr import Parameter
 from app.models.tool_models import ToolResult
-from app.swarm.agents import SWARM_AGENTS
+from app.swarm.agents import SWARM_AGENTS, SwarmRoster
 from app.swarm.bus import SwarmBus, SwarmHub, clip_text, parse_mentions
-from app.swarm.council import SwarmCouncil
+from app.swarm.council import CouncilPlan, SwarmCouncil
 from app.swarm.dispatcher import SwarmDispatcher
 from app.swarm.models import (
-    CouncilAlertDecision,
-    CouncilDecision,
-    CouncilDelegation,
-    CouncilTriage,
+    ConsulDecision,
+    ConsulTurn,
+    CouncilStep,
     SwarmReply,
     SwarmToolCall,
     SwarmTurn,
@@ -121,7 +125,7 @@ def test_clip_text_limits_length():
 
 
 ALL_AGENTS = set(SWARM_AGENTS)
-COUNCIL = ["bro", "business", "flirty"]
+COUNCIL = ["butler", "business", "bro", "flirty", "marcus"]
 
 
 def _dispatcher() -> SwarmDispatcher:
@@ -132,7 +136,7 @@ def _dispatcher() -> SwarmDispatcher:
         bus=MagicMock(post=AsyncMock()),
         roster=roster,
         runner=MagicMock(),
-        council=MagicMock(run=AsyncMock(), pop_relay=MagicMock(return_value=[])),
+        council=MagicMock(discuss=AsyncMock(return_value=None), execute=AsyncMock()),
         memory=MagicMock(get_mode=AsyncMock(return_value="running")),
     )
 
@@ -200,13 +204,27 @@ def test_cooldown_applies_only_to_agent_triggers():
         assert dispatcher.select_targets(user_message, ALL_AGENTS) == ["climate"]
 
 
-async def test_council_runs_with_enabled_members_and_force_on_mention():
+async def test_council_runs_with_enabled_members():
     dispatcher = _dispatcher()
     await dispatcher._start_council(_message(text="@council?"), ALL_AGENTS - {"bro"})
     await asyncio.gather(*dispatcher._tasks)
-    args = dispatcher.council.run.await_args.args
-    assert args[1] == ["business", "flirty"]
-    assert args[2] is True
+    args = dispatcher.council.discuss.await_args.args
+    assert args[1] == ["butler", "business", "flirty", "marcus"]
+    assert not dispatcher._running
+
+
+async def test_plan_runs_after_the_council_is_free():
+    dispatcher = _dispatcher()
+    plan = CouncilPlan(
+        consul="butler",
+        decision=_message(sender="butler", text="d"),
+        steps=[CouncilStep(agent_id="light", task="выключи", wait=False)],
+    )
+    dispatcher.council.discuss = AsyncMock(return_value=plan)
+    await dispatcher._start_council(_message(text="выключи свет"), ALL_AGENTS)
+    await asyncio.gather(*dispatcher._tasks)
+    await asyncio.gather(*dispatcher._tasks)
+    dispatcher.council.execute.assert_awaited_once_with(plan)
     assert not dispatcher._running
 
 
@@ -217,11 +235,11 @@ async def test_busy_council_keeps_latest_message_and_answers_it_after():
     await dispatcher._start_council(_message(text="первый"), ALL_AGENTS)
     await dispatcher._start_council(latest, ALL_AGENTS)
     assert dispatcher._pending["council"] is latest
-    dispatcher.council.run.assert_not_awaited()
+    dispatcher.council.discuss.assert_not_awaited()
     dispatcher._running.clear()
-    await dispatcher._run_council(_message(text="первый"), COUNCIL, False)
+    await dispatcher._run_council(_message(text="первый"), COUNCIL)
     await asyncio.gather(*dispatcher._tasks)
-    assert dispatcher.council.run.await_args_list[-1].args[0] is latest
+    assert dispatcher.council.discuss.await_args_list[-1].args[0] is latest
 
 
 async def test_sleeping_council_posts_system_message_without_mentions():
@@ -234,9 +252,9 @@ async def test_sleeping_council_posts_system_message_without_mentions():
 
 async def test_council_failure_posts_system_message_and_frees_members():
     dispatcher = _dispatcher()
-    dispatcher.council.run = AsyncMock(side_effect=RuntimeError("boom"))
+    dispatcher.council.discuss = AsyncMock(side_effect=RuntimeError("boom"))
     dispatcher._running.update(COUNCIL)
-    await dispatcher._run_council(_message(text="x"), COUNCIL, False)
+    await dispatcher._run_council(_message(text="x"), COUNCIL)
     assert dispatcher.bus.post.await_args.kwargs["text"] == "council failed: boom"
     assert not dispatcher._running
 
@@ -306,14 +324,64 @@ async def test_run_agent_posts_reply_with_next_depth():
 # --- council ---
 
 
-def _council(persona: str, answers: list) -> SwarmCouncil:
+def _council(answers: dict[str, list]) -> SwarmCouncil:
+    """Each agent ID gets its own queue of answers: members run in parallel."""
     runner = MagicMock()
-    runner.get_user_state = AsyncMock(return_value=make_user_state(persona=persona))
+    runner.get_user_state = AsyncMock(return_value=make_user_state())
     runner.render_task = MagicMock(side_effect=lambda template, **_: template)
     usage = SwarmUsage(model="m", input_tokens=10, output_tokens=2, total_cost=0.001)
-    runner.ask = AsyncMock(side_effect=[(answer, usage) for answer in answers])
-    bus = MagicMock(post=AsyncMock(), get_history=AsyncMock(return_value=[]))
+    queues = {agent_id: list(items) for agent_id, items in answers.items()}
+
+    async def ask(profile, trigger, history, task, schema):
+        return queues[profile.agent_id].pop(0), usage
+
+    runner.ask = AsyncMock(side_effect=ask)
+    bus = MagicMock(
+        post=AsyncMock(return_value=_message(sender="butler", text="d")),
+        get_history=AsyncMock(return_value=[]),
+    )
     return SwarmCouncil(hub=SwarmHub(), bus=bus, runner=runner)
+
+
+def _decision(reply: str = "", steps=None, **fields) -> ConsulDecision:
+    return ConsulDecision(
+        reasoning="r",
+        reply=reply,
+        steps=steps or [],
+        remember=fields.get("remember", []),
+        remember_today=[],
+    )
+
+
+def _more(remark: str) -> ConsulTurn:
+    return ConsulTurn(
+        reasoning="r",
+        next_round=True,
+        remark=remark,
+        reply="",
+        steps=[],
+        remember=[],
+        remember_today=[],
+    )
+
+
+def _done(reply: str, steps=None) -> ConsulTurn:
+    return ConsulTurn(
+        reasoning="r",
+        next_round=False,
+        remark="",
+        reply=reply,
+        steps=steps or [],
+        remember=[],
+        remember_today=[],
+    )
+
+
+MEMBERS = ["business", "bro", "flirty", "marcus"]
+
+
+def _opinions(*rounds: str) -> dict[str, list]:
+    return {m: [SwarmReply(reply=f"{m} {r}") for r in rounds] for m in MEMBERS}
 
 
 def _asked(council: SwarmCouncil) -> list[tuple[str, str]]:
@@ -330,96 +398,226 @@ def _posted(council: SwarmCouncil) -> list[tuple[str, str, str]]:
     ]
 
 
-async def test_chair_is_the_user_persona():
-    council = _council("bro", [])
-    assert await council.choose_chair(COUNCIL) == "bro"
-    council = _council("butler", [])
-    assert await council.choose_chair(COUNCIL) == "business"
-    assert await council.choose_chair(["flirty"]) == "flirty"
-
-
-async def test_simple_request_gets_decision_in_one_call():
-    triage = CouncilTriage(
-        reasoning="r",
-        convene=False,
-        reply="Выключаю.",
-        delegations=[CouncilDelegation(agent_id="light", task="выключи свет")],
-        remember=[],
-        remember_today=[],
+async def test_reply_to_a_plan_step_wakes_nobody():
+    dispatcher = _dispatcher()
+    dispatcher.runner.run = AsyncMock(
+        return_value=SwarmDraft(
+            text="12 °C, @display", actions=[], usage=SwarmUsage(model="m")
+        )
     )
-    council = _council("business", [triage])
-    await council.run(_message(text="выключи свет"), COUNCIL, force=False)
-    assert _asked(council) == [("business", "council_triage.jinja2")]
-    assert _posted(council) == [
-        ("business", "decision", "Выключаю.\n→ @light: выключи свет")
-    ]
+    dispatcher.bus.get_history = AsyncMock(return_value=[])
+    task = _message(sender="butler", text="1/2 @weather: погода").model_copy(
+        update={"kind": "task"}
+    )
+    await dispatcher._run_agent("weather", task)
+    assert dispatcher.bus.post.await_args.kwargs["mentions"] == []
 
 
-async def test_convened_council_posts_opinions_then_one_decision():
+def test_consul_is_the_chair_or_the_first_awake_member():
+    assert SwarmCouncil.choose_consul(COUNCIL) == "butler"
+    assert SwarmCouncil.choose_consul(["bro", "flirty"]) == "bro"
+
+
+async def test_first_round_runs_in_parallel_on_one_chat_snapshot():
+    council = _council({**_opinions("1"), "butler": [_done("Решено.")]})
+    active, peak = 0, 0
+    ask = council.runner.ask.side_effect
+
+    async def counting_ask(*args):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        await asyncio.sleep(0)
+        active -= 1
+        return await ask(*args)
+
+    council.runner.ask.side_effect = counting_ask
+    await council.discuss(_message(text="ехать или нет?"), COUNCIL)
+    assert peak == len(MEMBERS)
+    calls = council.runner.ask.await_args_list
+    assert len({id(c.args[2]) for c in calls[: len(MEMBERS)]}) == 1
+    assert _asked(council)[-1] == ("butler", "consul.jinja2")
+    posted = _posted(council)
+    assert sorted(posted[:-1]) == sorted(
+        (m, "opinion", f"{m} 1") for m in MEMBERS
+    )
+    assert posted[-1] == ("butler", "decision", "Решено.")
+    rounds = {c.kwargs["round_number"] for c in council.bus.post.await_args_list[:-1]}
+    assert rounds == {1}
+
+
+async def test_consul_starts_another_round_with_a_remark():
     council = _council(
-        "flirty",
-        [
-            CouncilTriage(
-                reasoning="r",
-                convene=True,
-                reply="",
-                delegations=[],
-                remember=[],
-                remember_today=[],
-            ),
-            SwarmReply(reply="Ехать"),
-            SwarmReply(reply="Остаться"),
-            CouncilDecision(
-                reply="Решили: едем в субботу.",
-                delegations=[],
-                remember=[],
-                remember_today=[],
-            ),
-        ],
+        {**_opinions("1", "2"), "butler": [_more("А соседи?"), _done("Итог.")]}
     )
-    await council.run(_message(text="ехать или нет?"), COUNCIL, force=False)
-    assert _asked(council) == [
-        ("flirty", "council_triage.jinja2"),
-        ("bro", "council_opinion.jinja2"),
-        ("business", "council_opinion.jinja2"),
-        ("flirty", "council_decision.jinja2"),
-    ]
-    assert _posted(council) == [
-        ("bro", "opinion", "Ехать"),
-        ("business", "opinion", "Остаться"),
-        ("flirty", "decision", "Решили: едем в субботу."),
-    ]
-    decision_usage = (
-        cast(AsyncMock, council.bus.post).await_args_list[-1].kwargs["usage"]
-    )
+    await council.discuss(_message(text="вечеринка в воскресенье?"), COUNCIL)
+    posted = _posted(council)
+    assert posted[len(MEMBERS)] == ("butler", "opinion", "А соседи?")
+    assert {p[2] for p in posted[len(MEMBERS) + 1 : -1]} == {
+        f"{m} 2" for m in MEMBERS
+    }
+    assert posted[-1] == ("butler", "decision", "Итог.")
+    decision_usage = council.bus.post.await_args_list[-1].kwargs["usage"]
     assert decision_usage.input_tokens == 20
 
 
-async def test_force_convenes_even_if_chair_has_an_answer():
-    council = _council(
-        "business",
-        [
-            CouncilTriage(
-                reasoning="r",
-                convene=False,
-                reply="Сразу ответ",
-                delegations=[],
-                remember=[],
-                remember_today=[],
-            ),
-            SwarmReply(reply="a"),
-            SwarmReply(reply="b"),
-            CouncilDecision(
-                reply="Итог", delegations=[], remember=[], remember_today=[]
-            ),
-        ],
-    )
-    await council.run(_message(text="@council?"), COUNCIL, force=True)
-    assert [kind for _, kind, _ in _posted(council)] == [
-        "opinion",
-        "opinion",
-        "decision",
+async def test_last_round_asks_for_the_decision_only(monkeypatch):
+    monkeypatch.setattr("app.swarm.council.settings.swarm_council_max_rounds", 1)
+    council = _council({**_opinions("1"), "butler": [_decision("Итог.")]})
+    await council.discuss(_message(text="?"), COUNCIL)
+    schema = council.runner.ask.await_args_list[-1].args[4]
+    assert schema is ConsulDecision
+
+
+async def test_silent_or_failed_member_does_not_stop_the_discussion():
+    answers = {**_opinions("1"), "butler": [_done("Итог.")]}
+    answers["marcus"] = [SwarmReply(reply="")]
+    answers["bro"] = []  # pop from an empty list fails
+    council = _council(answers)
+    await council.discuss(_message(text="?"), COUNCIL)
+    senders = [p[0] for p in _posted(council)]
+    assert "marcus" not in senders and "bro" not in senders
+    assert senders[-1] == "butler"
+
+
+async def test_decision_shows_the_plan_and_wakes_nobody():
+    steps = [
+        CouncilStep(agent_id="light", task="приглуши торшер", wait=False),
+        CouncilStep(agent_id="flirty", task="x", wait=False),
+        CouncilStep(agent_id="nobody", task="x", wait=False),
     ]
+    council = _council(
+        {**_opinions("1"), "butler": [_done("Прошу @light приглушить.", steps)]}
+    )
+    plan = await council.discuss(_message(text="приглуши свет"), COUNCIL)
+    kwargs = council.bus.post.await_args.kwargs
+    assert kwargs["mentions"] == []
+    assert kwargs["text"] == "Прошу light приглушить.\n@light"
+    assert plan is not None and [s.agent_id for s in plan.steps] == ["light"]
+
+
+async def test_alert_that_needs_nothing_posts_no_decision():
+    alert = _alert("Письмо от банка")
+    council = _council({**_opinions("1"), "butler": [_done("")]})
+    assert await council.discuss(alert, COUNCIL) is None
+    assert [p[1] for p in _posted(council)] == ["opinion"] * len(MEMBERS)
+
+
+def _plan(*steps: CouncilStep, delivered=None) -> CouncilPlan:
+    return CouncilPlan(
+        consul="butler",
+        decision=_message(sender="butler", text="d"),
+        steps=list(steps),
+        delivered=delivered or [],
+    )
+
+
+async def test_steps_run_one_by_one_and_wait_for_the_data():
+    council = _council({})
+    posted: list[SwarmMessage] = []
+
+    async def post(**kwargs):
+        message = SwarmMessage(
+            message_id=f"{len(posted) + 10}-0",
+            created_at="2026-10-23T10:00:00+00:00",
+            **{k: kwargs[k] for k in ("sender", "kind", "text", "mentions")},
+            reply_to=kwargs["reply_to"],
+        )
+        posted.append(message)
+        if kwargs["kind"] == "task" and kwargs["mentions"][0] == "weather":
+            # The weather agent answers a moment later.
+            asyncio.get_running_loop().call_soon(
+                council.hub.publish,
+                SwarmMessageEvent(
+                    message=_message(sender="weather", text="12 °C").model_copy(
+                        update={"reply_to": message.message_id}
+                    )
+                ),
+            )
+        return message
+
+    council.bus.post = AsyncMock(side_effect=post)
+    await council.execute(
+        _plan(
+            CouncilStep(agent_id="weather", task="погода", wait=True),
+            CouncilStep(agent_id="voice", task="скажи погоду", wait=False),
+        )
+    )
+    assert [m.text for m in posted] == [
+        "1/2 @weather: погода",
+        "2/2 @voice: скажи погоду",
+    ]
+    assert posted[1].mentions == ["voice", "display"]
+    assert all(m.kind == "task" for m in posted)
+
+
+async def test_step_without_reply_times_out_and_the_plan_goes_on(monkeypatch):
+    monkeypatch.setattr("app.swarm.council.settings.swarm_step_timeout_seconds", 0.01)
+    council = _council({})
+    await council.execute(
+        _plan(
+            CouncilStep(agent_id="search", task="найди", wait=True),
+            CouncilStep(agent_id="display", task="покажи", wait=False),
+        )
+    )
+    kinds = [p[1] for p in _posted(council)]
+    assert kinds == ["task", "system", "task"]
+
+
+async def test_alert_output_is_not_delivered_twice():
+    council = _council(
+        {
+            **_opinions("1"),
+            "butler": [
+                _done(
+                    "Открою чат.",
+                    [
+                        CouncilStep(agent_id="display", task="покажи", wait=False),
+                        CouncilStep(agent_id="chat", task="матч", wait=False),
+                    ],
+                )
+            ],
+        }
+    )
+    alert = _message(sender="cron", text="Матч через 5 минут").model_copy(
+        update={"kind": "alert", "mentions": ["display"]}
+    )
+    plan = await council.discuss(alert, COUNCIL)
+    assert plan is not None and [s.agent_id for s in plan.steps] == ["chat"]
+    council.bus.post.reset_mock()
+    await council.execute(plan)
+    assert council.bus.post.await_args.kwargs["mentions"] == ["chat"]
+
+
+def test_council_members_think_on_models_of_four_providers():
+    models = {m: SWARM_AGENTS[m].default_model for m in MEMBERS}
+    providers = {
+        "openai" if "/" not in model else model.split("/")[0]
+        for model in models.values()
+    }
+    assert providers == {"openai", "x-ai", "google", "anthropic"}
+    assert SWARM_AGENTS["butler"].default_model == settings.swarm_consul_model
+    assert SWARM_AGENTS["light"].default_model == settings.swarm_model
+
+
+async def test_roster_stores_only_a_known_non_default_model():
+    redis = AsyncMock()
+    with patch("app.swarm.agents.get_async_redis", return_value=redis):
+        roster = SwarmRoster()
+    await roster.set_model("bro", "gpt-4.1")
+    redis.hset.assert_awaited_once_with("archie:swarm:models", "bro", "gpt-4.1")
+    await roster.set_model("bro", SWARM_AGENTS["bro"].default_model)
+    redis.hdel.assert_awaited_once_with("archie:swarm:models", "bro")
+    with pytest.raises(ValueError):
+        await roster.set_model("bro", "no-such-model")
+
+
+def test_marcus_prompt_has_germany_rules_and_persona():
+    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    prompt = runner.build_system_prompt(SWARM_AGENTS["marcus"], "gpt-5.4-nano")
+    assert "## Your job: Germany" in prompt
+    assert "# Persona: Marcus" in prompt
+    assert "@butler (consul)" in prompt
 
 
 # --- runner ---
@@ -436,7 +634,10 @@ def _memory(facts=None, notes=None) -> MagicMock:
 def _runner() -> SwarmAgentRunner:
     state_service = MagicMock()
     state_service.get_user_state = AsyncMock(return_value=make_user_state())
-    roster = MagicMock(get_owner=AsyncMock(return_value="Niko"))
+    roster = MagicMock(
+        get_owner=AsyncMock(return_value="Niko"),
+        get_model=AsyncMock(side_effect=lambda profile: profile.default_model),
+    )
     runner = SwarmAgentRunner(
         tool_factory=ToolFactory(),
         state_service=state_service,
@@ -578,58 +779,7 @@ def test_parse_mentions_includes_groups():
     assert parse_mentions("@council и @voice") == ["council", "voice"]
 
 
-async def test_agent_mention_of_council_gets_triage_not_forced_discussion():
-    dispatcher = _dispatcher()
-    message = _message(sender="light", text="@council уточните время", depth=1)
-    assert SwarmDispatcher.wants_council(message)
-    await dispatcher._start_council(message, ALL_AGENTS)
-    await asyncio.gather(*dispatcher._tasks)
-    assert dispatcher.council.run.await_args.args[2] is False
-
-
-def test_council_members_use_the_council_model():
-    assert {SWARM_AGENTS[m].model for m in COUNCIL} == {settings.swarm_council_model}
-    assert SWARM_AGENTS["light"].model is None
-
-
 # --- ARCHIE-204 ---
-
-
-async def test_offer_with_at_sign_does_not_delegate():
-    triage = CouncilTriage(
-        reasoning="r",
-        convene=False,
-        reply="Могу попросить @light включить торшер.",
-        delegations=[],
-        remember=[],
-        remember_today=[],
-    )
-    council = _council("bro", [triage])
-    await council.run(_message(text="какой свет включить?"), COUNCIL, force=False)
-    kwargs = council.bus.post.await_args.kwargs
-    assert kwargs["mentions"] == []
-    assert "@" not in kwargs["text"]
-
-
-async def test_delegations_become_mentions_and_skip_unknown_or_council_agents():
-    triage = CouncilTriage(
-        reasoning="r",
-        convene=False,
-        reply="Делаю.",
-        delegations=[
-            CouncilDelegation(agent_id="light", task="приглуши торшер"),
-            CouncilDelegation(agent_id="flirty", task="x"),
-            CouncilDelegation(agent_id="nobody", task="x"),
-        ],
-        remember=[],
-        remember_today=[],
-    )
-    council = _council("bro", [triage])
-    await council.run(_message(text="приглуши свет"), COUNCIL, force=False)
-    kwargs = council.bus.post.await_args.kwargs
-    assert kwargs["mentions"] == ["light"]
-    assert kwargs["text"] == "Делаю.\n→ @light: приглуши торшер"
-    assert kwargs["sender"] == "bro"
 
 
 def test_decision_ignores_cooldown():
@@ -916,77 +1066,6 @@ def test_context_after_midnight_names_yesterday(monkeypatch):
     assert "after midnight" not in runner.build_context(make_user_state(), [], None, [])
 
 
-async def test_display_waits_for_the_data_agent():
-    council = _council(
-        "bro",
-        [
-            CouncilTriage(
-                reasoning="r",
-                convene=False,
-                reply="Выведу погоду.",
-                delegations=[
-                    CouncilDelegation(agent_id="search", task="погода на 23.10.2026"),
-                    CouncilDelegation(agent_id="display", task="покажи погоду"),
-                ],
-                remember=[],
-                remember_today=[],
-            )
-        ],
-    )
-    council.bus.post = AsyncMock(return_value=_message(sender="bro", text="d"))
-    await council.run(_message(text="покажи на табло погоду"), COUNCIL, force=False)
-    assert council.bus.post.await_args.kwargs["mentions"] == ["search"]
-    assert council.relays == {"1-0": ["display"]}
-    reply = _message(sender="search", text="9–13 °C").model_copy(
-        update={"reply_to": "1-0"}
-    )
-    assert council.pop_relay(reply) == ["display"]
-    assert council.relays == {}
-
-    dispatcher = _dispatcher()
-    dispatcher.council = council
-    council.relays["1-0"] = ["display"]
-    dispatcher._start = MagicMock()
-    await dispatcher.handle(reply)
-    agent_id, trigger = dispatcher._start.call_args.args
-    assert agent_id == "display"
-    assert trigger.mentions == ["display"]
-    assert format_chat_line(trigger).startswith(
-        "[1-0] @search (reply to [1-0]) (to @display)"
-    )
-
-
-async def test_display_alone_is_not_delayed():
-    council = _council(
-        "bro",
-        [
-            CouncilTriage(
-                reasoning="r",
-                convene=False,
-                reply="Показываю.",
-                delegations=[
-                    CouncilDelegation(agent_id="display", task="Бавария 20:30")
-                ],
-                remember=[],
-                remember_today=[],
-            )
-        ],
-    )
-    council.bus.post = AsyncMock(return_value=_message(sender="bro", text="d"))
-    await council.run(_message(text="покажи Бавария 20:30"), COUNCIL, force=False)
-    assert council.bus.post.await_args.kwargs["mentions"] == ["display"]
-    assert council.relays == {}
-
-
-async def test_relayed_agent_mentioned_again_gets_no_busy_note():
-    dispatcher = _dispatcher()
-    dispatcher.council.pop_relay = MagicMock(return_value=["display"])
-    reply = _message(sender="search", text="13° дождь, @display выводи")
-    await dispatcher.handle(reply)
-    assert _skip_notes(dispatcher) == []
-    assert "display" in dispatcher._running
-
-
 async def test_mention_of_sleeping_agent_is_reported():
     dispatcher = _dispatcher()
     dispatcher.roster.get_enabled_ids = AsyncMock(return_value=ALL_AGENTS - {"voice"})
@@ -1012,30 +1091,6 @@ def _alert(text: str = "Торшер горит, в спальне никого"
 
 def test_alerts_go_to_the_council():
     assert SwarmDispatcher.wants_council(_alert())
-
-
-async def test_council_acts_on_an_alert_only_with_delegations():
-    act = CouncilAlertDecision(
-        reasoning="r",
-        reply="Выключаю торшер: днём он не нужен.",
-        delegations=[
-            CouncilDelegation(agent_id="light", task="Выключи торшер в спальне")
-        ],
-        remember=[],
-        remember_today=[],
-    )
-    council = _council("bro", [act])
-    await council.run(_alert(), COUNCIL, force=False)
-    assert _asked(council) == [("bro", "council_alert.jinja2")]
-    kwargs = council.bus.post.await_args.kwargs
-    assert kwargs["kind"] == "decision" and kwargs["mentions"] == ["light"]
-
-    idle = CouncilAlertDecision(
-        reasoning="r", reply="", delegations=[], remember=[], remember_today=[]
-    )
-    council = _council("bro", [idle])
-    await council.run(_alert("Письмо от банка"), COUNCIL, force=False)
-    council.bus.post.assert_not_awaited()
 
 
 async def test_alert_does_not_push_out_a_waiting_user_message():
@@ -1073,30 +1128,6 @@ async def test_bus_adds_display_to_a_voice_mention():
         bus = SwarmBus(SwarmHub())
     posted = await bus.post(sender="user", kind="user", text="@voice скажи тест")
     assert posted.mentions == ["voice", "display"]
-
-
-async def test_voice_and_chat_wait_for_the_data_agent():
-    council = _council(
-        "bro",
-        [
-            CouncilTriage(
-                reasoning="r",
-                convene=False,
-                reply="Скажу счёт.",
-                delegations=[
-                    CouncilDelegation(agent_id="football", task="счёт Bayern"),
-                    CouncilDelegation(agent_id="voice", task="скажи счёт"),
-                    CouncilDelegation(agent_id="chat", task="чат о матче"),
-                ],
-                remember=[],
-                remember_today=[],
-            )
-        ],
-    )
-    council.bus.post = AsyncMock(return_value=_message(sender="bro", text="d"))
-    await council.run(_message(text="скажи счёт"), COUNCIL, force=False)
-    assert council.bus.post.await_args.kwargs["mentions"] == ["football"]
-    assert council.relays == {"1-0": ["voice", "display", "chat"]}
 
 
 def test_chat_agent_may_open_a_chat_but_not_control_devices():
@@ -1197,26 +1228,3 @@ async def test_post_alert_picks_outputs_by_importance(monkeypatch):
     assert kwargs["kind"] == "alert"
     assert kwargs["mentions"] == ["display", "voice"]
     assert kwargs["importance"] == "high"
-
-
-async def test_alert_already_on_the_display_is_not_shown_again():
-    council = _council(
-        "bro",
-        [
-            CouncilAlertDecision(
-                reasoning="r",
-                reply="Открою чат.",
-                delegations=[CouncilDelegation(agent_id="chat", task="матч")],
-                remember=[],
-                remember_today=[],
-            )
-        ],
-    )
-    council.bus.post = AsyncMock(return_value=_message(sender="bro", text="d"))
-    alert = _message(sender="cron", text="Матч через 5 минут").model_copy(
-        update={"kind": "alert", "mentions": ["display"]}
-    )
-    await council.run(alert, COUNCIL, force=False)
-    kwargs = council.bus.post.await_args.kwargs
-    assert kwargs["mentions"] == ["chat"]
-    assert kwargs["paired"] is False
