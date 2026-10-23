@@ -280,13 +280,14 @@ class SwarmDispatcher:
         for agent_id in message.mentions:
             if (
                 agent_id in SWARM_GROUPS
-                or agent_id not in enabled
                 or agent_id == message.sender
                 or agent_id in targets
                 or self._pending.get(agent_id) is message
             ):
                 continue
-            if message.depth >= settings.swarm_max_depth:
+            if agent_id not in enabled:
+                reason = "asleep, wake it up in the agent list"
+            elif message.depth >= settings.swarm_max_depth:
                 reason = f"chain limit of {settings.swarm_max_depth} steps reached"
             elif agent_id in self._running:
                 reason = "busy with another task"
