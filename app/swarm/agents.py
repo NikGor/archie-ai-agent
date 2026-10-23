@@ -3,7 +3,7 @@
 import logging
 from archie_shared.swarm.models import SwarmAgentInfo
 from ..backend.redis_factory import get_async_redis
-from ..config import settings
+from ..config import MODEL_PROVIDERS, settings
 from .models import ActionRule, SwarmAgentProfile
 
 
@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 _DISABLED_KEY = "archie:swarm:disabled"
 _OWNER_KEY = "archie:swarm:owner"
+_MODELS_KEY = "archie:swarm:models"
 
 # Agents that read the whole home at once need the full state
 WHOLE_HOME_MAX_CHARS = 16000
@@ -179,23 +180,66 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
             icon="alarm-clock",
             color="#fab005",
         ),
+        SwarmAgentProfile(
+            agent_id="butler",
+            display_name="Butler",
+            role="state",
+            description="Consul of the council: leads the discussion, then gives tasks to home agents one by one",
+            tools=[],
+            persona="butler",
+            groups=["council"],
+            chair=True,
+            model=settings.swarm_consul_model,
+            icon="concierge-bell",
+            color="#c9a227",
+        ),
+        # Every member thinks on a model of another provider (ARCHIE-249)
         *(
             SwarmAgentProfile(
                 agent_id=persona,
                 display_name=display_name,
                 role="state",
-                description=f"Council member with the {persona} persona",
+                description=description,
                 tools=[],
                 persona=persona,
                 groups=["council"],
-                model=settings.swarm_council_model,
+                model=model,
                 icon=icon,
                 color=color,
             )
-            for persona, display_name, icon, color in [
-                ("bro", "Bro", "beer", "#20c997"),
-                ("business", "Business", "briefcase", "#4dabf7"),
-                ("flirty", "Flirty", "heart", "#f06595"),
+            for persona, display_name, description, model, icon, color in [
+                (
+                    "business",
+                    "Business",
+                    "Council member: short, practical, professional view",
+                    "gpt-6-luna",
+                    "briefcase",
+                    "#4dabf7",
+                ),
+                (
+                    "bro",
+                    "Bro",
+                    "Council member: relaxed, friendly street-smart view",
+                    "x-ai/grok-4.7",
+                    "hand-metal",
+                    "#20c997",
+                ),
+                (
+                    "flirty",
+                    "Flirty",
+                    "Council member: warm, playful view on comfort and mood",
+                    "google/gemini-3.8-flash",
+                    "heart",
+                    "#f06595",
+                ),
+                (
+                    "marcus",
+                    "Marcus",
+                    "Council member: Swabian expert on German laws, customs and mentality",
+                    "anthropic/claude-sonnet-5.5",
+                    "beer",
+                    "#e0a526",
+                ),
             ]
         ),
     ]
@@ -217,8 +261,19 @@ def add_paired_outputs(mentions: list[str]) -> list[str]:
 
 
 SWARM_GROUPS: dict[str, str] = {
-    "council": "Main contact of the user: decides and delegates work to home agents",
+    "council": "Main contact of the user: discusses, then the consul gives tasks to home agents",
 }
+
+# Every model an agent can use: the user picks one per agent (ARCHIE-249)
+SELECTABLE_MODELS: list[str] = list(
+    dict.fromkeys(m for models in MODEL_PROVIDERS.values() for m in models)
+)
+
+
+def get_group_chair(group: str) -> str | None:
+    return next(
+        (a for a in get_group_members(group) if SWARM_AGENTS[a].chair), None
+    )
 
 
 def get_group_members(group: str) -> list[str]:
@@ -242,10 +297,32 @@ class SwarmRoster:
 
     async def list_agents(self) -> list[SwarmAgentInfo]:
         enabled = await self.get_enabled_ids()
+        models = await self.redis.hgetall(_MODELS_KEY)  # type: ignore[misc]
         return [
-            profile.to_info(agent_id in enabled)
+            profile.to_info(
+                agent_id in enabled, models.get(agent_id) or profile.default_model
+            )
             for agent_id, profile in SWARM_AGENTS.items()
         ]
+
+    async def get_model(self, profile: SwarmAgentProfile) -> str:
+        """The model the user chose for the agent, else its default model."""
+        chosen = await self.redis.hget(_MODELS_KEY, profile.agent_id)  # type: ignore[misc]
+        return chosen or profile.default_model
+
+    async def set_model(self, agent_id: str, model: str | None) -> None:
+        """Choose the agent's model; None or the default model clears the choice."""
+        if agent_id not in SWARM_AGENTS:
+            raise ValueError(f"Unknown swarm agent: {agent_id}")
+        if model and model not in SELECTABLE_MODELS:
+            raise ValueError(f"Unknown model: {model}")
+        if not model or model == SWARM_AGENTS[agent_id].default_model:
+            await self.redis.hdel(_MODELS_KEY, agent_id)  # type: ignore[misc]
+        else:
+            await self.redis.hset(_MODELS_KEY, agent_id, model)  # type: ignore[misc]
+        logger.info(
+            f"swarm_agents_003: Agent \033[36m{agent_id}\033[0m model=\033[35m{model}\033[0m"
+        )
 
     async def set_enabled(self, agent_id: str, enabled: bool) -> None:
         if agent_id not in SWARM_AGENTS:
