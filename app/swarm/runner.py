@@ -64,20 +64,9 @@ FINAL_REPLY_TASK = (
     "Write your chat reply now. You must reply: say what you did, "
     "or say that you could not do the task and why."
 )
-REPEATED_CALLS_TASK = (
-    "You already called these tools with the same arguments and have the results. "
-)
-EMPTY_TASK_TURN = (
-    "You got a task from the user or the council and returned nothing. "
-    "Do the task now: call your tools, or say why you cannot do it."
-)
-WATCH_TOOLS_TASK = (
-    "You did not call your tools. Call them now to get fresh data. "
-    "Do not answer from your notes."
-)
 WATCH_FINAL_TASK = (
     "Write the outcome of the check now. Write an alert only if something is "
-    "new for the user. Else leave the reply empty: do not write that nothing is new."
+    "new for the user. Else leave the reply empty."
 )
 
 
@@ -102,12 +91,6 @@ def format_chat_line(message: SwarmMessage) -> str:
     return f"[{message.message_id}] {sender}{reply}{to}{tag}: {message.text}"
 
 
-def clean_arguments(call: SwarmToolCall) -> SwarmToolCall:
-    """Drop arguments without a name: cheap models sometimes add them (ARCHIE-238)."""
-    call.arguments = [p for p in call.arguments if p.name.strip()]
-    return call
-
-
 class SwarmDraft(BaseModel):
     """Result of an agent turn, ready to post to the chat."""
 
@@ -121,9 +104,6 @@ class SwarmWatchDraft(BaseModel):
 
     outcome: SwarmWatchReply = Field(description="Alert, importance and notes")
     usage: SwarmUsage = Field(description="Summed LLM usage of the check")
-    got_data: bool = Field(
-        description="At least one tool call succeeded; without data the check failed"
-    )
 
 
 def format_day_note(note: DayNote) -> str:
@@ -298,15 +278,8 @@ class SwarmAgentRunner:
             history,
             f"React to this message:\n{format_chat_line(trigger)}",
         )
-        # A task from the user or the council must not end in an empty turn.
-        is_task = trigger.sender == "user" or trigger.kind == "decision"
-        turn, actions, traces, _ = await self._loop(
-            profile,
-            model,
-            messages,
-            SwarmTurn,
-            SwarmReply,
-            empty_task=EMPTY_TASK_TURN if is_task else None,
+        turn, actions, traces = await self._loop(
+            profile, model, messages, SwarmTurn, SwarmReply
         )
         reply = turn.reply.strip()
         if not reply and not actions:
@@ -333,19 +306,12 @@ class SwarmAgentRunner:
         messages = await self.build_messages(
             profile, model, None, history, task, watch_task
         )
-        turn, _, traces, succeeded = await self._loop(
-            profile,
-            model,
-            messages,
-            SwarmWatchTurn,
-            SwarmWatchReply,
-            WATCH_FINAL_TASK,
-            first_task=WATCH_TOOLS_TASK,
+        turn, _, traces = await self._loop(
+            profile, model, messages, SwarmWatchTurn, SwarmWatchReply, WATCH_FINAL_TASK
         )
         return SwarmWatchDraft(
             outcome=SwarmWatchReply.model_validate(turn.model_dump()),
             usage=self._sum_usage(model, traces),
-            got_data=succeeded > 0,
         )
 
     async def _loop(
@@ -356,14 +322,9 @@ class SwarmAgentRunner:
         turn_schema: type[SwarmTurn],
         reply_schema: type[SwarmReply],
         final_task: str = FINAL_REPLY_TASK,
-        first_task: str | None = None,
-        empty_task: str | None = None,
-    ) -> tuple[SwarmTurn | SwarmReply, list[SwarmActionInfo], list[LllmTrace], int]:
-        """Tool rounds until the agent replies. Also returns the number of
-        successful tool calls. Several rounds let an agent read
-        the state, then change it. `first_task`: the agent must call a tool
-        first; if it does not, it gets this task once. `empty_task`: the agent
-        gets it once if it returns neither tools nor a reply (ARCHIE-238)."""
+    ) -> tuple[SwarmTurn | SwarmReply, list[SwarmActionInfo], list[LllmTrace]]:
+        """Tool rounds until the agent replies. Several rounds let an agent read
+        the state, then change it."""
         provider = get_provider_for_model(model)
         client = get_client(provider)
         traces: list[LllmTrace] = []
@@ -371,50 +332,15 @@ class SwarmAgentRunner:
         turn: SwarmTurn | SwarmReply = await self._call(
             client, provider, model, messages, turn_schema, traces
         )
-        no_tools = isinstance(turn, SwarmTurn) and not turn.tool_calls
-        nudge = first_task if no_tools else None
-        if no_tools and not turn.reply.strip():
-            nudge = nudge or empty_task
-        if nudge:
-            logger.info(
-                f"swarm_runner_003: \033[36m{profile.agent_id}\033[0m answered without tools"
-            )
-            messages.append({"role": "user", "content": nudge})
-            turn = await self._call(
-                client, provider, model, messages, turn_schema, traces
-            )
-        done: set[str] = set()
         rounds = 0
         while isinstance(turn, SwarmTurn) and turn.tool_calls:
-            new_calls = [
-                clean_arguments(c)
-                for c in turn.tool_calls
-                if clean_arguments(c).model_dump_json() not in done
-            ]
-            if not new_calls:
-                # Cheap models repeat a call they already have results for (ARCHIE-238).
-                logger.info(
-                    f"swarm_runner_004: \033[36m{profile.agent_id}\033[0m repeats its calls"
-                )
-                messages.append(
-                    {"role": "user", "content": REPEATED_CALLS_TASK + final_task}
-                )
-                turn = await self._call(
-                    client, provider, model, messages, reply_schema, traces
-                )
-                break
-            turn.tool_calls = new_calls
             rounds += 1
             logger.info(
                 f"swarm_runner_001: \033[36m{profile.agent_id}\033[0m round {rounds} tools="
                 f"{[(tc.tool_name, {p.name: p.value for p in tc.arguments}) for tc in turn.tool_calls]} "
                 f"reasoning: \033[33m{turn.reasoning}\033[0m"
             )
-            results, new_actions, succeeded = await self._execute(
-                profile, turn.tool_calls
-            )
-            # Only a successful call must not repeat; a failed one may be fixed.
-            done.update(c.model_dump_json() for c in succeeded)
+            results, new_actions = await self._execute(profile, turn.tool_calls)
             actions.extend(new_actions)
             messages.append(
                 {
@@ -449,7 +375,7 @@ class SwarmAgentRunner:
                 reply_schema if last_round else turn_schema,
                 traces,
             )
-        return turn, actions, traces, len(done)
+        return turn, actions, traces
 
     async def _call(
         self,
@@ -460,31 +386,18 @@ class SwarmAgentRunner:
         schema: type[BaseModel],
         traces: list[LllmTrace],
     ) -> Any:
-        for attempt in (1, 2):
-            raw = await client.create_completion(
-                messages=messages, model=model, response_format=schema
-            )
-            try:
-                parsed = parse_llm_response(
-                    raw_response=raw, provider=provider, expected_type=schema
-                )
-            except ValueError as exc:
-                # Cheap models sometimes loop into broken JSON: try once more (ARCHIE-238).
-                if attempt == 2:
-                    raise
-                logger.warning(
-                    f"swarm_runner_warning_001: Broken {schema.__name__} from "
-                    f"\033[36m{model}\033[0m, retrying: {str(exc)[:120]}"
-                )
-                continue
-            traces.append(parsed.llm_trace)
-            return parsed.parsed_content
+        raw = await client.create_completion(
+            messages=messages, model=model, response_format=schema
+        )
+        parsed = parse_llm_response(
+            raw_response=raw, provider=provider, expected_type=schema
+        )
+        traces.append(parsed.llm_trace)
+        return parsed.parsed_content
 
     async def _execute(
         self, profile: SwarmAgentProfile, tool_calls: list[SwarmToolCall]
-    ) -> tuple[list[ToolResult], list[SwarmActionInfo], list[SwarmToolCall]]:
-        """Run the allowed calls. Returns the results, the side effects and
-        the calls that succeeded."""
+    ) -> tuple[list[ToolResult], list[SwarmActionInfo]]:
         allowed: list[SwarmToolCall] = []
         actions: list[SwarmActionInfo] = []
         for call in tool_calls:
@@ -507,8 +420,7 @@ class SwarmAgentRunner:
                         call, "success" if result.success else "error", result.error
                     )
                 )
-        succeeded = [c for c, r in zip(allowed, results, strict=True) if r.success]
-        return results, actions, succeeded
+        return results, actions
 
     @staticmethod
     async def _run_calls(
