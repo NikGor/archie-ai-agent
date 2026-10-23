@@ -178,9 +178,9 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
     ]
 }
 
-# Output agent -> agent that always delivers with it: what the voice says is
-# also shown on the display (ARCHIE-247)
-PAIRED_OUTPUTS: dict[str, str] = {"voice": "display"}
+# Output agent -> agent that always delivers with it: what the voice says and
+# what an alert chat is about is also shown on the display (ARCHIE-247)
+PAIRED_OUTPUTS: dict[str, str] = {"voice": "display", "chat": "display"}
 
 
 def add_paired_outputs(mentions: list[str]) -> list[str]:
