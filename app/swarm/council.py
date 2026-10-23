@@ -23,6 +23,7 @@ from .agents import SWARM_AGENTS
 from .bus import SwarmBus, SwarmHub
 from .models import CouncilAlertDecision, CouncilDecision, CouncilTriage, SwarmReply
 from .runner import SwarmAgentRunner, format_chat_line
+from .schedule import local_now
 
 
 logger = logging.getLogger(__name__)
@@ -120,6 +121,8 @@ class SwarmCouncil:
         )
         if decision.delegations:
             await self._post_decision(chair, decision, trigger, usage)
+        else:
+            await self._remember(decision)
 
     async def _ask(
         self,
@@ -156,7 +159,7 @@ class SwarmCouncil:
             for d in decision.delegations
             if d.agent_id in SWARM_AGENTS and not SWARM_AGENTS[d.agent_id].groups
         ]
-        await self._remember(decision.remember)
+        await self._remember(decision)
         lines = [decision.reply.replace("@", "").strip()]
         lines += [f"→ @{d.agent_id}: {d.task}" for d in delegations]
         mentions = list(dict.fromkeys(d.agent_id for d in delegations))
@@ -176,8 +179,15 @@ class SwarmCouncil:
             while len(self.relays) > RELAYS_MAX:
                 self.relays.pop(next(iter(self.relays)))
 
-    async def _remember(self, facts: list[str]) -> None:
-        saved = [f for f in facts if await self.runner.memory.add_fact(f)]
+    async def _remember(self, decision: CouncilDecision) -> None:
+        """Long-term facts and facts for today, as the council chose them."""
+        memory = self.runner.memory
+        saved = [f for f in decision.remember if await memory.add_fact(f)]
+        if decision.remember_today:
+            state = await self.runner.get_user_state()
+            today = local_now(state.user_timezone).date()
+            if await memory.add_today_facts(today, decision.remember_today):
+                saved.append("today")
         if saved and self.on_memory_change:
             await self.on_memory_change()
 
