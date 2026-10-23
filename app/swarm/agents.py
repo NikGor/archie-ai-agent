@@ -156,6 +156,29 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
             icon="message-square-plus",
             color="#12b886",
         ),
+        SwarmAgentProfile(
+            agent_id="cron",
+            display_name="Cron",
+            role="action",
+            description="Plans swarm alerts for an exact time (reminders before matches, events, deadlines); at that time the alert comes back to the swarm",
+            tools=["cron_tool"],
+            auto_actions=[
+                # The swarm plans only its own alerts, no direct device actions (ARCHIE-248)
+                ActionRule(
+                    tool_name="cron_tool",
+                    allowed_values={
+                        "action": ["create"],
+                        "tool_name": ["swarm_alert_tool"],
+                    },
+                ),
+                ActionRule(
+                    tool_name="cron_tool",
+                    allowed_values={"action": ["pause", "resume", "delete"]},
+                ),
+            ],
+            icon="alarm-clock",
+            color="#fab005",
+        ),
         *(
             SwarmAgentProfile(
                 agent_id=persona,
