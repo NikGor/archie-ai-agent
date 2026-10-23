@@ -186,7 +186,7 @@ class CouncilAlertDecision(CouncilDecision):
     """Chair's decision on an alert of a spontaneous check (ARCHIE-245)."""
 
     reasoning: str = Field(
-        description="One short sentence: does the user need this now, and can a home agent fix it"
+        description="One short sentence: does the user need this now, and can a home agent or a chat help"
     )
 
 
