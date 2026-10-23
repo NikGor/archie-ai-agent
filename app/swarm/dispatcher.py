@@ -27,6 +27,11 @@ from .runner import SwarmAgentRunner
 logger = logging.getLogger(__name__)
 
 _AGENT_SENDERS = set(SWARM_AGENTS)
+_COUNCIL_ALERT_KEY = "council:alert"
+
+
+def _council_key(message: SwarmMessage) -> str:
+    return _COUNCIL_ALERT_KEY if message.kind == "alert" else COUNCIL_GROUP
 
 
 class SwarmDispatcher:
@@ -128,6 +133,9 @@ class SwarmDispatcher:
             return False
         if COUNCIL_GROUP in message.mentions:
             return True
+        if message.kind == "alert":
+            # The council decides if the home acts on its own (ARCHIE-245).
+            return True
         return message.sender == "user" and not message.mentions
 
     @staticmethod
@@ -192,7 +200,8 @@ class SwarmDispatcher:
             return
         if self._running & set(members):
             # The council is busy: answer the latest message when it is free.
-            self._pending[COUNCIL_GROUP] = message
+            # Alerts wait in their own place and never push out a user message.
+            self._pending[_council_key(message)] = message
             return
         self._running.update(members)
         # Only the user can force a discussion; agents get a chair triage.
@@ -209,9 +218,11 @@ class SwarmDispatcher:
             await self._post_failure(COUNCIL_GROUP, trigger, exc)
         finally:
             self._running.difference_update(members)
-        pending = self._pending.pop(COUNCIL_GROUP, None)
-        if pending:
-            await self._start_council(pending, await self.roster.get_enabled_ids())
+        for key in (COUNCIL_GROUP, _COUNCIL_ALERT_KEY):
+            pending = self._pending.pop(key, None)
+            if pending:
+                await self._start_council(pending, await self.roster.get_enabled_ids())
+                return
 
     def _start(self, agent_id: str, trigger: SwarmMessage) -> None:
         self._running.add(agent_id)
