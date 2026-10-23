@@ -150,6 +150,10 @@ def _weather_detail(args: dict[str, Any]) -> str:
     return f"Weather: {args.get('city', '')}".strip(": ")
 
 
+def _alert_chat_detail(args: dict[str, Any]) -> str:
+    return f"Opening a chat: {args.get('title', '')}".strip(": ")
+
+
 def _awtrix_detail(args: dict[str, Any]) -> str:
     return (
         "Updating the display"
@@ -175,6 +179,7 @@ _TOOL_DETAIL_MAP: dict[str, Any] = {
     "announce_tool": _announce_detail,
     "awtrix_tool": _awtrix_detail,
     "weather_tool": _weather_detail,
+    "alert_chat_tool": _alert_chat_detail,
     "agent_task_tool": _agent_task_detail,
 }
 
