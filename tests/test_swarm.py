@@ -13,6 +13,7 @@ from app.swarm.bus import SwarmBus, SwarmHub, clip_text, parse_mentions
 from app.swarm.council import SwarmCouncil
 from app.swarm.dispatcher import SwarmDispatcher
 from app.swarm.models import (
+    CouncilAlertDecision,
     CouncilDecision,
     CouncilDelegation,
     CouncilTriage,
@@ -978,3 +979,50 @@ async def test_mention_of_sleeping_agent_is_reported():
     assert _skip_notes(dispatcher) == [
         "voice skipped: asleep, wake it up in the agent list"
     ]
+
+
+def _alert(text: str = "Торшер горит, в спальне никого") -> SwarmMessage:
+    return SwarmMessage(
+        message_id="7-0",
+        created_at="2026-10-23T11:25:00+00:00",
+        sender="home",
+        kind="alert",
+        text=text,
+        mentions=["display"],
+        importance="low",
+    )
+
+
+def test_alerts_go_to_the_council():
+    assert SwarmDispatcher.wants_council(_alert())
+
+
+async def test_council_acts_on_an_alert_only_with_delegations():
+    act = CouncilAlertDecision(
+        reasoning="r",
+        reply="Выключаю торшер: днём он не нужен.",
+        delegations=[
+            CouncilDelegation(agent_id="light", task="Выключи торшер в спальне")
+        ],
+        remember=[],
+    )
+    council = _council("bro", [act])
+    await council.run(_alert(), COUNCIL, force=False)
+    assert _asked(council) == [("bro", "council_alert.jinja2")]
+    kwargs = council.bus.post.await_args.kwargs
+    assert kwargs["kind"] == "decision" and kwargs["mentions"] == ["light"]
+
+    idle = CouncilAlertDecision(reasoning="r", reply="", delegations=[], remember=[])
+    council = _council("bro", [idle])
+    await council.run(_alert("Письмо от банка"), COUNCIL, force=False)
+    council.bus.post.assert_not_awaited()
+
+
+async def test_alert_does_not_push_out_a_waiting_user_message():
+    dispatcher = _dispatcher()
+    dispatcher._running.update(COUNCIL)
+    user = _message(text="как дела?")
+    await dispatcher._start_council(user, ALL_AGENTS)
+    await dispatcher._start_council(_alert(), ALL_AGENTS)
+    assert dispatcher._pending["council"] is user
+    assert dispatcher._pending["council:alert"].kind == "alert"
