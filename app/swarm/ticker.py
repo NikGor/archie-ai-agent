@@ -20,10 +20,12 @@ from archie_shared.swarm.models import (
     SwarmControlEvent,
     SwarmHistoryEvent,
     SwarmImportance,
+    SwarmMessage,
     SwarmMode,
     SwarmRunInfo,
     SwarmSettings,
     SwarmTypingEvent,
+    SwarmUsage,
     SwarmWatchTask,
 )
 from ..config import settings as app_settings
@@ -270,20 +272,34 @@ class SwarmTicker:
             )
             await self._finish(task, "silent")
             return
+        await self.post_alert(agent_id, alert, outcome.importance, draft.usage, now)
+        await self._finish(task, "reported")
+
+    async def post_alert(
+        self,
+        sender: str,
+        text: str,
+        importance: SwarmImportance,
+        usage: SwarmUsage | None = None,
+        now: datetime | None = None,
+    ) -> SwarmMessage:
+        """Post an alert; its importance decides who else delivers it."""
+        swarm_settings = await self.memory.get_settings()
+        if now is None:
+            now = local_now((await self.runner.get_user_state()).user_timezone)
         outputs = select_outputs(
-            outcome.importance,
+            importance,
             voice_allowed(now, swarm_settings),
             await self.roster.get_enabled_ids(),
         )
-        await self.bus.post(
-            sender=agent_id,
+        return await self.bus.post(
+            sender=sender,
             kind="alert",
-            text=alert,
-            usage=draft.usage,
+            text=text,
+            usage=usage,
             mentions=outputs,
-            importance=outcome.importance,
+            importance=importance,
         )
-        await self._finish(task, "reported")
 
     async def _finish(self, task: SwarmWatchTask, outcome: str) -> None:
         await self.memory.set_last_run(
