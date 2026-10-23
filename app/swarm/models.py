@@ -169,6 +169,14 @@ class CouncilDecision(BaseModel):
     )
 
 
+class CouncilAlertDecision(CouncilDecision):
+    """Chair's decision on an alert of a spontaneous check (ARCHIE-245)."""
+
+    reasoning: str = Field(
+        description="One short sentence: does the user need this now, and can a home agent fix it"
+    )
+
+
 class CouncilTriage(CouncilDecision):
     """Council chair's first call: decide now or convene the council."""
 
