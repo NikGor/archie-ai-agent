@@ -132,8 +132,9 @@ class SwarmDispatcher:
 
     @staticmethod
     def is_human_intent(message: SwarmMessage) -> bool:
-        """User messages and council decisions carry the user's will: no cooldown."""
-        return message.sender == "user" or message.kind == "decision"
+        """User messages, council decisions and check alerts must be delivered:
+        no cooldown, a busy agent gets them later (alerts: ARCHIE-242)."""
+        return message.sender == "user" or message.kind in ("decision", "alert")
 
     def _mentioned(self, message: SwarmMessage, enabled: set[str]) -> list[str]:
         if message.kind == "opinion":
