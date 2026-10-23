@@ -19,6 +19,7 @@ ToolName = Literal[
     "awtrix_tool",
     "weather_tool",
     "alert_chat_tool",
+    "swarm_alert_tool",
     "agent_task_tool",
     "document_search_tool",
     "skill_loader_tool",
