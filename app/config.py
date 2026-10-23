@@ -554,6 +554,7 @@ TOOLS_CONFIG = {
     "swarm": {
         "weather_tool": "app.tools.weather_tool",
         "alert_chat_tool": "app.tools.alert_chat_tool",
+        "swarm_alert_tool": "app.tools.swarm_alert_tool",
     },
 }
 
