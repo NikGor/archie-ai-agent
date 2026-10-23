@@ -45,7 +45,11 @@ class Settings(BaseSettings):
     # answer and made up tool results (ARCHIE-243). GPT-5.6 Luna runs on the
     # OpenAI API with strict structured output.
     swarm_model: str = "gpt-5.6-luna"
-    swarm_council_model: str = "gpt-5.6-luna"
+    # The consul (butler) leads the council discussion on a flagship model (ARCHIE-249)
+    swarm_consul_model: str = "anthropic/claude-opus-5.5"
+    swarm_council_max_rounds: int = 3
+    # How long a plan step waits for the agent's reply before the next step
+    swarm_step_timeout_seconds: int = 240
     # The council takes one hop itself: user -> decision -> agent -> agent
     swarm_max_depth: int = 4
     swarm_cooldown_seconds: int = 20
@@ -180,6 +184,8 @@ MODEL_PROVIDERS = {
         "openai/gpt-6-astra",
         "openai/gpt-5.6-terra",
         "anthropic/claude-haiku-5.5",
+        "anthropic/claude-sonnet-5.5",
+        "anthropic/claude-opus-5.5",
         "google/gemini-4-argon",
         "google/gemini-3.8-flash",
         "google/gemini-3.5-flash-lite",
@@ -283,6 +289,8 @@ VISION_MODELS: frozenset[str] = frozenset(
 MODEL_TOKEN_PRICES: dict[str, dict[str, float]] = {
     # OpenAI cut the Luna price by 80% on 30.07.2026
     "gpt-5.6-luna": {"input": 0.2, "output": 1.2},
+    # OpenRouter rate of openai/gpt-6-luna
+    "gpt-6-luna": {"input": 0.1, "output": 0.5},
     "gpt-4.1": {"input": 2.0, "output": 8.0},
     "gpt-4.1-mini": {"input": 0.4, "output": 1.6},
     "gpt-4.1-nano": {"input": 0.1, "output": 0.4},
@@ -373,6 +381,7 @@ MODEL_TOKEN_PRICES: dict[str, dict[str, float]] = {
 }
 
 # ARCHIE-227: one smoke per case; see docs/model-catalog/openrouter-2026-10-17.md.
+# "swarm": small structured council schemas pass (ARCHIE-249 probe, 23.10.2026).
 MODEL_STAGE_SUPPORT: dict[str, dict[str, bool]] = {
     "openai/gpt-6.1-sol": {"command": True, "final_plain": True, "final_ui": True},
     "openai/gpt-6-luna": {"command": True, "final_plain": True, "final_ui": True},
@@ -387,11 +396,13 @@ MODEL_STAGE_SUPPORT: dict[str, dict[str, bool]] = {
         "command": False,
         "final_plain": False,
         "final_ui": False,
+        "swarm": True,
     },
     "anthropic/claude-opus-5.5": {
         "command": False,
         "final_plain": False,
         "final_ui": False,
+        "swarm": True,
     },
     "anthropic/claude-fable-5.1": {
         "command": False,
