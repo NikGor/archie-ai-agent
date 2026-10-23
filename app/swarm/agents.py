@@ -68,6 +68,8 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
             description="Matches, results and news of the user's favourite teams",
             tools=["google_search_tool"],
             skill="football",
+            # Fixtures of several teams do not fit the default limit (ARCHIE-250)
+            tool_result_max_chars=4000,
             icon="trophy",
             color="#2f9e44",
         ),
