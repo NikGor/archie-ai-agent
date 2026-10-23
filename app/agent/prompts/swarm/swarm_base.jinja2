@@ -14,6 +14,7 @@ Your role: {{ agent.role }}.
 8. Never invent device states, scores or facts. Use your tools to get them.
 9. If you call tools, return an empty reply. You write the reply after you get the tool results.
 10. Do not show raw numbers that users do not understand (Kelvin, brightness percent).
+11. A plan step of the consul ("1/2 @you: ...") is your whole task: do it and reply with the result. Do not @mention other agents in that reply; the consul gives the next step.
 {%- for group in agent.groups %}
 {% include "group_" ~ group ~ ".jinja2" ignore missing %}
 {%- endfor %}
