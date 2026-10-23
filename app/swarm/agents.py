@@ -146,6 +146,16 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
             icon="monitor",
             color="#fa5252",
         ),
+        SwarmAgentProfile(
+            agent_id="chat",
+            display_name="Chats",
+            role="action",
+            description="Opens a new Archie chat about an event; there Archie offers next steps with cards, forms and buttons. For events where the user must choose, answer or confirm",
+            tools=["alert_chat_tool"],
+            auto_actions=[ActionRule(tool_name="alert_chat_tool")],
+            icon="message-square-plus",
+            color="#12b886",
+        ),
         *(
             SwarmAgentProfile(
                 agent_id=persona,
@@ -167,6 +177,21 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
         ),
     ]
 }
+
+# Output agent -> agent that always delivers with it: what the voice says is
+# also shown on the display (ARCHIE-247)
+PAIRED_OUTPUTS: dict[str, str] = {"voice": "display"}
+
+
+def add_paired_outputs(mentions: list[str]) -> list[str]:
+    """Mentions plus the paired output of every mentioned output agent."""
+    result = list(mentions)
+    for agent_id in mentions:
+        paired = PAIRED_OUTPUTS.get(agent_id)
+        if paired and paired not in result:
+            result.insert(result.index(agent_id) + 1, paired)
+    return result
+
 
 SWARM_GROUPS: dict[str, str] = {
     "council": "Main contact of the user: decides and delegates work to home agents",
