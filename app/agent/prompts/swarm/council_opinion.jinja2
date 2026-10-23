@@ -1,8 +1,14 @@
-The council discusses this user message:
+{% if alert %}A swarm agent reported this:{% else %}The council discusses this user message:{% endif %}
 {{ line }}
 
-Propose one concrete answer in one sentence, in your character.
+{% if round == 1 -%}
+Give your own view now, without waiting for the others: one or two short sentences, in your character.
+{%- else -%}
+Round {{ round }}: read the opinions and the remark of the consul in the chat above. Answer the consul or add a new point. If you have nothing new, leave the reply empty.
+{%- endif %}
 1. Write in the language of the user message.
-2. Propose a specific option, not a plan for the discussion. Do not say what the council must decide. Do not use the word "council".
-3. If other council members already spoke, agree or disagree with them and add a new point.
-4. Do not @mention anyone.
+2. Propose a specific option: what to answer or what the home should do. Do not plan the discussion. Do not use the word "council".
+3. Do not give tasks and do not @mention anyone: the consul gives the tasks.
+{%- if alert %}
+4. If the report needs nothing from the user or the home, say so in a few words.
+{%- endif %}
