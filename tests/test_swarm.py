@@ -1063,6 +1063,7 @@ def test_voice_mention_also_wakes_the_display():
     ]
     assert add_paired_outputs(["display", "voice"]) == ["display", "voice"]
     assert add_paired_outputs(["display"]) == ["display"]
+    assert add_paired_outputs(["chat"]) == ["chat", "display"]
 
 
 async def test_bus_adds_display_to_a_voice_mention():
