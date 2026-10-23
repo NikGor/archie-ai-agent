@@ -22,7 +22,7 @@ from archie_shared.swarm.models import (
 )
 from ..backend.redis_factory import get_async_redis
 from ..config import settings
-from .agents import SWARM_AGENTS, SWARM_GROUPS
+from .agents import SWARM_AGENTS, SWARM_GROUPS, add_paired_outputs
 
 
 logger = logging.getLogger(__name__)
@@ -98,7 +98,9 @@ class SwarmBus:
             text=text,
             mentions=[
                 m
-                for m in (mentions if mentions is not None else parse_mentions(text))
+                for m in add_paired_outputs(
+                    mentions if mentions is not None else parse_mentions(text)
+                )
                 if m != sender
             ],
             reply_to=reply_to,
