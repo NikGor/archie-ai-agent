@@ -5,7 +5,7 @@ import inspect
 import logging
 from collections.abc import Callable
 from typing import Any
-from ..config import TOOLS_CONFIG
+from ..config import SWARM_ONLY_TOOL_GROUPS, TOOLS_CONFIG
 from ..utils.provider_utils import get_provider_for_model
 from ..utils.tools_utils import openai_parse, oss_parse
 
@@ -55,8 +55,10 @@ class ToolFactory:
             )
             return ["smarthome"]
 
-        # Default: all groups including smarthome
-        all_groups = list(self.tools_config.keys())
+        # Default: all groups including smarthome; swarm-only groups are left out
+        all_groups = [
+            group for group in self.tools_config if group not in SWARM_ONLY_TOOL_GROUPS
+        ]
         logger.info(
             f"tool_factory_004: Response format \033[36m{response_format}\033[0m -> using groups: \033[33m{all_groups}\033[0m"
         )
@@ -77,7 +79,12 @@ class ToolFactory:
         )
 
         # Determine which tool groups to include
-        enabled_groups = self.get_tools_for_response_format(response_format)
+        # A swarm agent names its tools: they may come from any group (ARCHIE-246)
+        enabled_groups = (
+            list(self.tools_config)
+            if allowed_tools is not None
+            else self.get_tools_for_response_format(response_format)
+        )
 
         # Collect tool functions from enabled groups
         tool_functions: list[Callable] = []

@@ -146,6 +146,10 @@ def _agent_task_detail(_args: dict[str, Any]) -> str:
     return "Running a scheduled task"
 
 
+def _weather_detail(args: dict[str, Any]) -> str:
+    return f"Weather: {args.get('city', '')}".strip(": ")
+
+
 def _awtrix_detail(args: dict[str, Any]) -> str:
     return (
         "Updating the display"
@@ -170,6 +174,7 @@ _TOOL_DETAIL_MAP: dict[str, Any] = {
     "cron_tool": _cron_detail,
     "announce_tool": _announce_detail,
     "awtrix_tool": _awtrix_detail,
+    "weather_tool": _weather_detail,
     "agent_task_tool": _agent_task_detail,
 }
 

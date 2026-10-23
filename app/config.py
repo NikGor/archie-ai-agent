@@ -548,4 +548,11 @@ TOOLS_CONFIG = {
     "skills": {
         "skill_loader_tool": "app.tools.skill_loader_tool",
     },
+    # Only swarm agents get these tools; the main chat does not (ARCHIE-246)
+    "swarm": {
+        "weather_tool": "app.tools.weather_tool",
+    },
 }
+
+# Tool groups the main chat pipeline does not load
+SWARM_ONLY_TOOL_GROUPS: frozenset[str] = frozenset({"swarm"})
