@@ -26,6 +26,7 @@ from archie_shared.swarm.models import (
     SwarmTypingEvent,
     SwarmWatchTask,
 )
+from ..config import settings as app_settings
 from .agents import SWARM_AGENTS, SwarmRoster
 from .bus import SwarmBus, SwarmHub
 from .dispatcher import SwarmDispatcher
@@ -187,14 +188,30 @@ class SwarmTicker:
                 if task is None:
                     logger.info("swarm_ticker_004: No check is due")
                     return
-            await self._watch(task, swarm_settings, now)
-        except Exception:
+            await self._watch(
+                task,
+                swarm_settings,
+                now,
+                state.language or app_settings.default_language,
+            )
+        except Exception as exc:
             logger.exception("swarm_ticker_error_001: Check failed")
             if task:
+                # No "@" here: a mention would wake an agent.
+                await self.bus.post(
+                    sender="system",
+                    kind="system",
+                    text=f"{task} check failed: {exc}",
+                    depth=app_settings.swarm_max_depth,
+                )
                 await self._finish(task, "failed")
 
     async def _watch(
-        self, task: SwarmWatchTask, swarm_settings: SwarmSettings, now: datetime
+        self,
+        task: SwarmWatchTask,
+        swarm_settings: SwarmSettings,
+        now: datetime,
+        language: str,
     ) -> None:
         agent_id = WATCH_AGENTS[task]
         logger.info(f"swarm_ticker_005: Check \033[36m{task}\033[0m")
@@ -209,6 +226,7 @@ class SwarmTicker:
                     "watch_task.jinja2",
                     task=task,
                     teams=swarm_settings.football_teams,
+                    language=language,
                 ),
             )
         finally:
@@ -234,6 +252,14 @@ class SwarmTicker:
             f"alert=\033[33m{alert or '-'}\033[0m note: {outcome.today_note}"
         )
         if not alert:
+            # Every check shows in the chat; agents do not read "check" lines (ARCHIE-242).
+            await self.bus.post(
+                sender=agent_id,
+                kind="check",
+                text=outcome.today_note.strip() or "ничего нового",
+                usage=draft.usage,
+                mentions=[],
+            )
             await self._finish(task, "silent")
             return
         outputs = select_outputs(
