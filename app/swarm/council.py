@@ -162,9 +162,15 @@ class SwarmCouncil:
         await self._remember(decision)
         lines = [decision.reply.replace("@", "").strip()]
         lines += [f"→ @{d.agent_id}: {d.task}" for d in delegations]
-        mentions = add_paired_outputs(
-            list(dict.fromkeys(d.agent_id for d in delegations))
-        )
+        # An alert already went to its outputs: do not deliver it there again.
+        delivered = set(trigger.mentions) if trigger.kind == "alert" else set()
+        mentions = [
+            a
+            for a in add_paired_outputs(
+                list(dict.fromkeys(d.agent_id for d in delegations))
+            )
+            if a not in delivered or a not in OUTPUT_AGENTS
+        ]
         outputs = [a for a in mentions if a in OUTPUT_AGENTS]
         sources = [a for a in mentions if a not in OUTPUT_AGENTS]
         message = await self._post(
@@ -175,6 +181,7 @@ class SwarmCouncil:
             usage,
             # Display and voice start after the data arrives, not before it.
             mentions=sources if outputs and sources else mentions,
+            paired=False,
         )
         if outputs and sources:
             self.relays[message.message_id] = outputs
@@ -201,6 +208,7 @@ class SwarmCouncil:
         trigger: SwarmMessage,
         usage: SwarmUsage,
         mentions: list[str] | None = None,
+        paired: bool = True,
     ) -> SwarmMessage:
         return await self.bus.post(
             sender=agent_id,
@@ -210,4 +218,5 @@ class SwarmCouncil:
             depth=trigger.depth + 1,
             usage=usage,
             mentions=mentions,
+            paired=paired,
         )
