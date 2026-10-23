@@ -30,7 +30,8 @@ from .service import swarm_service
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-_HISTORY_SIZE = 50
+# The feed also shows check lines, about one per 10 minutes
+_HISTORY_SIZE = 100
 _command_adapter: TypeAdapter[SwarmClientCommand] = TypeAdapter(SwarmClientCommand)
 
 
@@ -97,7 +98,9 @@ async def ws_swarm(websocket: WebSocket, user_name: str | None = None) -> None:
     logger.info("swarm_ws_001: Client connected")
     try:
         history = SwarmHistoryEvent(
-            messages=await swarm_service.bus.get_history(_HISTORY_SIZE),
+            messages=await swarm_service.bus.get_history(
+                _HISTORY_SIZE, with_checks=True
+            ),
             agents=await swarm_service.roster.list_agents(),
         )
         await websocket.send_json(history.model_dump(mode="json"))
