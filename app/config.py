@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     swarm_tool_result_max_chars: int = 1000
     swarm_max_tool_rounds: int = 3
     swarm_user_name: str | None = None
+    # Archie web app (Django) as the agent reaches it: alert chats (ARCHIE-247)
+    web_django_url: str = "http://archie-web:8000"
     # Dry run: tools with side effects (lights, climate, voice) run in demo mode;
     # state reads stay real. For safe testing against the real home.
     swarm_dry_run: bool = False
@@ -551,6 +553,7 @@ TOOLS_CONFIG = {
     # Only swarm agents get these tools; the main chat does not (ARCHIE-246)
     "swarm": {
         "weather_tool": "app.tools.weather_tool",
+        "alert_chat_tool": "app.tools.alert_chat_tool",
     },
 }
 
