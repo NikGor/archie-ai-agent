@@ -328,8 +328,8 @@ MODEL_TOKEN_PRICES: dict[str, dict[str, float]] = {
     "mistralai/mistral-medium-3-5": {"input": 1.5, "output": 7.5},
     "sakana/fugu-ultra-v2": {"input": 5.0, "output": 30.0, "cached": 0.5},
     "deepseek/deepseek-v4.1-flash-1017": {
-        "input": 0.07,
-        "output": 0.5,
+        "input": 0.15,
+        "output": 0.6,
         "cached": 0.003,
     },
     "qwen/qwen3.8-27b": {"input": 0.24, "output": 2.2, "cached": 0.05},
