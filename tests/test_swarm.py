@@ -4,7 +4,7 @@ import asyncio
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
-from archie_shared.swarm.models import SwarmMessage, SwarmUsage
+from archie_shared.swarm.models import SwarmMessage, SwarmSettings, SwarmUsage
 from app.config import settings
 from app.models.orchestration_sgr import Parameter
 from app.models.tool_models import ToolResult
@@ -1139,3 +1139,84 @@ async def test_alert_chat_tool_creates_the_chat_in_django(monkeypatch):
 def test_main_chat_does_not_get_the_alert_chat_tool():
     names = [t["name"] for t in ToolFactory().get_tool_schemas("gpt-5.6-luna", "plain")]
     assert "alert_chat_tool" not in names
+
+
+# --- timed swarm alerts (ARCHIE-248) ---
+
+
+def _cron_call(**arguments: str) -> SwarmToolCall:
+    return SwarmToolCall(
+        tool_name="cron_tool",
+        arguments=[Parameter(name=k, value=v) for k, v in arguments.items()],
+    )
+
+
+def test_cron_agent_plans_only_swarm_alerts():
+    cron = SWARM_AGENTS["cron"]
+    plan = _cron_call(
+        action="create",
+        tool_name="swarm_alert_tool",
+        arguments_json='{"text": "Матч через 5 минут"}',
+        run_at="2026-10-24T18:25:00",
+    )
+    assert check_tool_call(cron, plan) == "allow"
+    lamp = _cron_call(action="create", tool_name="smarthome_control_tool")
+    assert check_tool_call(cron, lamp) == "block"
+    assert check_tool_call(cron, _cron_call(action="list")) == "allow"
+    assert check_tool_call(cron, _cron_call(action="delete", job_id="j")) == "allow"
+    assert check_tool_call(cron, _cron_call(action="run_now", job_id="j")) == "block"
+
+
+async def test_swarm_alert_tool_posts_an_alert_of_cron(monkeypatch):
+    from app.tools import swarm_alert_tool as module
+
+    service = MagicMock()
+    service.memory.get_mode = AsyncMock(return_value="paused")
+    service.ticker.post_alert = AsyncMock(return_value=_message(sender="cron"))
+    monkeypatch.setattr(module, "swarm_service", service)
+    result = await module.swarm_alert_tool("Матч через 5 минут", importance="high")
+    assert result == {"status": "success", "message_id": "1-0"}
+    service.ticker.post_alert.assert_awaited_once_with(
+        "cron", "Матч через 5 минут", "high"
+    )
+    service.memory.get_mode = AsyncMock(return_value="stopped")
+    assert (await module.swarm_alert_tool("x"))["status"] == "skipped"
+
+
+async def test_post_alert_picks_outputs_by_importance(monkeypatch):
+    from app.swarm.ticker import SwarmTicker
+
+    ticker = SwarmTicker.__new__(SwarmTicker)
+    ticker.memory = MagicMock(get_settings=AsyncMock(return_value=SwarmSettings()))
+    ticker.runner = MagicMock(get_user_state=AsyncMock(return_value=make_user_state()))
+    ticker.roster = MagicMock(get_enabled_ids=AsyncMock(return_value=ALL_AGENTS))
+    ticker.bus = MagicMock(post=AsyncMock())
+    monkeypatch.setattr("app.swarm.ticker.voice_allowed", lambda now, s: True)
+    await ticker.post_alert("cron", "Матч", "high")
+    kwargs = ticker.bus.post.await_args.kwargs
+    assert kwargs["kind"] == "alert"
+    assert kwargs["mentions"] == ["display", "voice"]
+    assert kwargs["importance"] == "high"
+
+
+async def test_alert_already_on_the_display_is_not_shown_again():
+    council = _council(
+        "bro",
+        [
+            CouncilAlertDecision(
+                reasoning="r",
+                reply="Открою чат.",
+                delegations=[CouncilDelegation(agent_id="chat", task="матч")],
+                remember=[],
+                remember_today=[],
+            )
+        ],
+    )
+    council.bus.post = AsyncMock(return_value=_message(sender="bro", text="d"))
+    alert = _message(sender="cron", text="Матч через 5 минут").model_copy(
+        update={"kind": "alert", "mentions": ["display"]}
+    )
+    await council.run(alert, COUNCIL, force=False)
+    kwargs = council.bus.post.await_args.kwargs
+    assert kwargs["mentions"] == ["chat"]
+    assert kwargs["paired"] is False
