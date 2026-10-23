@@ -32,9 +32,11 @@ _DAY_KEY = "archie:swarm:day:{day}"
 _LAST_TASK_KEY = "archie:swarm:last_task"
 _QUIET_KEY = "archie:swarm:quiet_until"
 _LAST_RUN_KEY = "archie:swarm:last_run"
+_TODAY_KEY = "archie:swarm:today:{day}"
 
 _DAY_TTL_SECONDS = 2 * 24 * 3600
 MEMORY_MAX_FACTS = 30
+TODAY_MAX_FACTS = 20
 
 
 class DayNote(BaseModel):
@@ -100,6 +102,27 @@ class SwarmMemory:
     async def get_day_notes(self, day: date) -> list[DayNote]:
         raw = await self.redis.lrange(_DAY_KEY.format(day=day.isoformat()), 0, -1)
         return [DayNote.model_validate_json(item) for item in raw]
+
+    async def add_today_facts(self, day: date, facts: list[str]) -> bool:
+        """Keep facts the swarm chose for today (ARCHIE-246); True if any is new."""
+        key = _TODAY_KEY.format(day=day.isoformat())
+        known = {f.lower() for f in await self.redis.lrange(key, 0, -1)}
+        new = []
+        for fact in facts:
+            fact = " ".join(fact.split())[:SWARM_MEMORY_FACT_MAX_LENGTH]
+            if fact and fact.lower() not in known:
+                known.add(fact.lower())
+                new.append(fact)
+        if not new:
+            return False
+        await self.redis.rpush(key, *new)
+        await self.redis.ltrim(key, -TODAY_MAX_FACTS, -1)
+        await self.redis.expire(key, _DAY_TTL_SECONDS)
+        logger.info(f"swarm_memory_004: Today: \033[33m{new}\033[0m")
+        return True
+
+    async def get_today_facts(self, day: date) -> list[str]:
+        return await self.redis.lrange(_TODAY_KEY.format(day=day.isoformat()), 0, -1)
 
     async def get_last_task_runs(self) -> dict[str, float]:
         raw = await self.redis.hgetall(_LAST_TASK_KEY)

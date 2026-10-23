@@ -127,6 +127,13 @@ class WatchOutcome(BaseModel):
             "e.g. the start of the next match; empty if unknown"
         )
     )
+    remember_today: list[str] = Field(
+        description=(
+            "Facts that you, other agents or the user may need later today, one "
+            "short sentence each; all agents see them until midnight. Only facts "
+            "that are not yet in today's memory; usually empty"
+        )
+    )
 
 
 class SwarmWatchTurn(SwarmTurn, WatchOutcome):
@@ -165,6 +172,12 @@ class CouncilDecision(BaseModel):
             "Lasting facts or preferences to keep in long-term memory, one short "
             "sentence each; only when the user asks to remember or states a "
             "lasting preference. Usually empty"
+        )
+    )
+    remember_today: list[str] = Field(
+        description=(
+            "Facts from the chat that the swarm may need later today only, one "
+            "short sentence each (e.g. a plan of the user for today). Usually empty"
         )
     )
 
