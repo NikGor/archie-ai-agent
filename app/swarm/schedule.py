@@ -80,13 +80,11 @@ def due_tasks(
     now: datetime,
     quiet_until: dict[str, datetime],
 ) -> list[SwarmWatchTask]:
-    """Enabled checks that are not waiting for a later time. Football needs
-    at least one team."""
+    """Enabled checks that are not waiting for a later time."""
     return [
         task
         for task in swarm_settings.tasks
         if not (task in quiet_until and quiet_until[task] > now)
-        and (task != "football" or swarm_settings.football_teams)
     ]
 
 
