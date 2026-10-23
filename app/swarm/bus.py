@@ -88,6 +88,7 @@ class SwarmBus:
         mentions: list[str] | None = None,
         importance: SwarmImportance | None = None,
         paired: bool = True,
+        round_number: int | None = None,
     ) -> SwarmMessage:
         """`mentions` overrides the mentions parsed from the text (council
         delegations). `paired` adds the paired outputs (voice -> display)."""
@@ -109,6 +110,7 @@ class SwarmBus:
             depth=depth,
             actions=actions or [],
             importance=importance,
+            round=round_number,
             usage=usage,
         )
         data = message.model_dump_json(exclude={"message_id"})
