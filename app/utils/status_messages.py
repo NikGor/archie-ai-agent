@@ -154,6 +154,10 @@ def _alert_chat_detail(args: dict[str, Any]) -> str:
     return f"Opening a chat: {args.get('title', '')}".strip(": ")
 
 
+def _swarm_alert_detail(args: dict[str, Any]) -> str:
+    return f"Swarm alert: {args.get('text', '')}".strip(": ")
+
+
 def _awtrix_detail(args: dict[str, Any]) -> str:
     return (
         "Updating the display"
@@ -180,6 +184,7 @@ _TOOL_DETAIL_MAP: dict[str, Any] = {
     "awtrix_tool": _awtrix_detail,
     "weather_tool": _weather_detail,
     "alert_chat_tool": _alert_chat_detail,
+    "swarm_alert_tool": _swarm_alert_detail,
     "agent_task_tool": _agent_task_detail,
 }
 
