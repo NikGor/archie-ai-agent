@@ -5,6 +5,7 @@ from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from archie_shared.swarm.models import (
+    SWARM_TEXT_MAX_LENGTH,
     SwarmMessage,
     SwarmMessageEvent,
     SwarmSettings,
@@ -81,6 +82,10 @@ def test_agent_cannot_use_tool_outside_profile():
     )
 
 
+def test_football_sees_long_search_results():
+    assert SWARM_AGENTS["football"].tool_result_max_chars == 4000
+
+
 def test_read_only_tool_in_profile_is_allowed():
     assert (
         check_tool_call(
@@ -118,7 +123,7 @@ def test_parse_mentions_keeps_known_agents_only():
 
 
 def test_clip_text_limits_length():
-    assert len(clip_text("a " * 400)) == 280
+    assert len(clip_text("a " * 400)) == SWARM_TEXT_MAX_LENGTH == 600
 
 
 # --- dispatcher guards ---
