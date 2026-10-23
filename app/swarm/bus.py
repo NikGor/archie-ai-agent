@@ -28,6 +28,8 @@ from .agents import SWARM_AGENTS, SWARM_GROUPS
 logger = logging.getLogger(__name__)
 
 _STREAM_KEY = "archie:swarm:stream"
+# Extra entries read past check lines: about a day of checks
+_CHECK_LINES_SCAN = 120
 _MENTION_PATTERN = re.compile(r"@([a-z][a-z0-9_]*)")
 
 
@@ -125,12 +127,19 @@ class SwarmBus:
         await self.redis.delete(_STREAM_KEY)
         logger.info("swarm_bus_002: Chat history cleared")
 
-    async def get_history(self, count: int) -> list[SwarmMessage]:
-        """Return the last `count` messages, oldest first."""
-        entries = await self.redis.xrevrange(_STREAM_KEY, count=count)
-        return [
+    async def get_history(
+        self, count: int, with_checks: bool = False
+    ) -> list[SwarmMessage]:
+        """Return the last `count` messages, oldest first. Silent check lines
+        are for the user only: agents get the chat without them (ARCHIE-242)."""
+        scan = count if with_checks else count + _CHECK_LINES_SCAN
+        entries = await self.redis.xrevrange(_STREAM_KEY, count=scan)
+        messages = [
             SwarmMessage.model_validate(
                 {**json.loads(fields["data"]), "message_id": entry_id}
             )
-            for entry_id, fields in reversed(entries)
+            for entry_id, fields in entries
         ]
+        if not with_checks:
+            messages = [m for m in messages if m.kind != "check"]
+        return list(reversed(messages[:count]))
