@@ -137,10 +137,7 @@ class SwarmWatchReply(SwarmReply, WatchOutcome):
     """Last LLM call of a spontaneous check: the reply is the alert, or empty."""
 
     reply: str = Field(
-        description=(
-            "Alert for the user, max 200 characters. Empty if nothing is new: "
-            "never write that nothing is new or that all is fine"
-        )
+        description="Alert for the user, max 200 characters; empty if nothing is new"
     )
 
 
