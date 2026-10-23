@@ -1046,3 +1046,95 @@ async def test_alert_does_not_push_out_a_waiting_user_message():
     await dispatcher._start_council(_alert(), ALL_AGENTS)
     assert dispatcher._pending["council"] is user
     assert dispatcher._pending["council:alert"].kind == "alert"
+
+
+# --- alert chats and paired outputs (ARCHIE-247) ---
+
+
+def test_voice_mention_also_wakes_the_display():
+    from app.swarm.agents import add_paired_outputs
+
+    assert add_paired_outputs(["voice"]) == ["voice", "display"]
+    assert add_paired_outputs(["light", "voice", "chat"]) == [
+        "light",
+        "voice",
+        "display",
+        "chat",
+    ]
+    assert add_paired_outputs(["display", "voice"]) == ["display", "voice"]
+    assert add_paired_outputs(["display"]) == ["display"]
+
+
+async def test_bus_adds_display_to_a_voice_mention():
+    redis = AsyncMock()
+    redis.xadd = AsyncMock(return_value="6-0")
+    with patch("app.swarm.bus.get_async_redis", return_value=redis):
+        bus = SwarmBus(SwarmHub())
+    posted = await bus.post(sender="user", kind="user", text="@voice скажи тест")
+    assert posted.mentions == ["voice", "display"]
+
+
+async def test_voice_and_chat_wait_for_the_data_agent():
+    council = _council(
+        "bro",
+        [
+            CouncilTriage(
+                reasoning="r",
+                convene=False,
+                reply="Скажу счёт.",
+                delegations=[
+                    CouncilDelegation(agent_id="football", task="счёт Bayern"),
+                    CouncilDelegation(agent_id="voice", task="скажи счёт"),
+                    CouncilDelegation(agent_id="chat", task="чат о матче"),
+                ],
+                remember=[],
+                remember_today=[],
+            )
+        ],
+    )
+    council.bus.post = AsyncMock(return_value=_message(sender="bro", text="d"))
+    await council.run(_message(text="скажи счёт"), COUNCIL, force=False)
+    assert council.bus.post.await_args.kwargs["mentions"] == ["football"]
+    assert council.relays == {"1-0": ["voice", "display", "chat"]}
+
+
+def test_chat_agent_may_open_a_chat_but_not_control_devices():
+    chat = SWARM_AGENTS["chat"]
+    assert (
+        check_tool_call(chat, _call("alert_chat_tool", title="t", message="m"))
+        == "allow"
+    )
+    assert check_tool_call(chat, _call("smarthome_control_tool")) == "block"
+
+
+async def test_alert_chat_tool_creates_the_chat_in_django(monkeypatch):
+    from app.tools import alert_chat_tool as module
+
+    client = AsyncMock()
+    client.__aenter__.return_value = client
+    client.post.return_value = MagicMock(raise_for_status=MagicMock())
+    monkeypatch.setattr(module.httpx, "AsyncClient", MagicMock(return_value=client))
+    monkeypatch.setattr(settings, "swarm_user_name", "niko")
+    monkeypatch.setattr(settings, "web_django_url", "http://web:8000/")
+    result = await module.alert_chat_tool(
+        title="Торшер  горит", message="Днём горит торшер в гостиной. Что сделать?"
+    )
+    conversation_id = result["chat"].split("/")[2]
+    assert result == {"chat": f"/c/{conversation_id}/", "title": "🔔 Торшер горит"}
+    post = client.post.await_args
+    assert post.args[0] == "http://web:8000/ai-assistant/api/messages/"
+    assert post.kwargs["json"] == {
+        "conversation_id": conversation_id,
+        "input": "Днём горит торшер в гостиной. Что сделать?",
+        "user_name": "niko",
+        "response_format": "ui_answer",
+        "demo_mode": False,
+    }
+    patch_call = client.patch.await_args
+    assert patch_call.args[0].endswith(f"/conversations/{conversation_id}/")
+    assert patch_call.kwargs["json"] == {"title": "🔔 Торшер горит"}
+
+
+def test_main_chat_does_not_get_the_alert_chat_tool():
+    names = [t["name"] for t in ToolFactory().get_tool_schemas("gpt-5.6-luna", "plain")]
+    assert "alert_chat_tool" not in names
