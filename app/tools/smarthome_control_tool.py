@@ -63,7 +63,7 @@ async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
 ) -> dict[str, Any]:
     """
     Control smart home devices via Home Assistant: lights, climate, media players, timers,
-    and whole-home voice broadcasts. This tool only CHANGES state — it cannot answer
+    robot vacuum, and whole-home voice broadcasts. This tool only CHANGES state — it cannot answer
     "is the light on"/"what's the temperature" or similar questions, use smarthome_status_tool for those.
     IMPORTANT: Users don't know numeric values (brightness percentages, Kelvin temperatures, etc.).
     Choose appropriate values based on context and NEVER mention raw numbers to the user.
@@ -72,10 +72,13 @@ async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
         action: One of: turn_on, turn_off, set_light, set_temperature, increase_temperature,
             decrease_temperature, media_pause, media_unpause, media_next, media_previous,
             media_set_volume, media_volume_step, media_mute, media_unmute, media_search_and_play,
-            broadcast, cancel_timers, activate_scene
+            broadcast, cancel_timers, activate_scene, vacuum_start, vacuum_return_to_base,
+            vacuum_clean_area
         device_name: Entity name/alias to target, e.g. 'Floor Lamp Living Room', 'Living Room Thermostat'.
-            For 'activate_scene', the scene name, e.g. 'Jazz Bar', 'Рождество'
-        area: Area/room name to target instead of/in addition to name, e.g. 'Гостиная'
+            For 'activate_scene', the scene name, e.g. 'Jazz Bar', 'Рождество'.
+            Optional for vacuum_* actions (the only robot vacuum is used by default)
+        area: Area/room name to target instead of/in addition to name, e.g. 'Гостиная'.
+            Required for 'vacuum_clean_area' (the room to clean)
         floor: Floor name to target
         brightness: 0-100 percent, for 'set_light'. Interpret naturally: 'brighter'=+20, 'dim'=-20, 'max'=100
         color_temp: Color warmth in Kelvin, for 'set_light'. 2700=warm, 4000=neutral, 6500=cold
@@ -222,6 +225,27 @@ async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
                     "message": "device_name is required for action=activate_scene",
                 }
             ha_result = await call_tool("HassTurnOn", target)
+        elif action in ("vacuum_start", "vacuum_return_to_base"):
+            # Vacuums have no area and no TURN_ON feature, so HassTurnOn can't start them. # ARCHIE-244
+            vacuum_args: dict[str, Any] = {"domain": ["vacuum"]}
+            if device_name:
+                vacuum_args["name"] = device_name
+            ha_result = await call_tool(
+                "HassVacuumStart"
+                if action == "vacuum_start"
+                else "HassVacuumReturnToBase",
+                vacuum_args,
+            )
+        elif action == "vacuum_clean_area":
+            if not area:
+                return {
+                    "status": "error",
+                    "message": "area is required for action=vacuum_clean_area",
+                }
+            clean_args: dict[str, Any] = {"area": area}
+            if device_name:
+                clean_args["name"] = device_name
+            ha_result = await call_tool("HassVacuumCleanArea", clean_args)
         else:
             return {
                 "status": "error",
