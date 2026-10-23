@@ -345,6 +345,7 @@ async def test_simple_request_gets_decision_in_one_call():
         reply="Выключаю.",
         delegations=[CouncilDelegation(agent_id="light", task="выключи свет")],
         remember=[],
+        remember_today=[],
     )
     council = _council("business", [triage])
     await council.run(_message(text="выключи свет"), COUNCIL, force=False)
@@ -359,12 +360,20 @@ async def test_convened_council_posts_opinions_then_one_decision():
         "flirty",
         [
             CouncilTriage(
-                reasoning="r", convene=True, reply="", delegations=[], remember=[]
+                reasoning="r",
+                convene=True,
+                reply="",
+                delegations=[],
+                remember=[],
+                remember_today=[],
             ),
             SwarmReply(reply="Ехать"),
             SwarmReply(reply="Остаться"),
             CouncilDecision(
-                reply="Решили: едем в субботу.", delegations=[], remember=[]
+                reply="Решили: едем в субботу.",
+                delegations=[],
+                remember=[],
+                remember_today=[],
             ),
         ],
     )
@@ -396,10 +405,13 @@ async def test_force_convenes_even_if_chair_has_an_answer():
                 reply="Сразу ответ",
                 delegations=[],
                 remember=[],
+                remember_today=[],
             ),
             SwarmReply(reply="a"),
             SwarmReply(reply="b"),
-            CouncilDecision(reply="Итог", delegations=[], remember=[]),
+            CouncilDecision(
+                reply="Итог", delegations=[], remember=[], remember_today=[]
+            ),
         ],
     )
     await council.run(_message(text="@council?"), COUNCIL, force=True)
@@ -417,6 +429,7 @@ def _memory(facts=None, notes=None) -> MagicMock:
     memory = MagicMock()
     memory.list_facts = AsyncMock(return_value=facts or [])
     memory.get_day_notes = AsyncMock(return_value=notes or [])
+    memory.get_today_facts = AsyncMock(return_value=[])
     return memory
 
 
@@ -589,6 +602,7 @@ async def test_offer_with_at_sign_does_not_delegate():
         reply="Могу попросить @light включить торшер.",
         delegations=[],
         remember=[],
+        remember_today=[],
     )
     council = _council("bro", [triage])
     await council.run(_message(text="какой свет включить?"), COUNCIL, force=False)
@@ -608,6 +622,7 @@ async def test_delegations_become_mentions_and_skip_unknown_or_council_agents():
             CouncilDelegation(agent_id="nobody", task="x"),
         ],
         remember=[],
+        remember_today=[],
     )
     council = _council("bro", [triage])
     await council.run(_message(text="приглуши свет"), COUNCIL, force=False)
@@ -914,6 +929,7 @@ async def test_display_waits_for_the_data_agent():
                     CouncilDelegation(agent_id="display", task="покажи погоду"),
                 ],
                 remember=[],
+                remember_today=[],
             )
         ],
     )
@@ -952,6 +968,7 @@ async def test_display_alone_is_not_delayed():
                     CouncilDelegation(agent_id="display", task="Бавария 20:30")
                 ],
                 remember=[],
+                remember_today=[],
             )
         ],
     )
@@ -1005,6 +1022,7 @@ async def test_council_acts_on_an_alert_only_with_delegations():
             CouncilDelegation(agent_id="light", task="Выключи торшер в спальне")
         ],
         remember=[],
+        remember_today=[],
     )
     council = _council("bro", [act])
     await council.run(_alert(), COUNCIL, force=False)
@@ -1012,7 +1030,9 @@ async def test_council_acts_on_an_alert_only_with_delegations():
     kwargs = council.bus.post.await_args.kwargs
     assert kwargs["kind"] == "decision" and kwargs["mentions"] == ["light"]
 
-    idle = CouncilAlertDecision(reasoning="r", reply="", delegations=[], remember=[])
+    idle = CouncilAlertDecision(
+        reasoning="r", reply="", delegations=[], remember=[], remember_today=[]
+    )
     council = _council("bro", [idle])
     await council.run(_alert("Письмо от банка"), COUNCIL, force=False)
     council.bus.post.assert_not_awaited()
