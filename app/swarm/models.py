@@ -104,7 +104,7 @@ class SwarmTurn(BaseModel):
     )
     reply: str = Field(
         description=(
-            "Chat message, max 280 characters, may @mention other agents. "
+            "Chat message, max 600 characters, may @mention other agents. "
             "Empty if you call tools or have nothing useful to say"
         )
     )
@@ -114,7 +114,7 @@ class SwarmReply(BaseModel):
     """Second LLM call of an agent turn: reply after tool results."""
 
     reply: str = Field(
-        description="Chat message, max 280 characters, may @mention other agents"
+        description="Chat message, max 600 characters, may @mention other agents"
     )
 
 
