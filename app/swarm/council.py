@@ -19,7 +19,7 @@ from archie_shared.swarm.models import (
 )
 from pydantic import BaseModel
 from ..config import settings
-from .agents import SWARM_AGENTS
+from .agents import SWARM_AGENTS, add_paired_outputs
 from .bus import SwarmBus, SwarmHub
 from .models import CouncilAlertDecision, CouncilDecision, CouncilTriage, SwarmReply
 from .runner import SwarmAgentRunner, format_chat_line
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 COUNCIL_GROUP = "council"
 DEFAULT_CHAIR = "business"
 # Agents that deliver data to the user; they wait for the agents that find it.
-OUTPUT_AGENTS = frozenset({"display", "voice"})
+OUTPUT_AGENTS = frozenset({"display", "voice", "chat"})
 RELAYS_MAX = 20
 
 
@@ -162,7 +162,9 @@ class SwarmCouncil:
         await self._remember(decision)
         lines = [decision.reply.replace("@", "").strip()]
         lines += [f"→ @{d.agent_id}: {d.task}" for d in delegations]
-        mentions = list(dict.fromkeys(d.agent_id for d in delegations))
+        mentions = add_paired_outputs(
+            list(dict.fromkeys(d.agent_id for d in delegations))
+        )
         outputs = [a for a in mentions if a in OUTPUT_AGENTS]
         sources = [a for a in mentions if a not in OUTPUT_AGENTS]
         message = await self._post(
