@@ -109,7 +109,7 @@
     "text": "For questions about the user's incoming emails call `gmail_tool` (read-only). Composing or sending emails is not supported by it."
   },
   "load_matching_skill": {
-    "text": "If \"Available Skills\" lists a skill whose description matches the request, call `skill_loader_tool` with that skill's name first to load its full instructions before acting."
+    "text": "Before you select a tool, read \"Available Skills\" at the end of this prompt. If a skill there matches the request and is not loaded yet, you MUST call only `skill_loader_tool` with that skill's name. A tool description does not replace the instructions of the skill."
   },
   "fill_ui_intents": {
     "text": "Fill `sgr.intents` with relevant intents from this list. Leave empty for base UI only (Card, Text, Table, Image)."
