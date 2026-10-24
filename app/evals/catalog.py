@@ -4,9 +4,7 @@ Django stores the cases (ARCHIE-208); the agent owns the rules a case must follo
 (known tools, ui item types, prompts) and infers which prompts a case tests.
 """
 
-import hashlib
 import logging
-from pathlib import Path
 from typing import Literal, get_args, get_origin
 import httpx
 from archie_shared.chat.models import ChatRequest
@@ -27,7 +25,6 @@ from app.monitoring.spec_rules import ASSISTANT_SPEC, COMMAND_SPEC, rules_for_tu
 
 logger = logging.getLogger(__name__)
 
-SWARM_PROMPTS_DIR = Path(__file__).resolve().parents[1] / "agent" / "prompts" / "swarm"
 CASE_ID_PATTERN = r"^[a-z0-9_]+(\.[a-z0-9_]+)+$"
 
 # Formats that skip Stage 1 (see AgentFactory.arun)
@@ -89,20 +86,16 @@ def _literal_values(annotation: object) -> list[str]:
 def compute_prompt_hashes() -> dict[str, str]:
     """Prompt name -> sha256 of its current version, to tell prompt versions apart.
 
-    Spec prompts hash the spec and the rules it uses (ARCHIE-212); swarm prompts
-    are still Jinja2 templates and hash their source.
+    Every prompt is a spec: the hash covers the spec and the rules it uses
+    (ARCHIE-212; swarm prompts since ARCHIE-285).
     """
     compiler = PromptCompiler()
     hashes = {name: compiler.fingerprint(name) for name in compiler.library.specs}
-    hashes |= {
-        path.stem: hashlib.sha256(path.read_bytes()).hexdigest()
-        for path in sorted(SWARM_PROMPTS_DIR.glob("*.jinja2"))
-    }
     return dict(sorted(hashes.items()))
 
 
 def list_prompt_templates() -> list[str]:
-    """Prompt names: spec names and swarm template stems."""
+    """Prompt names: the spec names."""
     return list(compute_prompt_hashes())
 
 
