@@ -28,7 +28,7 @@ from ..backend.state_service import StateService
 from ..config import settings
 from ..models.orchestration_sgr import ToolCallRequest
 from ..models.state_models import UserState
-from ..models.tool_models import ToolResult
+from ..models.tool_models import ToolContext, ToolResult
 from ..tools.tool_factory import ToolFactory
 from ..utils.general_utils import local_now
 from ..utils.llm_parser import parse_llm_response
@@ -223,6 +223,7 @@ class SwarmAgentRunner:
 
     async def build_messages(
         self,
+        state: UserState,
         profile: SwarmAgentProfile,
         model: str,
         trigger_id: str | None,
@@ -230,7 +231,6 @@ class SwarmAgentRunner:
         task: str,
         watch_task: SwarmWatchTask | None = None,
     ) -> list[dict[str, Any]]:
-        state = await self.get_user_state()
         memory_lines = await self.build_memory_lines(state, watch_task)
         return [
             {
@@ -260,7 +260,12 @@ class SwarmAgentRunner:
         model = await self.roster.get_model(profile)
         provider = get_provider_for_model(model)
         messages = await self.build_messages(
-            profile, model, trigger.message_id, history, task
+            await self.get_user_state(),
+            profile,
+            model,
+            trigger.message_id,
+            history,
+            task,
         )
         traces: list[LllmTrace] = []
         content = await self._call(
@@ -275,7 +280,9 @@ class SwarmAgentRunner:
         history: list[SwarmMessage],
     ) -> SwarmDraft | None:
         model = await self.roster.get_model(profile)
+        state = await self.get_user_state()
         messages = await self.build_messages(
+            state,
             profile,
             model,
             trigger.message_id,
@@ -283,7 +290,12 @@ class SwarmAgentRunner:
             f"React to this message:\n{format_chat_line(trigger)}",
         )
         turn, actions, traces = await self._loop(
-            profile, model, messages, SwarmTurn, SwarmReply
+            profile,
+            model,
+            messages,
+            ToolContext(user_timezone=state.user_timezone),
+            SwarmTurn,
+            SwarmReply,
         )
         reply = turn.reply.strip()
         if not reply and not actions:
@@ -307,11 +319,18 @@ class SwarmAgentRunner:
         """One spontaneous check: read fresh data, compare with today's notes,
         return an alert or an empty reply (ARCHIE-238)."""
         model = await self.roster.get_model(profile)
+        state = await self.get_user_state()
         messages = await self.build_messages(
-            profile, model, None, history, task, watch_task
+            state, profile, model, None, history, task, watch_task
         )
         turn, _, traces = await self._loop(
-            profile, model, messages, SwarmWatchTurn, SwarmWatchReply, WATCH_FINAL_TASK
+            profile,
+            model,
+            messages,
+            ToolContext(user_timezone=state.user_timezone),
+            SwarmWatchTurn,
+            SwarmWatchReply,
+            WATCH_FINAL_TASK,
         )
         return SwarmWatchDraft(
             outcome=SwarmWatchReply.model_validate(turn.model_dump()),
@@ -323,6 +342,7 @@ class SwarmAgentRunner:
         profile: SwarmAgentProfile,
         model: str,
         messages: list[dict[str, Any]],
+        context: ToolContext,
         turn_schema: type[SwarmTurn],
         reply_schema: type[SwarmReply],
         final_task: str = FINAL_REPLY_TASK,
@@ -344,7 +364,9 @@ class SwarmAgentRunner:
                 f"{[(tc.tool_name, {p.name: p.value for p in tc.arguments}) for tc in turn.tool_calls]} "
                 f"reasoning: \033[33m{turn.reasoning}\033[0m"
             )
-            results, new_actions = await self._execute(profile, turn.tool_calls)
+            results, new_actions = await self._execute(
+                profile, turn.tool_calls, context
+            )
             actions.extend(new_actions)
             messages.append(
                 {
@@ -400,7 +422,10 @@ class SwarmAgentRunner:
         return parsed.parsed_content
 
     async def _execute(
-        self, profile: SwarmAgentProfile, tool_calls: list[SwarmToolCall]
+        self,
+        profile: SwarmAgentProfile,
+        tool_calls: list[SwarmToolCall],
+        context: ToolContext,
     ) -> tuple[list[ToolResult], list[SwarmActionInfo]]:
         allowed: list[SwarmToolCall] = []
         actions: list[SwarmActionInfo] = []
@@ -414,8 +439,8 @@ class SwarmAgentRunner:
         reads = [c for c in allowed if is_read_only(c)]
         writes = [c for c in allowed if not is_read_only(c)]
         results = await self._run_calls(
-            profile, reads, self.tool_factory
-        ) + await self._run_calls(profile, writes, self.action_factory)
+            profile, reads, self.tool_factory, context
+        ) + await self._run_calls(profile, writes, self.action_factory, context)
         allowed = reads + writes
         for call, result in zip(allowed, results, strict=True):
             if not is_read_only(call):
@@ -428,7 +453,10 @@ class SwarmAgentRunner:
 
     @staticmethod
     async def _run_calls(
-        profile: SwarmAgentProfile, calls: list[SwarmToolCall], factory: ToolFactory
+        profile: SwarmAgentProfile,
+        calls: list[SwarmToolCall],
+        factory: ToolFactory,
+        context: ToolContext,
     ) -> list[ToolResult]:
         if not calls:
             return []
@@ -444,6 +472,7 @@ class SwarmAgentRunner:
                 for call in calls
             ],
             tool_factory=factory,
+            context=context,
         )
 
     @staticmethod
