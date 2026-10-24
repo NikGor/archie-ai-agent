@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     # Dry run: tools with side effects (lights, climate, voice) run in demo mode;
     # state reads stay real. For safe testing against the real home.
     swarm_dry_run: bool = False
+    # Swarm journal (ARCHIE-281): every posted message goes to Django
+    # {web_django_url}/swarm-journal/api for the daily swarm audit; auth: EVAL_API_TOKEN
+    swarm_journal_enabled: bool = True
+    swarm_journal_flush_seconds: float = 5.0
+    swarm_journal_buffer_size: int = 2000
 
     # Prompt eval suite (ARCHIE-208)
     # Prompt autofix (ARCHIE-213): cases run on the model a rule failed on, gpt-4.1
