@@ -6,7 +6,10 @@ A bad outcome with no broken rule points to a gap in the specs.
 - goal: did the response solve the request, and if not, why (fixed reasons);
 - user_reaction: what the user's next message says about the response — a
   rephrased request or a correction means the turn failed. Asked only when the
-  next message exists.
+  next message exists;
+- informative_title: the conversation title (set once per chat, so asked on the
+  first assistant turn only) tells the user what the chat is about. A bad title
+  is cosmetic: never worse than orange.
 """
 
 from archie_shared.monitoring.models import (
@@ -22,6 +25,12 @@ REACTION_RULE = "user_reaction"
 GOAL_TEXT = "The response solves what the user asked in the last message."
 REACTION_TEXT = (
     "The user's next message does not repeat the request or point out a mistake."
+)
+TITLE_RULE = "informative_title"
+TITLE_TEXT = (
+    "The conversation title is informative: it names the topic of the chat, so the "
+    'user can recognise it in a list. It is specific, not generic ("New chat", '
+    '"Chat", a greeting, a bare tool name) and fits the conversation.'
 )
 NO_PROBLEM = "no_problem"
 
@@ -57,10 +66,11 @@ _REACTION_MIN_PROBABILITY = 0.5
 GOAL_KEY = "outcome_goal"
 GOAL_REASON_KEY = "outcome_goal_reason"
 REACTION_KEY = "outcome_reaction"
+TITLE_KEY = "outcome_title"
 
 
 def build_outcome_questions(
-    answers: dict[str, str], has_next_message: bool
+    answers: dict[str, str], has_next_message: bool, ask_title: bool = False
 ) -> dict[str, dict]:
     """`answers`: the followed / partly / violated / not_applicable options."""
     questions = {
@@ -83,7 +93,34 @@ def build_outcome_questions(
             ),
             "criteria": {name: text for name, (text, _, _) in REACTIONS.items()},
         }
+    if ask_title:
+        questions[TITLE_KEY] = {
+            "type": "choice",
+            "instructions": (
+                f"{TITLE_TEXT} Read conversation_title. Is the title informative?"
+            ),
+            "criteria": answers,
+        }
     return questions
+
+
+def parse_title(
+    answers: dict, title_grade: MonitorGrade | None
+) -> list[MonitorRuleScore]:
+    """Title score; empty when the title was not asked about. The caller grades it."""
+    if TITLE_KEY not in answers:
+        return []
+    probabilities = answers[TITLE_KEY]["probabilities"]
+    return [
+        MonitorRuleScore(
+            spec=OUTCOME_SPEC,
+            rule_id=TITLE_RULE,
+            text=TITLE_TEXT,
+            # A poor title is cosmetic: orange at worst
+            grade="orange" if title_grade == "red" else title_grade,
+            probability=round(max(probabilities.values()), 3),
+        )
+    ]
 
 
 def parse_outcome(

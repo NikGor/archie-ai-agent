@@ -23,7 +23,7 @@ from app.evals.prompt_descriptions import PROMPT_DESCRIPTIONS
 from app.tools.tool_factory import ToolFactory
 from app.utils.skill_utils import list_skills
 from .outcome import GOAL_KEY as OUTCOME_GOAL_KEY
-from .outcome import build_outcome_questions, parse_outcome
+from .outcome import TITLE_KEY, build_outcome_questions, parse_outcome, parse_title
 from .spec_rules import SpecRule, rules_for_turn, spec_versions
 from .traces import TraceTurn
 
@@ -169,7 +169,10 @@ def _format_tool_calls(trace: TraceTurn | None) -> str:
 
 
 def build_state(
-    messages: list[MonitorMessage], index: int, trace: TraceTurn | None
+    messages: list[MonitorMessage],
+    index: int,
+    trace: TraceTurn | None,
+    title: str | None = None,
 ) -> dict[str, str]:
     """Jev state for the assistant message messages[index]."""
     response = messages[index]
@@ -182,6 +185,7 @@ def build_state(
     user_messages = [m for m in history if m.role == "user"]
     next_message = _next_user_message(messages, index)
     return {
+        **({"conversation_title": title} if title else {}),
         "agent_catalog": agent_catalog(),
         "conversation": "\n".join(
             f"[{m.created_at}] {m.role}: {_short_text(m)}" for m in history
@@ -255,9 +259,18 @@ def parse_answers(rules: list[SpecRule], answers: dict) -> list[MonitorRuleScore
     return scores
 
 
+def _is_first_assistant_turn(messages: list[MonitorMessage], index: int) -> bool:
+    return all(m.role != "assistant" for m in messages[:index])
+
+
 async def judge_turn(
-    messages: list[MonitorMessage], index: int, trace: TraceTurn | None, model: str
+    messages: list[MonitorMessage],
+    index: int,
+    trace: TraceTurn | None,
+    model: str,
+    title: str | None = None,
 ) -> JudgeResult:
+    """`title`: the conversation title; judged on the first assistant turn only."""
     content_format = judged_format(
         _content(messages[index]), messages[index].response_format
     )
@@ -267,13 +280,14 @@ async def judge_turn(
         trace is not None,
         _short_text(user_messages[-1]) if user_messages else "",
     )
+    ask_title = bool(title) and _is_first_assistant_turn(messages, index)
     data = await _decide(
         model,
-        build_state(messages, index, trace),
+        build_state(messages, index, trace, title if ask_title else None),
         {
             **build_questions(rules),
             **build_outcome_questions(
-                ANSWERS, _next_user_message(messages, index) is not None
+                ANSWERS, _next_user_message(messages, index) is not None, ask_title
             ),
         },
     )
@@ -282,7 +296,16 @@ async def judge_turn(
         goal_grade = grade_from_probabilities(
             answers[OUTCOME_GOAL_KEY]["probabilities"]
         )
-        scores = parse_outcome(answers, goal_grade) + parse_answers(rules, answers)
+        title_grade = (
+            grade_from_probabilities(answers[TITLE_KEY]["probabilities"])
+            if TITLE_KEY in answers
+            else None
+        )
+        scores = (
+            parse_outcome(answers, goal_grade)
+            + parse_title(answers, title_grade)
+            + parse_answers(rules, answers)
+        )
     except (KeyError, ValueError) as exc:
         raise JudgeError(f"Jev {model} returned unexpected answers: {exc}") from exc
     return JudgeResult(

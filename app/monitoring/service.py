@@ -180,7 +180,11 @@ class MonitorRun:
         message = conversation.messages[index]
         async with self.semaphore:
             result = await judge_turn(
-                conversation.messages, index, trace, self.info.judge_model
+                conversation.messages,
+                index,
+                trace,
+                self.info.judge_model,
+                conversation.title,
             )
         rules = result.rules
         evaluation = MonitorTurnEvaluation(
