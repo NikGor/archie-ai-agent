@@ -12,6 +12,13 @@ from ..utils.skill_utils import list_skills
 from .prompt_compiler import PromptCompiler
 
 
+# Header of the skill list in the Stage 1 prompt; chat monitoring finds it in traces
+SKILLS_HEADER = (
+    "Available Skills (call skill_loader_tool with skill_name to load "
+    "full instructions):"
+)
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -85,10 +92,7 @@ class PromptBuilder:
             skills_list = "\n".join(
                 f"- {s['name']}: {s['description']}" for s in skills
             )
-            system_message += (
-                "\n\nAvailable Skills (call skill_loader_tool with skill_name to load "
-                f"full instructions):\n{skills_list}"
-            )
+            system_message += f"\n\n{SKILLS_HEADER}\n{skills_list}"
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_message, "cacheable": True},
         ]
