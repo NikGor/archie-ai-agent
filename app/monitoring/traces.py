@@ -5,13 +5,15 @@ app/utils/tracing.py). Django does not store tool calls, so the judge gets them
 from here; turns older than tracing have no trace.
 """
 
+import itertools
 import json
 import logging
 from datetime import datetime, timedelta
 from archie_shared.monitoring.models import MonitorToolCall
 from langfuse import get_client
 from pydantic import BaseModel, Field
-from app.utils.tracing import CHAT_TRACE_NAME
+from app.agent.prompt_builder import SKILLS_HEADER
+from app.utils.tracing import CHAT_TRACE_NAME, COMMAND_TRACE_NAME
 
 
 logger = logging.getLogger(__name__)
@@ -19,6 +21,7 @@ logger = logging.getLogger(__name__)
 SKILL_LOADER_TOOL = "skill_loader_tool"
 _PAGE_SIZE = 100
 _FIELDS = "core,basic,io,metadata"
+_SPEC_VERSIONS_PREFIX = "spec_versions."
 
 
 class TraceTurn(BaseModel):
@@ -28,6 +31,15 @@ class TraceTurn(BaseModel):
     started_at: datetime = Field(description="Start of the handle-chat observation")
     message_id: str | None = Field(default=None, description="ChatMessage.message_id")
     tool_calls: list[MonitorToolCall] = Field(default_factory=list)
+    spec_versions: dict[str, str] = Field(
+        default_factory=dict,
+        description="Spec -> fingerprint of the prompt version that produced the turn",
+    )
+    skills_offered: list[str] | None = Field(
+        default=None,
+        description="'- name: description' lines of the skills that the turn's Stage 1 "
+        "prompt listed; None when the turn has no Stage 1 call",
+    )
 
     @property
     def skills_loaded(self) -> list[str]:
@@ -39,6 +51,34 @@ class TraceTurn(BaseModel):
             if name and name not in skills:
                 skills.append(name)
         return skills
+
+
+def offered_skills(generation_input: object) -> list[str]:
+    """Skill lines of the system prompt of a Stage 1 call, as Langfuse stored it.
+
+    The judge needs the skills of the turn, not the current ones: a skill added
+    later made older turns break load_matching_skill (ARCHIE-256).
+    """
+    messages = (
+        json.loads(generation_input)
+        if isinstance(generation_input, str)
+        else generation_input
+    )
+    system_prompt = next(m["content"] for m in messages if m.get("role") == "system")
+    _, found, rest = system_prompt.partition(SKILLS_HEADER)
+    if not found:
+        return []
+    lines = rest.lstrip("\n").splitlines()
+    return list(itertools.takewhile(lambda line: line.startswith("- "), lines))
+
+
+def _spec_versions(metadata: dict) -> dict[str, str]:
+    """Langfuse returns nested metadata flattened: spec_versions.<spec> -> version."""
+    return {
+        key.removeprefix(_SPEC_VERSIONS_PREFIX): str(value)
+        for key, value in metadata.items()
+        if key.startswith(_SPEC_VERSIONS_PREFIX)
+    }
 
 
 def _tool_success(output: str | None) -> bool | None:
@@ -72,8 +112,28 @@ async def fetch_session_turns(session_id: str) -> list[TraceTurn]:
                 trace_id=observation.trace_id,
                 started_at=observation.start_time,
                 message_id=metadata.get("message_id"),
+                spec_versions=_spec_versions(metadata),
             )
     for observation in sorted(observations, key=lambda o: o.start_time):
+        turn = turns.get(observation.trace_id)
+        if (
+            turn is not None
+            and observation.name == COMMAND_TRACE_NAME
+            and turn.skills_offered is None
+        ):
+            try:
+                turn.skills_offered = offered_skills(observation.input)
+            except (
+                ValueError,
+                TypeError,
+                KeyError,
+                AttributeError,
+                StopIteration,
+            ) as e:
+                logger.warning(
+                    f"monitor_traces_warning_001: No skill list in Stage 1 prompt of "
+                    f"trace {observation.trace_id}: {e!r}"
+                )
         if observation.type == "TOOL" and observation.trace_id in turns:
             turns[observation.trace_id].tool_calls.append(
                 MonitorToolCall(
