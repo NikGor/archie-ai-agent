@@ -4,7 +4,8 @@
 - long-term memory: lasting facts and preferences, shown in every prompt;
 - day memory: what each check saw and reported today, so the swarm does not
   repeat itself; one Redis list per local date, expires after two days;
-- per-check state: when a check ran last and until when it has nothing to do.
+- per-check state: when a check ran last, until when it has nothing to do and
+  when it must run again to follow a live event (ARCHIE-286).
 """
 
 import json
@@ -31,6 +32,7 @@ _MEMORY_KEY = "archie:swarm:memory"
 _DAY_KEY = "archie:swarm:day:{day}"
 _LAST_TASK_KEY = "archie:swarm:last_task"
 _QUIET_KEY = "archie:swarm:quiet_until"
+_FOLLOW_UP_KEY = "archie:swarm:follow_up"
 _LAST_RUN_KEY = "archie:swarm:last_run"
 _TODAY_KEY = "archie:swarm:today:{day}"
 
@@ -142,6 +144,16 @@ class SwarmMemory:
             await self.redis.hdel(_QUIET_KEY, task)
         else:
             await self.redis.hset(_QUIET_KEY, task, until.isoformat())
+
+    async def get_follow_ups(self) -> dict[str, datetime]:
+        raw = await self.redis.hgetall(_FOLLOW_UP_KEY)
+        return {task: datetime.fromisoformat(value) for task, value in raw.items()}
+
+    async def set_follow_up(self, task: SwarmWatchTask, at: datetime | None) -> None:
+        if at is None:
+            await self.redis.hdel(_FOLLOW_UP_KEY, task)
+        else:
+            await self.redis.hset(_FOLLOW_UP_KEY, task, at.isoformat())
 
     async def get_last_run(self) -> SwarmRunInfo | None:
         raw = await self.redis.get(_LAST_RUN_KEY)
