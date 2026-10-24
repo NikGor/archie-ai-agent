@@ -59,7 +59,10 @@ _CATALOG_MODEL = "gpt-4.1"
 
 class JudgeResult(BaseModel):
     rules: list[MonitorRuleScore] = Field(description="Score per judged rule")
-    spec_versions: dict[str, str] = Field(description="Spec -> judged fingerprint")
+    spec_versions: dict[str, str] = Field(
+        description="Spec -> fingerprint of the version that produced the turn "
+        "(from its trace), else of the judged version"
+    )
     model: str = Field(description="Jev version that answered")
     cost: float | None = Field(default=None, description="Cost in USD")
 
@@ -82,20 +85,40 @@ def grade_from_probabilities(probabilities: dict[str, float]) -> MonitorGrade | 
 
 
 @functools.cache
-def agent_catalog() -> str:
+def _tool_lines() -> str:
     schemas = ToolFactory().get_tool_schemas(_CATALOG_MODEL, "ui_answer")
-    tools = "\n".join(
+    return "\n".join(
         f"- {schema['name']}: {schema['description'].strip().splitlines()[0]}"
         for schema in schemas
     )
-    skills = "\n".join(
+
+
+@functools.cache
+def _current_skill_lines() -> tuple[str, ...]:
+    return tuple(
         f"- {skill['name']}: {skill['description']}" for skill in list_skills()
     )
+
+
+def agent_catalog(skills: list[str] | None = None) -> str:
+    """Tools and skills for the judge. `skills`: the skill lines of the turn's
+    Stage 1 prompt; None (no Stage 1 call in the trace) uses the current ones."""
+    skill_lines = "\n".join(_current_skill_lines() if skills is None else skills)
     return (
         "Archie is a personal AI assistant for a smart home and daily life. "
         "Stage 1 picks tools and loads skills, Stage 2 runs tools, Stage 3 writes "
-        f"the response.\nTools:\n{tools}\nSkills:\n{skills or '- none'}"
+        f"the response.\nTools:\n{_tool_lines()}\nSkills:\n{skill_lines or '- none'}"
     )
+
+
+def turn_spec_versions(content_format: str, trace: TraceTurn | None) -> dict[str, str]:
+    """Spec -> version that produced the turn, from its trace; else the judged
+    version (ARCHIE-256: a backlog run must not put old turns on the new version)."""
+    produced = trace.spec_versions if trace else {}
+    return {
+        spec: produced.get(spec, judged)
+        for spec, judged in spec_versions(content_format, trace is not None).items()
+    }
 
 
 def _compact(value: object, limit: int = _STRING_LIMITS[0]) -> object:
@@ -186,7 +209,7 @@ def build_state(
     next_message = _next_user_message(messages, index)
     return {
         **({"conversation_title": title} if title else {}),
-        "agent_catalog": agent_catalog(),
+        "agent_catalog": agent_catalog(trace.skills_offered if trace else None),
         "conversation": "\n".join(
             f"[{m.created_at}] {m.role}: {_short_text(m)}" for m in history
         )
@@ -310,7 +333,7 @@ async def judge_turn(
         raise JudgeError(f"Jev {model} returned unexpected answers: {exc}") from exc
     return JudgeResult(
         rules=scores,
-        spec_versions=spec_versions(content_format, trace is not None),
+        spec_versions=turn_spec_versions(content_format, trace),
         model=data.get("model", model),
         cost=data["usage"].get("cost"),
     )
