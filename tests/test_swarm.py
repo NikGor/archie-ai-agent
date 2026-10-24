@@ -13,7 +13,7 @@ from archie_shared.swarm.models import (
 )
 from app.config import settings
 from app.models.orchestration_sgr import Parameter
-from app.models.tool_models import ToolResult
+from app.models.tool_models import ToolContext, ToolResult
 from app.swarm.agents import SWARM_AGENTS, SwarmRoster
 from app.swarm.bus import SwarmBus, SwarmHub, clip_text, parse_mentions
 from app.swarm.council import CouncilPlan, SwarmCouncil
@@ -936,7 +936,12 @@ async def test_dry_run_simulates_actions_but_reads_real_state():
                 _call("smarthome_control_tool", action="turn_off"),
                 _call("smarthome_status_tool", query="x"),
             ],
+            ToolContext(user_timezone="Europe/Berlin"),
         )
+    # The user's timezone reaches reads and actions (ARCHIE-257)
+    assert {c.kwargs["context"].user_timezone for c in executed.await_args_list} == {
+        "Europe/Berlin"
+    }
     factories = {
         c.kwargs["tool_calls"][0].tool_name: c.kwargs["tool_factory"]
         for c in executed.await_args_list
