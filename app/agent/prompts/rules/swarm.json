@@ -277,6 +277,12 @@
   "swarm_watch_weather_report": {
     "text": "Report what the user would want to know about the weather now or for the rest of the day."
   },
+  "swarm_watch_weather_same_event": {
+    "text": "One period of rain, snow or wind is one event. If your notes already report it, do not report it again when its time or probability changes a little or when it starts as forecast. Report it again only if the weather becomes a different kind (thunderstorm, heavy rain, snow, frost) or the change affects the user's plans."
+  },
+  "swarm_watch_weather_importance": {
+    "text": "Use low importance for a weather alert. Use normal only for dangerous weather or weather that changes the user's plans today."
+  },
   "swarm_consul_intro": {
     "text": "You are the consul. {% if alert %}A swarm agent reported this:{% else %}The council discusses this user message:{% endif %}\n{{ line }}"
   },
