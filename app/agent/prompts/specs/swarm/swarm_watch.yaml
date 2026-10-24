@@ -34,7 +34,12 @@ sections:
     rules: [swarm_watch_football_teams]
   - style: bullets
     when: "task == 'football'"
-    rules: [swarm_watch_football_schedule, swarm_watch_football_live, swarm_watch_football_done]
+    rules:
+      - swarm_watch_football_schedule
+      - swarm_watch_football_live
+      - swarm_watch_football_fresh_score
+      - swarm_watch_football_follow_up
+      - swarm_watch_football_done
   - style: lines
     when: "task == 'football'"
     rules: [swarm_watch_football_dates]
