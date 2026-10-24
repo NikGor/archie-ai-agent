@@ -27,6 +27,44 @@ def convert_parameters_to_dict(parameters: list[Parameter]) -> dict[str, Any]:
     return {param.name: param.value for param in parameters}
 
 
+class RepeatedArgumentsError(ValueError):
+    """Repeated parameters of one tool call have different counts (ARCHIE-255)."""
+
+
+def expand_repeated_arguments(tool_call: ToolCallRequest) -> list[ToolCallRequest]:
+    """Split a call that repeats a parameter into one call per value (ARCHIE-255).
+
+    Stage 1 sometimes puts several values of one parameter into one call, e.g.
+    seven `query` arguments for google_search_tool, and a dict keeps only the
+    last one. Repeated parameters are paired by position; single ones go to
+    every call.
+    """
+    values: dict[str, list[str]] = {}
+    for param in tool_call.arguments:
+        values.setdefault(param.name, []).append(param.value)
+    repeated = {name: found for name, found in values.items() if len(found) > 1}
+    if not repeated:
+        return [tool_call]
+    counts = {len(found) for found in repeated.values()}
+    if len(counts) > 1:
+        listed = ", ".join(f"{name} x{len(found)}" for name, found in repeated.items())
+        raise RepeatedArgumentsError(
+            f"{tool_call.tool_name}: repeated parameters have different counts "
+            f"({listed}). Make one call per set of values."
+        )
+    return [
+        tool_call.model_copy(
+            update={
+                "arguments": [
+                    Parameter(name=name, value=found[index % len(found)])
+                    for name, found in values.items()
+                ]
+            }
+        )
+        for index in range(counts.pop())
+    ]
+
+
 async def execute_tool_call(
     tool_call: ToolCallRequest,
     tool_factory: ToolFactory | None = None,
@@ -131,12 +169,30 @@ async def execute_tool_calls(
     on_status: StatusCallback = None,
     context: ToolContext | None = None,
 ) -> list[ToolResult]:
-    logger.info(f"tool_executor_004: Executing \033[33m{len(tool_calls)}\033[0m tools")
+    calls: list[ToolCallRequest] = []
+    rejected: list[ToolResult] = []
+    for tool_call in tool_calls:
+        try:
+            calls += expand_repeated_arguments(tool_call)
+        except RepeatedArgumentsError as e:
+            logger.warning(f"tool_executor_warning_001: {e}")
+            rejected.append(
+                ToolResult(
+                    tool_name=tool_call.tool_name,
+                    success=False,
+                    output={},
+                    error=str(e),
+                )
+            )
+    if len(calls) > len(tool_calls) - len(rejected):
+        logger.info(
+            f"tool_executor_006: Repeated arguments expanded into \033[33m{len(calls)}\033[0m calls"
+        )
+    logger.info(f"tool_executor_004: Executing \033[33m{len(calls)}\033[0m tools")
     if tool_factory is None:
         tool_factory = ToolFactory()
     tasks = [
-        execute_tool_call(tool_call, tool_factory, on_status, context)
-        for tool_call in tool_calls
+        execute_tool_call(call, tool_factory, on_status, context) for call in calls
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     successful = sum(1 for r in results if isinstance(r, ToolResult) and r.success)
@@ -155,4 +211,4 @@ async def execute_tool_calls(
             )
         )
         for r in results
-    ]
+    ] + rejected
