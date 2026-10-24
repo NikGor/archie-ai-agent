@@ -133,6 +133,13 @@ class WatchOutcome(BaseModel):
             "check to compare. Write it also if you report nothing"
         )
     )
+    follow_up: bool = Field(
+        description=(
+            "True while an event in your area goes on now and can change any "
+            "minute, e.g. a live match: the check then runs again in a few "
+            "minutes and quiet_until is ignored. Else false"
+        )
+    )
     quiet_until: str = Field(
         description=(
             "Local time HH:MM before which nothing new can happen in your area, "

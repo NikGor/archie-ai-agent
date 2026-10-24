@@ -260,10 +260,16 @@
     "text": "{% if teams %}Teams: {{ teams | join(\", \") }}.{% else %}Teams: the favourite teams and the matches to follow from your skill.{% endif %}"
   },
   "swarm_watch_football_schedule": {
-    "text": "If your notes have no schedule for today: search today's matches of these teams. Write the kickoff times into today_note. If there is no match today, set quiet_until to 23:59. If the next match starts later, set quiet_until to 5 minutes before kickoff."
+    "text": "If your notes have no schedule for today: search today's matches of these teams. Write the kickoff times into today_note. If there is no match today, set quiet_until to 23:59. If no match is live and the next match starts later, set quiet_until to its kickoff time."
   },
   "swarm_watch_football_live": {
     "text": "During a match: search the live score. Report the kickoff, every goal and the final score, each one time."
+  },
+  "swarm_watch_football_fresh_score": {
+    "text": "Before you use a live score, calculate the expected match minute: the minutes since kickoff, minus 15 after the half-time. For example, kickoff 15:30 and time 16:40 give about minute 55. If the source gives no minute, or its minute differs from the expected minute by more than 10, the score is old. Then do not use it: search again with the names of both teams, \"live score\" and the date."
+  },
+  "swarm_watch_football_follow_up": {
+    "text": "If the kickoff time of a match has come and you did not report its final score: set follow_up to true and leave quiet_until empty. A postponed match does not need follow_up. Report the final score of every match."
   },
   "swarm_watch_football_done": {
     "text": "After the final whistle of the last match today, set quiet_until to 23:59."
