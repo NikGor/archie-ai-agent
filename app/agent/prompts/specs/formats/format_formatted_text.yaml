@@ -25,5 +25,6 @@ sections:
       - {rule: syntax_prompt, when: "response_format == 'prompt'"}
   - style: lines
     rules:
+      - times_in_user_timezone
       - respond_only_in_format
       - remind_ui_answer_null

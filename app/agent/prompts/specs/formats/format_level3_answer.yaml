@@ -11,6 +11,7 @@ sections:
       - markdown_structure
       - level3_text_complements_widget
       - level3_concise_text
+      - times_in_user_timezone
   - title: Widget Usage
     rules:
       - widget_weather

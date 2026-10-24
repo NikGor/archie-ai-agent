@@ -13,3 +13,4 @@ sections:
       - tts_no_adjacent_tags
       - tts_commas_between_parts
       - tts_natural_short
+      - times_in_user_timezone

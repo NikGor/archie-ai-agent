@@ -9,3 +9,4 @@ sections:
       - plain_concise
       - plain_natural_paragraphs
       - plain_straightforward
+      - times_in_user_timezone

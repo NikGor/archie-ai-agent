@@ -12,6 +12,7 @@ sections:
       - level2_scannable
       - level2_paragraphs_and_lists
       - markdown_no_excess
+      - times_in_user_timezone
   - title: Quick Action Button Rules
     rules:
       - quick_actions_two_to_three

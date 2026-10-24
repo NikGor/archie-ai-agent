@@ -26,6 +26,7 @@ sections:
       - ui_no_walls_of_text
       - ui_data_driven
       - ui_rich_depth
+      - times_in_user_timezone
 
   - title: UI Component Usage Rules
     rules:

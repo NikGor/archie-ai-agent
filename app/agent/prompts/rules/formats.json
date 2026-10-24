@@ -5,6 +5,9 @@
   "markdown_structure": {
     "text": "Use markdown for structure: headers, lists, bold, code blocks"
   },
+  "times_in_user_timezone": {
+    "text": "Show every time in the user's timezone. If a tool result gives a time in a different time zone (for example UK time, UTC or Moscow time), convert it to the user's timezone. Use the UTC offset that applies on the date of the event. Never tell the user to convert a time. If the time zone of a time is not known, say so."
+  },
   "quick_actions_two_to_three": {
     "text": "Provide 2-3 buttons representing most likely user needs"
   },
