@@ -20,6 +20,7 @@ from ..tools.tool_factory import ToolFactory
 from ..utils.llm_parser import parse_llm_response
 from ..utils.provider_utils import get_provider_for_model
 from ..utils.trace_utils import StepTimer
+from ..utils.tracing import COMMAND_TRACE_NAME
 from .command_loop import CommandLoop
 from .context import ConversationContext
 from .pipeline_metrics import PipelineMetrics
@@ -84,7 +85,7 @@ class AgentFactory:
             model=model,
             response_format=DecisionResponse,
             previous_response_id=ctx.previous_response_id,
-            observation_name="decide-action",
+            observation_name=COMMAND_TRACE_NAME,
         )
         parsed = parse_llm_response(
             raw_response=raw_response,
