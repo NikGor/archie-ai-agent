@@ -3,7 +3,7 @@ import logging
 from typing import Any
 from langfuse import get_client
 from ..models.orchestration_sgr import Parameter, ToolCallRequest
-from ..models.tool_models import ToolResult
+from ..models.tool_models import ToolContext, ToolResult
 from ..models.ws_models import StatusCallback, StatusNotifier
 from ..tools.tool_factory import ToolFactory
 from .status_messages import get_tool_detail
@@ -31,6 +31,7 @@ async def execute_tool_call(
     tool_call: ToolCallRequest,
     tool_factory: ToolFactory | None = None,
     on_status: StatusCallback = None,
+    context: ToolContext | None = None,
 ) -> ToolResult:
     """Run one tool call inside a Langfuse `tool` observation (ARCHIE-211)."""
     with get_client().start_as_current_observation(
@@ -39,7 +40,7 @@ async def execute_tool_call(
         input=convert_parameters_to_dict(tool_call.arguments),
         metadata={"reason": tool_call.reason},
     ) as observation:
-        result = await _run_tool_call(tool_call, tool_factory, on_status)
+        result = await _run_tool_call(tool_call, tool_factory, on_status, context)
         observation.update(
             output=result.output,
             level="ERROR" if result.error else "DEFAULT",
@@ -52,6 +53,7 @@ async def _run_tool_call(
     tool_call: ToolCallRequest,
     tool_factory: ToolFactory | None,
     on_status: StatusCallback,
+    context: ToolContext | None,
 ) -> ToolResult:
     logger.info(
         f"tool_executor_001: Executing tool: \033[36m{tool_call.tool_name}\033[0m"
@@ -72,6 +74,7 @@ async def _run_tool_call(
         result = await tool_factory.execute_tool(
             tool_name=tool_call.tool_name,
             tool_arguments=arguments_dict,
+            context=context,
         )
         result_error = _result_error(result)
         if result_error:
@@ -126,12 +129,13 @@ async def execute_tool_calls(
     tool_calls: list[ToolCallRequest],
     tool_factory: ToolFactory | None = None,
     on_status: StatusCallback = None,
+    context: ToolContext | None = None,
 ) -> list[ToolResult]:
     logger.info(f"tool_executor_004: Executing \033[33m{len(tool_calls)}\033[0m tools")
     if tool_factory is None:
         tool_factory = ToolFactory()
     tasks = [
-        execute_tool_call(tool_call, tool_factory, on_status)
+        execute_tool_call(tool_call, tool_factory, on_status, context)
         for tool_call in tool_calls
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)

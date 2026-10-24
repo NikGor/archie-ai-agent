@@ -6,6 +6,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 from ..config import SWARM_ONLY_TOOL_GROUPS, TOOLS_CONFIG
+from ..models.tool_models import ToolContext
 from ..utils.provider_utils import get_provider_for_model
 from ..utils.tools_utils import openai_parse, oss_parse
 
@@ -138,8 +139,16 @@ class ToolFactory:
 
         return schemas
 
-    async def execute_tool(self, tool_name: str, tool_arguments: dict[str, Any]) -> Any:
-        """Execute a tool by name with given arguments."""
+    async def execute_tool(
+        self,
+        tool_name: str,
+        tool_arguments: dict[str, Any],
+        context: ToolContext | None = None,
+    ) -> Any:
+        """Execute a tool by name with given arguments.
+
+        Fields of `context` go to the tool only if its signature declares them.
+        """
         logger.info(
             f"tool_factory_008: Executing \033[36m{tool_name}\033[0m with args: {tool_arguments}"
         )
@@ -155,6 +164,16 @@ class ToolFactory:
                 tool_arguments["demo_mode"] = self.demo_mode
                 logger.info(
                     f"tool_factory_008a: Injected demo_mode=\033[35m{self.demo_mode}\033[0m"
+                )
+            injected = {
+                name: value
+                for name, value in (context.model_dump() if context else {}).items()
+                if name in sig.parameters
+            }
+            if injected:
+                tool_arguments.update(injected)
+                logger.info(
+                    f"tool_factory_008b: Injected context: \033[35m{injected}\033[0m"
                 )
             result = await tool_func(**tool_arguments)
             logger.info(
