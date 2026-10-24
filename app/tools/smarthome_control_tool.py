@@ -226,7 +226,7 @@ async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
                 }
             ha_result = await call_tool("HassTurnOn", target)
         elif action in ("vacuum_start", "vacuum_return_to_base"):
-            # Vacuums have no area and no TURN_ON feature, so HassTurnOn can't start them. # ARCHIE-245
+            # Vacuums have no area and no TURN_ON feature, so HassTurnOn can't start them. # ARCHIE-244
             vacuum_args: dict[str, Any] = {"domain": ["vacuum"]}
             if device_name:
                 vacuum_args["name"] = device_name
