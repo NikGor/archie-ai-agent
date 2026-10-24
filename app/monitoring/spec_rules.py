@@ -19,6 +19,7 @@ so the turn grade stays meaningful with 30+ rules per turn.
 """
 
 import functools
+import re
 from dataclasses import dataclass
 from app.agent.prompt_builder import PromptBuilder
 from app.agent.prompt_compiler import PromptCompiler, PromptLibrary, load_library
@@ -148,6 +149,40 @@ GUIDANCE_RULES = frozenset(
 )
 
 
+# Rules that concern only some requests: when the condition is false for the turn,
+# the judge must answer "not applicable" instead of "violated" (false reds, ARCHIE-213)
+RULE_CONDITIONS = {
+    "load_matching_skill": "a skill in the agent catalog clearly matches the user's request",
+    "gmail_read_only": "the user asks about emails",
+    "defer_actions_with_cron": "the user asks to do an action later or on a schedule",
+    "form_before_create": "the user asks to create a calendar event, a note or an email",
+    "smarthome_act_without_confirmation": "the user asks to control a smart-home device now",
+    "smarthome_infer_parameters": "the user asks to control a smart-home device and leaves a parameter open",
+    "never_offer_search": "the assistant asks the user whether to search, or offers to search",
+    "search_for_live_data": "the request needs live, recent or date-bound facts",
+    "respond_in_message_language": 'the user message is more than an interjection like "Mhm" or "ok" and has a clear language',
+    "answer_from_knowledge_cases": "the assistant answered without calling a tool",
+}
+
+# User messages that only acknowledge the previous answer: no request, so the
+# Stage 1 tool and skill rules have nothing to judge
+_ACKNOWLEDGEMENTS = frozenset(
+    "mhm hmm hm ok okay yes no yep thanks thank you cool nice great sure "
+    "угу ага ок окей да нет спасибо благодарю понял поняла ясно хорошо ладно круто супер "
+    "ну отлично здорово понятно".split()
+)
+
+
+def is_acknowledgement(text: str) -> bool:
+    """True for a message like "Mhm." or "ок, спасибо" that carries no request."""
+    words = re.findall(r"[\w']+", text.lower())
+    return (
+        0 < len(words) <= 4
+        and "?" not in text
+        and all(w in _ACKNOWLEDGEMENTS for w in words)
+    )
+
+
 @dataclass(frozen=True)
 class SpecRule:
     """One rule the judge checks."""
@@ -156,6 +191,10 @@ class SpecRule:
     rule_id: str
     text: str
     guidance: bool = False
+
+    @property
+    def condition(self) -> str | None:
+        return RULE_CONDITIONS.get(self.rule_id)
 
     @property
     def key(self) -> str:
@@ -227,10 +266,15 @@ def spec_rules(spec: str, content_format: str) -> tuple[SpecRule, ...]:
     return tuple(rules)
 
 
-def rules_for_turn(content_format: str, trace_found: bool) -> list[SpecRule]:
+def rules_for_turn(
+    content_format: str, trace_found: bool, user_message: str = ""
+) -> list[SpecRule]:
     """Every judged rule of the turn's specs (outcome checks live in outcome.py)."""
+    specs = specs_for_turn(content_format, trace_found)
+    if is_acknowledgement(user_message):
+        specs = [spec for spec in specs if spec != COMMAND_SPEC]
     rules: list[SpecRule] = []
-    for spec in specs_for_turn(content_format, trace_found):
+    for spec in specs:
         rules += spec_rules(spec, content_format)
     return rules
 

@@ -210,13 +210,23 @@ def _question_key(index: int) -> str:
     return f"rule_{index}"
 
 
+def _condition_note(rule: SpecRule) -> str:
+    if rule.condition is None:
+        return ""
+    return (
+        f"The rule applies only if {rule.condition}. "
+        f"If this is not the case, answer: {NOT_APPLICABLE}.\n"
+    )
+
+
 def build_questions(rules: list[SpecRule]) -> dict[str, dict]:
     return {
         _question_key(index): {
             "type": "choice",
             "instructions": (
                 f"Rule from the {rule.spec} prompt that the assistant had to follow:\n"
-                f"{rule.text}\nDid the assistant response follow this rule?"
+                f"{rule.text}\n{_condition_note(rule)}"
+                "Did the assistant response follow this rule?"
             ),
             "criteria": ANSWERS,
         }
@@ -251,7 +261,12 @@ async def judge_turn(
     content_format = judged_format(
         _content(messages[index]), messages[index].response_format
     )
-    rules = rules_for_turn(content_format, trace is not None)
+    user_messages = [m for m in messages[:index] if m.role == "user"]
+    rules = rules_for_turn(
+        content_format,
+        trace is not None,
+        _short_text(user_messages[-1]) if user_messages else "",
+    )
     data = await _decide(
         model,
         build_state(messages, index, trace),
