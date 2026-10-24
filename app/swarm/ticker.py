@@ -7,6 +7,10 @@ A check that finds nothing new stays silent. An alert goes to the chat; its
 importance decides who else hears it: normal -> @display, high -> @display
 and @voice (only in the voice hours).
 
+A calendar or football check runs before the other checks when its
+quiet_until ends, and again after swarm_follow_up_minutes while it follows a
+live event, e.g. a match (ARCHIE-286).
+
 Play/Pause/Stop: Pause stops the checks, the chat still works. Stop also
 clears the chat and the dispatcher ignores all messages.
 """
@@ -40,8 +44,10 @@ from .schedule import (
     due_tasks,
     is_active,
     parse_quiet_until,
-    plan_delay_seconds,
+    pick_follow_up,
     pick_task,
+    plan_delay_seconds,
+    plan_wake,
     voice_allowed,
 )
 
@@ -56,7 +62,8 @@ WATCH_AGENTS: dict[SwarmWatchTask, str] = {
     "football": "football",
     "weather": "weather",
 }
-# Checks whose next event has a known time; home and mail can change any time.
+# Checks whose events have a known time: they may wait for the next event
+# (quiet_until) or follow a live one (follow_up); home and mail can change any time.
 QUIET_TASKS: frozenset[str] = frozenset({"calendar", "football"})
 # Chat lines a watcher sees: it works from its notes, the chat is background.
 WATCH_HISTORY_SIZE = 6
@@ -91,6 +98,8 @@ class SwarmTicker:
         self.memory = memory
         self.dispatcher = dispatcher
         self.next_run_at: datetime | None = None
+        # The regular random wake-up; follow-ups come in between (ARCHIE-286)
+        self._regular_at: datetime | None = None
         self._changed = asyncio.Event()
         self._worker: asyncio.Task[None] | None = None
         self._check: asyncio.Task[None] | None = None
@@ -144,22 +153,42 @@ class SwarmTicker:
     async def publish_control(self) -> None:
         self.hub.publish(await self.build_control_event())
 
+    async def plan_next_run(self) -> float | None:
+        """Seconds to the next check; None if the swarm does not run."""
+        if await self.memory.get_mode() != "running":
+            self._regular_at = None
+            return None
+        state = await self.runner.get_user_state()
+        now = local_now(state.user_timezone)
+        swarm_settings = await self.memory.get_settings()
+        if self._regular_at is None:
+            self._regular_at = now + timedelta(
+                seconds=plan_delay_seconds(now, swarm_settings)
+            )
+        wake = plan_wake(
+            now,
+            self._regular_at,
+            await self._next_follow_up(swarm_settings),
+            swarm_settings,
+        )
+        if wake >= self._regular_at:
+            # This wake-up uses the regular slot; the next one is planned anew
+            self._regular_at = None
+        # A check that ran long may have passed the planned time
+        return max((wake - now).total_seconds(), 0.0)
+
     async def _loop(self) -> None:
         while True:
             self._changed.clear()
-            delay = None
-            if await self.memory.get_mode() == "running":
-                state = await self.runner.get_user_state()
-                delay = plan_delay_seconds(
-                    local_now(state.user_timezone), await self.memory.get_settings()
-                )
-                self.next_run_at = datetime.now(UTC) + timedelta(seconds=delay)
-            else:
-                self.next_run_at = None
+            delay = await self.plan_next_run()
+            self.next_run_at = (
+                None if delay is None else datetime.now(UTC) + timedelta(seconds=delay)
+            )
             await self.publish_control()
             try:
                 # A mode or settings change plans the next check again.
                 await asyncio.wait_for(self._changed.wait(), timeout=delay)
+                self._regular_at = None
                 continue
             except TimeoutError:
                 pass
@@ -167,6 +196,19 @@ class SwarmTicker:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._check
             self._check = None
+
+    async def _next_follow_up(self, swarm_settings: SwarmSettings) -> datetime | None:
+        """Earliest follow-up time of an enabled check (ARCHIE-286)."""
+        enabled = await self.roster.get_enabled_ids()
+        follow_ups = await self.memory.get_follow_ups()
+        return min(
+            (
+                at
+                for task, at in follow_ups.items()
+                if task in swarm_settings.tasks and WATCH_AGENTS.get(task) in enabled
+            ),
+            default=None,
+        )
 
     async def _cancel_check(self) -> None:
         if self._check and not self._check.done():
@@ -185,16 +227,17 @@ class SwarmTicker:
                     logger.info("swarm_ticker_003: Outside the active hours")
                     return
                 enabled = await self.roster.get_enabled_ids()
-                task = pick_task(
-                    [
-                        t
-                        for t in due_tasks(
-                            swarm_settings, now, await self.memory.get_quiet_until()
-                        )
-                        if WATCH_AGENTS[t] in enabled
-                    ],
-                    await self.memory.get_last_task_runs(),
-                )
+                tasks = [
+                    t
+                    for t in due_tasks(
+                        swarm_settings, now, await self.memory.get_quiet_until()
+                    )
+                    if WATCH_AGENTS[t] in enabled
+                ]
+                # A live event goes first, then the check that waited longest
+                task = pick_follow_up(
+                    tasks, await self.memory.get_follow_ups(), now
+                ) or pick_task(tasks, await self.memory.get_last_task_runs())
                 if task is None:
                     logger.info("swarm_ticker_004: No check is due")
                     return
@@ -216,6 +259,8 @@ class SwarmTicker:
                     depth=app_settings.swarm_max_depth,
                     run_id=run_id,
                 )
+                # A failed check must not come back at once (ARCHIE-286)
+                await self.memory.set_follow_up(task, None)
                 await self._finish(task, "failed")
 
     async def _watch(
@@ -256,9 +301,17 @@ class SwarmTicker:
             self.hub.publish(SwarmTypingEvent(agent_id=agent_id, active=False))
         outcome = draft.outcome
         if task in QUIET_TASKS:
-            await self.memory.set_quiet_until(
-                task, parse_quiet_until(outcome.quiet_until, now)
-            )
+            # ARCHIE-286: during a live event quiet_until would skip it; the
+            # check runs again soon. Else it runs when the quiet time ends.
+            if outcome.follow_up:
+                quiet = None
+                follow_up = now + timedelta(
+                    minutes=app_settings.swarm_follow_up_minutes
+                )
+            else:
+                quiet = follow_up = parse_quiet_until(outcome.quiet_until, now)
+            await self.memory.set_quiet_until(task, quiet)
+            await self.memory.set_follow_up(task, follow_up)
         alert = outcome.reply.replace("@", "").strip()
         # The check itself decides what the swarm keeps for today (ARCHIE-246)
         await self.memory.add_today_facts(now.date(), outcome.remember_today)
