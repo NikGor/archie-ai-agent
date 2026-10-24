@@ -14,9 +14,11 @@ import contextlib
 import logging
 import time
 from collections.abc import Coroutine
+from datetime import date
 from typing import Any
 from archie_shared.swarm.models import SwarmMessage, SwarmMessageEvent, SwarmTypingEvent
 from ..config import settings
+from ..utils.general_utils import local_now
 from ..utils.tracing import trace_swarm_run
 from .agents import SWARM_AGENTS, SWARM_GROUPS, SwarmRoster, get_group_members
 from .bus import SwarmBus, SwarmHub
@@ -205,6 +207,7 @@ class SwarmDispatcher:
                 "swarm-council",
                 trigger.run_id or trigger.message_id,
                 COUNCIL_GROUP,
+                await self._local_date(),
                 trigger.text,
                 message_id=trigger.message_id,
                 trigger_kind=trigger.kind,
@@ -229,6 +232,11 @@ class SwarmDispatcher:
             if pending:
                 await self._start_council(pending, await self.roster.get_enabled_ids())
                 return
+
+    async def _local_date(self) -> date:
+        """The swarm owner's day: the Langfuse session of swarm traces (ARCHIE-281)."""
+        state = await self.runner.get_user_state()
+        return local_now(state.user_timezone).date()
 
     async def _run_plan(self, plan: CouncilPlan) -> None:
         try:
@@ -272,6 +280,7 @@ class SwarmDispatcher:
                 "swarm-agent-turn",
                 trigger.run_id or trigger.message_id,
                 agent_id,
+                await self._local_date(),
                 trigger.text,
                 message_id=trigger.message_id,
                 trigger_kind=trigger.kind,

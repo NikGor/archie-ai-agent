@@ -233,7 +233,12 @@ class SwarmTicker:
         self.hub.publish(SwarmTypingEvent(agent_id=agent_id, active=True))
         try:
             with trace_swarm_run(
-                "swarm-check", run_id, agent_id, f"{task} check", task=task
+                "swarm-check",
+                run_id,
+                agent_id,
+                now.date(),
+                f"{task} check",
+                task=task,
             ) as root:
                 draft = await self.runner.watch(
                     SWARM_AGENTS[agent_id],

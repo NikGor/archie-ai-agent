@@ -33,7 +33,6 @@ from opentelemetry.sdk.trace.sampling import (
 from opentelemetry.trace import Link, SpanKind, TraceState
 from opentelemetry.util.types import Attributes
 from app.monitoring.spec_rules import spec_versions
-from app.utils.general_utils import local_now
 
 
 logger = logging.getLogger(__name__)
@@ -178,12 +177,13 @@ def trace_swarm_run(
     name: SwarmTraceName,
     run_id: str,
     agent_id: str,
+    day: date,
     trace_input: str,
     **metadata: str | int | None,
 ) -> Iterator[LangfuseAgent]:
     """Root observation of one swarm step (ARCHIE-281): a check, a council
-    discussion or one agent turn. `run_id` links the traces of one run; the
-    session is the day in DEFAULT_TIMEZONE."""
+    discussion or one agent turn. `run_id` links the traces of one run; `day`
+    is the swarm owner's local day: the session of the trace."""
     with (
         get_client().start_as_current_observation(
             as_type="agent",
@@ -192,7 +192,7 @@ def trace_swarm_run(
             metadata={"swarm_run_id": run_id, "agent_id": agent_id, **metadata},
         ) as root,
         propagate_attributes(
-            session_id=swarm_session_id(local_now(None).date()),
+            session_id=swarm_session_id(day),
             tags=["swarm", agent_id],
             metadata={"swarm_run_id": run_id},
         ),
