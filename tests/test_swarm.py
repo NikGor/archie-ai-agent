@@ -326,6 +326,39 @@ async def test_run_agent_posts_reply_with_next_depth():
     assert "light" not in dispatcher._running
 
 
+async def test_agent_reply_keeps_the_run_of_its_trigger():
+    """ARCHIE-281: every message a trigger causes shares its run_id."""
+    dispatcher = _dispatcher()
+    dispatcher.bus.get_history = AsyncMock(return_value=[])
+    dispatcher.runner.run = AsyncMock(
+        return_value=SwarmDraft(text="Готово", actions=[], usage={"model": "m"})
+    )
+    trigger = _message(text="@light").model_copy(update={"run_id": "run-1"})
+    await dispatcher._run_agent("light", trigger)
+    assert dispatcher.bus.post.await_args.kwargs["run_id"] == "run-1"
+
+
+async def test_failed_agent_note_keeps_the_run():
+    dispatcher = _dispatcher()
+    dispatcher.bus.get_history = AsyncMock(return_value=[])
+    dispatcher.runner.run = AsyncMock(side_effect=RuntimeError("boom"))
+    trigger = _message(text="@light").model_copy(update={"run_id": "run-1"})
+    await dispatcher._run_agent("light", trigger)
+    kwargs = dispatcher.bus.post.await_args.kwargs
+    assert (kwargs["sender"], kwargs["run_id"]) == ("system", "run-1")
+
+
+async def test_bus_starts_a_run_or_keeps_the_given_one():
+    redis = AsyncMock()
+    redis.xadd = AsyncMock(return_value="5-0")
+    with patch("app.swarm.bus.get_async_redis", return_value=redis):
+        bus = SwarmBus(SwarmHub())
+    first = await bus.post(sender="user", kind="user", text="привет")
+    second = await bus.post(sender="system", kind="system", text="x", run_id="run-1")
+    assert first.run_id and first.run_id != "run-1"
+    assert second.run_id == "run-1"
+
+
 # --- council ---
 
 
@@ -443,9 +476,7 @@ async def test_first_round_runs_in_parallel_on_one_chat_snapshot():
     assert len({id(c.args[2]) for c in calls[: len(MEMBERS)]}) == 1
     assert _asked(council)[-1] == ("butler", "consul.jinja2")
     posted = _posted(council)
-    assert sorted(posted[:-1]) == sorted(
-        (m, "opinion", f"{m} 1") for m in MEMBERS
-    )
+    assert sorted(posted[:-1]) == sorted((m, "opinion", f"{m} 1") for m in MEMBERS)
     assert posted[-1] == ("butler", "decision", "Решено.")
     rounds = {c.kwargs["round_number"] for c in council.bus.post.await_args_list[:-1]}
     assert rounds == {1}
@@ -458,9 +489,7 @@ async def test_consul_starts_another_round_with_a_remark():
     await council.discuss(_message(text="вечеринка в воскресенье?"), COUNCIL)
     posted = _posted(council)
     assert posted[len(MEMBERS)] == ("butler", "opinion", "А соседи?")
-    assert {p[2] for p in posted[len(MEMBERS) + 1 : -1]} == {
-        f"{m} 2" for m in MEMBERS
-    }
+    assert {p[2] for p in posted[len(MEMBERS) + 1 : -1]} == {f"{m} 2" for m in MEMBERS}
     assert posted[-1] == ("butler", "decision", "Итог.")
     decision_usage = council.bus.post.await_args_list[-1].kwargs["usage"]
     assert decision_usage.input_tokens == 20
@@ -511,7 +540,9 @@ async def test_alert_that_needs_nothing_posts_no_decision():
 def _plan(*steps: CouncilStep, delivered=None) -> CouncilPlan:
     return CouncilPlan(
         consul="butler",
-        decision=_message(sender="butler", text="d"),
+        decision=_message(sender="butler", text="d").model_copy(
+            update={"run_id": "run-d"}
+        ),
         steps=list(steps),
         delivered=delivered or [],
     )
@@ -554,6 +585,11 @@ async def test_steps_run_one_by_one_and_wait_for_the_data():
     ]
     assert posted[1].mentions == ["voice", "display"]
     assert all(m.kind == "task" for m in posted)
+    # ARCHIE-281: plan steps belong to the run of the decision
+    assert [c.kwargs["run_id"] for c in council.bus.post.await_args_list] == [
+        "run-d",
+        "run-d",
+    ]
 
 
 async def test_step_without_reply_times_out_and_the_plan_goes_on(monkeypatch):

@@ -567,3 +567,19 @@ def test_main_chat_does_not_get_the_weather_tool():
         "gpt-5.6-luna", "plain", allowed_tools={"weather_tool"}
     )
     assert [t["name"] for t in swarm] == ["weather_tool"]
+
+
+async def test_check_line_and_alert_keep_the_run_of_the_check():
+    """ARCHIE-281: the audit groups a check and its alert by run_id."""
+    ticker = _ticker(_outcome(""))
+    await ticker._watch("mail", SwarmSettings(), _at(22, 12), "ru", "run-c")
+    assert ticker.bus.post.await_args.kwargs["run_id"] == "run-c"
+    ticker = _ticker(_outcome("Новое письмо от банка"))
+    await ticker._watch("mail", SwarmSettings(), _at(22, 12), "ru", "run-a")
+    assert ticker.bus.post.await_args.kwargs["run_id"] == "run-a"
+
+
+async def test_cron_alert_starts_its_own_run():
+    ticker = _ticker(_outcome(""))
+    await ticker.post_alert("cron", "Матч через 5 минут", "high")
+    assert ticker.bus.post.await_args.kwargs["run_id"] is None
