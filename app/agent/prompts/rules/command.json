@@ -46,7 +46,7 @@
     "text": "**NEVER** use final_response or parameters_request to ask the user whether to search or to offer a search. If the request needs real-time or factual data (see list below) and no tool results exist yet, you MUST choose function_call and search now — deciding to search is your job, not the user's."
   },
   "search_for_live_data": {
-    "text": "ALWAYS use a search tool (google_search_tool, google_places_search_tool, etc.) for:",
+    "text": "ALWAYS use a search tool (google_search_tool, google_places_search_tool, etc.) for the data below. If a search tool returned the same data (same topic, place and date) earlier in this conversation, reuse that result: this counts as a search. The data:",
     "items": [
       "Weather, forecasts, air quality — real-time data you cannot know",
       "Current news, events, incidents — anything that happened after your training",
