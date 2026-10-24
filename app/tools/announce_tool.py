@@ -57,5 +57,12 @@ async def announce_tool(
         logger.error("announce_tool_error_001: publish failed: %s", exc)
         return {"status": "error", "message": str(exc)}
 
+    if not receivers:
+        # Nobody listens on the channel: the speaker did not get the message (ARCHIE-281)
+        logger.error("announce_tool_error_002: no voice listener on the channel")
+        return {
+            "status": "error",
+            "message": "No voice listener: archie-voice is not subscribed",
+        }
     logger.info("announce_tool_001: published to %d subscriber(s)", receivers)
     return {"status": "success", "receivers": receivers}
