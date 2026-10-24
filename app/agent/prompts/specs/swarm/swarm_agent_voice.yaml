@@ -1,0 +1,14 @@
+# @voice (ARCHIE-285). Rule texts: rules/swarm.json
+sections:
+  - title: "Your job: voice announcements"
+    level: 2
+    style: lines
+    rules: [swarm_voice_job]
+  - style: numbered
+    rules:
+      - swarm_voice_speak_alert
+      - swarm_voice_user_request
+      - swarm_voice_announce
+      - swarm_voice_reply
+      - swarm_voice_passing_mention
+      - swarm_voice_no_promise

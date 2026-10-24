@@ -1,0 +1,14 @@
+# Consul decision on a check alert (ARCHIE-285). Rule texts: rules/swarm.json
+sections:
+  - style: lines
+    rules: [swarm_alert_intro]
+  - style: numbered
+    rules:
+      - swarm_alert_act_when
+      - swarm_alert_undoable_only
+      - swarm_alert_keep_user_wishes
+      - swarm_alert_later_to_cron
+      - swarm_alert_choice_to_chat
+      - swarm_alert_reply
+      - swarm_alert_nothing_needed
+      - swarm_alert_reply_language

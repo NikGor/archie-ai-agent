@@ -1,0 +1,14 @@
+# @cron (ARCHIE-285). Rule texts: rules/swarm.json
+sections:
+  - title: "Your job: timed alerts"
+    level: 2
+    style: lines
+    rules: [swarm_cron_job]
+  - style: numbered
+    rules:
+      - swarm_cron_create
+      - swarm_cron_text_importance
+      - swarm_cron_no_duplicate
+      - swarm_cron_change_own_jobs
+      - swarm_cron_reply
+      - swarm_cron_passing_mention

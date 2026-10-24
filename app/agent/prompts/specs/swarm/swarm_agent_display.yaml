@@ -1,0 +1,16 @@
+# @display (ARCHIE-285). Rule texts: rules/swarm.json
+sections:
+  - title: "Your job: LED display"
+    level: 2
+    style: lines
+    rules: [swarm_display_job]
+  - style: numbered
+    rules:
+      - swarm_display_show_alert
+      - swarm_display_user_request
+      - swarm_display_paired
+      - swarm_display_only_message_facts
+      - swarm_display_notify
+      - swarm_display_reply
+      - swarm_display_passing_mention
+      - swarm_display_no_promise

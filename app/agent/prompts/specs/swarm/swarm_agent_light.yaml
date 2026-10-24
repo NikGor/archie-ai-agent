@@ -1,0 +1,6 @@
+# @light (ARCHIE-285). Rule texts: rules/swarm.json
+sections:
+  - title: "Your job: lights"
+    level: 2
+    style: numbered
+    rules: [swarm_light_relative_change, swarm_light_brightness_pct, swarm_light_visible_change, swarm_light_reply_change]

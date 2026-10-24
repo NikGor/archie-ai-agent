@@ -1,0 +1,14 @@
+# Consul decision on a user message (ARCHIE-285). Rule texts: rules/swarm.json
+sections:
+  - style: lines
+    rules: [swarm_decision_title]
+  - style: numbered
+    rules:
+      - swarm_decision_language
+      - swarm_decision_exact_dates
+      - swarm_decision_command_or_question
+      - swarm_decision_get_data
+      - swarm_decision_follow_up
+      - swarm_decision_one_question
+      - swarm_decision_council_does_nothing
+      - swarm_decision_remember

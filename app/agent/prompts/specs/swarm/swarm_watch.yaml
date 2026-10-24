@@ -1,0 +1,45 @@
+# Spontaneous check of a watcher agent (ARCHIE-285). Rule texts: rules/swarm.json
+sections:
+  - style: lines
+    rules: [swarm_watch_intro]
+  - style: numbered
+    rules:
+      - swarm_watch_fresh_data
+      - swarm_watch_only_new
+      - swarm_watch_no_repeat
+      - swarm_watch_alert_form
+      - swarm_watch_importance
+      - swarm_watch_today_note
+      - swarm_watch_follow_memory
+      - swarm_watch_remember_today
+  - title: What to check
+    level: 2
+    style: lines
+    when: "task == 'home'"
+    rules: [swarm_watch_home_read, swarm_watch_home_report, swarm_watch_home_trend]
+  - title: What to check
+    level: 2
+    style: lines
+    when: "task == 'mail'"
+    rules: [swarm_watch_mail_search, swarm_watch_mail_report, swarm_watch_mail_ids]
+  - title: What to check
+    level: 2
+    style: lines
+    when: "task == 'calendar'"
+    rules: [swarm_watch_calendar_read, swarm_watch_calendar_60, swarm_watch_calendar_quiet]
+  - title: What to check
+    level: 2
+    style: lines
+    when: "task == 'football'"
+    rules: [swarm_watch_football_teams]
+  - style: bullets
+    when: "task == 'football'"
+    rules: [swarm_watch_football_schedule, swarm_watch_football_live, swarm_watch_football_done]
+  - style: lines
+    when: "task == 'football'"
+    rules: [swarm_watch_football_dates]
+  - title: What to check
+    level: 2
+    style: lines
+    when: "task == 'weather'"
+    rules: [swarm_watch_weather_read, swarm_watch_weather_report]

@@ -1,0 +1,23 @@
+# Consul turn of a council discussion (ARCHIE-285). Rule texts: rules/swarm.json
+sections:
+  - style: lines
+    rules: [swarm_consul_intro, swarm_consul_round_over]
+  - style: lines
+    when: "not last"
+    rules: [swarm_consul_more_rounds]
+  - style: bullets
+    when: "not last"
+    rules: [swarm_consul_next_round_true, swarm_consul_next_round_false]
+  - style: lines
+    when: "last"
+    rules: [swarm_consul_decide_now]
+  - style: lines
+    rules: [swarm_consul_use_opinions]
+  - include: "{{ 'swarm_council_alert' if alert else 'swarm_council_rules' }}"
+  - style: lines
+    rules: [swarm_consul_steps_title]
+  - style: numbered
+    rules:
+      - swarm_consul_step_order
+      - swarm_consul_step_wait
+      - swarm_consul_output_after_data
