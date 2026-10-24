@@ -88,3 +88,27 @@ def pick_task(
     if never:
         return random.choice(never)
     return min(tasks, key=lambda task: last_runs[task])
+
+
+def plan_wake(
+    now: datetime,
+    regular_at: datetime,
+    follow_up: datetime | None,
+    swarm_settings: SwarmSettings,
+) -> datetime:
+    """The next wake-up: the regular random one, or an earlier follow-up in the
+    active hours. A follow-up adds a wake-up, so the other checks keep their
+    pace during a live event (ARCHIE-286)."""
+    if follow_up is not None and follow_up < regular_at:
+        at = max(follow_up, now)
+        if is_active(at, swarm_settings):
+            return at
+    return regular_at
+
+
+def pick_follow_up(
+    tasks: list[SwarmWatchTask], follow_ups: dict[str, datetime], now: datetime
+) -> SwarmWatchTask | None:
+    """The check whose follow-up time came first, if any came (ARCHIE-286)."""
+    due = [task for task in tasks if task in follow_ups and follow_ups[task] <= now]
+    return min(due, key=lambda task: follow_ups[task]) if due else None
