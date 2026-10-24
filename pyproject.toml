@@ -40,6 +40,9 @@ types-pyyaml = "^6.0.12.20260906"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 pythonpath = ["."]
+markers = [
+    "llm: calls a real LLM or API; needs the .env keys (select with -m llm)",
+]
 
 [tool.black]
 line-length = 88
