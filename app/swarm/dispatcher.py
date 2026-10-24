@@ -17,6 +17,7 @@ from collections.abc import Coroutine
 from typing import Any
 from archie_shared.swarm.models import SwarmMessage, SwarmMessageEvent, SwarmTypingEvent
 from ..config import settings
+from ..utils.tracing import trace_swarm_run
 from .agents import SWARM_AGENTS, SWARM_GROUPS, SwarmRoster, get_group_members
 from .bus import SwarmBus, SwarmHub
 from .council import COUNCIL_GROUP, CouncilPlan, SwarmCouncil
@@ -187,6 +188,7 @@ class SwarmDispatcher:
                 text="The council is asleep. Wake a council member or mention an agent.",
                 reply_to=message.message_id,
                 depth=settings.swarm_max_depth,
+                run_id=message.run_id,
             )
             return
         if self._running & set(members):
@@ -199,7 +201,21 @@ class SwarmDispatcher:
 
     async def _run_council(self, trigger: SwarmMessage, members: list[str]) -> None:
         try:
-            plan = await self.council.discuss(trigger, members)
+            with trace_swarm_run(
+                "swarm-council",
+                trigger.run_id or trigger.message_id,
+                COUNCIL_GROUP,
+                trigger.text,
+                message_id=trigger.message_id,
+                trigger_kind=trigger.kind,
+            ) as root:
+                plan = await self.council.discuss(trigger, members)
+                root.update(
+                    output={
+                        "decision": plan.decision.text if plan else None,
+                        "steps": [s.model_dump() for s in plan.steps] if plan else [],
+                    }
+                )
             if plan and plan.steps:
                 # The steps can wait minutes for agents: the council is free meanwhile.
                 self._track(self._run_plan(plan))
@@ -252,7 +268,17 @@ class SwarmDispatcher:
         self.hub.publish(SwarmTypingEvent(agent_id=agent_id, active=True))
         try:
             history = await self.bus.get_history(settings.swarm_history_size)
-            draft = await self.runner.run(SWARM_AGENTS[agent_id], trigger, history)
+            with trace_swarm_run(
+                "swarm-agent-turn",
+                trigger.run_id or trigger.message_id,
+                agent_id,
+                trigger.text,
+                message_id=trigger.message_id,
+                trigger_kind=trigger.kind,
+                depth=trigger.depth,
+            ) as root:
+                draft = await self.runner.run(SWARM_AGENTS[agent_id], trigger, history)
+                root.update(output=draft.model_dump(mode="json") if draft else None)
             if not draft and self.is_human_intent(trigger):
                 # A task from the user or the council must not end in silence.
                 await self._post_note(f"{agent_id} gave no answer", trigger)
@@ -271,6 +297,7 @@ class SwarmDispatcher:
                     usage=draft.usage,
                     # The consul gives the next plan step, not the agent (ARCHIE-249)
                     mentions=[] if trigger.kind == "task" else None,
+                    run_id=trigger.run_id,
                 )
         except Exception as exc:
             logger.exception(f"swarm_dispatcher_error_002: Agent {agent_id} failed")
@@ -316,6 +343,7 @@ class SwarmDispatcher:
             text=text,
             reply_to=trigger.message_id,
             depth=settings.swarm_max_depth,
+            run_id=trigger.run_id,
         )
 
     async def _post_failure(
@@ -328,4 +356,5 @@ class SwarmDispatcher:
             text=f"{name} failed: {exc}",
             reply_to=trigger.message_id,
             depth=settings.swarm_max_depth,
+            run_id=trigger.run_id,
         )
