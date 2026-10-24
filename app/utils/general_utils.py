@@ -3,9 +3,20 @@
 import logging
 import uuid
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from ..config import settings
 
 
 logger = logging.getLogger(__name__)
+
+
+def local_now(timezone: str | None) -> datetime:
+    """Current time in `timezone`; the default timezone if it is empty, UTC if it is unknown."""
+    try:
+        zone = ZoneInfo(timezone or settings.default_timezone)
+    except ZoneInfoNotFoundError:
+        zone = ZoneInfo("UTC")
+    return datetime.now(zone)
 
 
 def generate_id_with_timestamp(prefix: str) -> str:

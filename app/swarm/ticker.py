@@ -29,6 +29,7 @@ from archie_shared.swarm.models import (
     SwarmWatchTask,
 )
 from ..config import settings as app_settings
+from ..utils.general_utils import local_now
 from .agents import SWARM_AGENTS, SwarmRoster
 from .bus import SwarmBus, SwarmHub
 from .dispatcher import SwarmDispatcher
@@ -37,7 +38,6 @@ from .runner import SwarmAgentRunner
 from .schedule import (
     due_tasks,
     is_active,
-    local_now,
     parse_quiet_until,
     plan_delay_seconds,
     pick_task,

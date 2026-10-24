@@ -2,17 +2,7 @@
 
 import random
 from datetime import datetime, time, timedelta
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from archie_shared.swarm.models import SwarmSettings, SwarmWatchTask
-from ..config import settings as app_settings
-
-
-def local_now(timezone: str | None) -> datetime:
-    try:
-        zone = ZoneInfo(timezone or app_settings.default_timezone)
-    except ZoneInfoNotFoundError:
-        zone = ZoneInfo("UTC")
-    return datetime.now(zone)
 
 
 def parse_clock(value: str) -> time:

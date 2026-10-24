@@ -30,6 +30,7 @@ from ..models.orchestration_sgr import ToolCallRequest
 from ..models.state_models import UserState
 from ..models.tool_models import ToolResult
 from ..tools.tool_factory import ToolFactory
+from ..utils.general_utils import local_now
 from ..utils.llm_parser import parse_llm_response
 from ..utils.provider_utils import get_provider_for_model
 from ..utils.skill_utils import load_skill, load_skill_references
@@ -45,7 +46,6 @@ from .models import (
     SwarmWatchTurn,
 )
 from .policy import block_reason, check_tool_call, is_read_only
-from .schedule import local_now
 
 
 logger = logging.getLogger(__name__)

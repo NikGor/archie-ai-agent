@@ -26,11 +26,11 @@ from archie_shared.swarm.models import (
 )
 from pydantic import BaseModel, Field
 from ..config import settings
+from ..utils.general_utils import local_now
 from .agents import SWARM_AGENTS, add_paired_outputs
 from .bus import SwarmBus, SwarmHub
 from .models import ConsulDecision, ConsulTurn, CouncilStep, SwarmReply
 from .runner import SwarmAgentRunner, format_chat_line
-from .schedule import local_now
 
 
 logger = logging.getLogger(__name__)
