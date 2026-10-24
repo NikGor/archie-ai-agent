@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import re
+import uuid
 from datetime import UTC, datetime
 from archie_shared.swarm.models import (
     SWARM_TEXT_MAX_LENGTH,
@@ -41,6 +42,11 @@ def parse_mentions(text: str) -> list[str]:
         if m in SWARM_AGENTS or m in SWARM_GROUPS
     ]
     return list(dict.fromkeys(found))
+
+
+def new_run_id() -> str:
+    """ID of one swarm run: a trigger and every message it causes (ARCHIE-281)."""
+    return uuid.uuid4().hex[:16]
 
 
 def clip_text(text: str) -> str:
@@ -89,14 +95,18 @@ class SwarmBus:
         importance: SwarmImportance | None = None,
         paired: bool = True,
         round_number: int | None = None,
+        run_id: str | None = None,
     ) -> SwarmMessage:
         """`mentions` overrides the mentions parsed from the text (council
-        delegations). `paired` adds the paired outputs (voice -> display)."""
+        delegations). `paired` adds the paired outputs (voice -> display).
+        A message without `run_id` starts a new run; replies pass the run of
+        their trigger."""
         if mentions is None:
             mentions = parse_mentions(text)
         text = clip_text(text)
         message = SwarmMessage(
             message_id="",
+            run_id=run_id or new_run_id(),
             created_at=datetime.now(UTC).isoformat(),
             sender=sender,
             kind=kind,
