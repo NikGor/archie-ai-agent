@@ -1,0 +1,97 @@
+# What the swarm must do in a day (ARCHIE-282); checked by the daily swarm audit.
+# The audit agent never edits this file: a human owns the expectations.
+# protects: the prompt spec rules behind a rule ("spec:rule_id").
+rules:
+  - id: cal_notice_60
+    description: Every calendar event of the day gets one notice at most 60 minutes before it starts.
+    source: calendar
+    when: event starts today inside the active hours
+    expect: {type: notice, importance: [normal, high], channels: [display], before_minutes: 60, once: true}
+    severity: red
+    protects: [swarm_watch:swarm_watch_calendar_60]
+
+  - id: cal_high_15
+    description: An event that starts in 15 minutes or less is reported with high importance, also by voice in the voice hours.
+    source: calendar
+    when: notice is sent 15 minutes or less before the start
+    expect: {type: notice, importance: [high], channels: [display, voice], once: true}
+    severity: orange
+    protects: [swarm_watch:swarm_watch_calendar_60, swarm_watch:swarm_watch_importance]
+
+  - id: cron_alert_fired
+    description: Every swarm alert planned with cron for the day comes to the swarm at its time and is delivered.
+    source: cron
+    when: job with tool_name swarm_alert_tool that is due today
+    expect: {type: notice, importance: [low, normal, high], before_minutes: 0, once: true}
+    severity: red
+    protects: [swarm_agent_cron:swarm_cron_create]
+
+  - id: user_request_delegated
+    description: A user message gets a council decision; a command or a question about data gets a plan step for the right agent.
+    source: user
+    expect: {type: delegation, within_minutes: 5}
+    severity: red
+    judge: true
+    protects:
+      - swarm_council_rules:swarm_decision_command_or_question
+      - swarm_council_rules:swarm_decision_get_data
+      - swarm_council_rules:swarm_decision_follow_up
+
+  - id: council_steps_done
+    description: Every plan step of the consul gets a reply from its agent before the step timeout, without blocked actions.
+    source: council
+    expect: {type: delegation, within_minutes: 4}
+    severity: red
+    protects: [swarm_base:swarm_plan_step_is_task, swarm_base:swarm_empty_reply]
+
+  - id: ticker_coverage
+    description: Each enabled check runs at least every 60 minutes inside the active hours, unless it is quiet.
+    source: ticker
+    expect: {type: coverage, max_gap_minutes: 60, skip_quiet: true}
+    severity: orange
+
+  - id: delivery_ok
+    description: Every voice, display and alert chat action succeeds.
+    source: council
+    expect: {type: delivery, channels: [display, voice, chat]}
+    severity: red
+    protects: [swarm_agent_voice:swarm_voice_announce, swarm_agent_display:swarm_display_notify]
+
+  - id: no_voice_outside_hours
+    description: The voice speaks only inside the voice hours of the settings.
+    source: council
+    expect: {type: no_notice, reason: outside_voice_hours}
+    severity: red
+    protects: [swarm_agent_voice:swarm_voice_speak_alert]
+
+  - id: no_duplicate_notice
+    description: The same event is not reported two times in a day, unless it became worse.
+    source: ticker
+    expect: {type: no_notice, reason: duplicate}
+    severity: orange
+    judge: true
+    protects: [swarm_watch:swarm_watch_no_repeat, swarm_watch:swarm_watch_mail_ids]
+
+  - id: respect_quiet_until
+    description: A calendar or football check does not run before its quiet_until.
+    source: ticker
+    expect: {type: no_notice, reason: quiet_until}
+    severity: orange
+    protects: [swarm_watch:swarm_watch_calendar_quiet, swarm_watch:swarm_watch_football_done]
+
+  - id: football_favorite_match
+    description: For a match of a team from the swarm settings (or the football skill), the kickoff, every goal and the final score are reported, each one time.
+    source: football
+    when: match of a followed team is played today
+    expect: {type: notice, importance: [normal, high], channels: [display], once: true}
+    severity: red
+    judge: true
+    protects: [swarm_watch:swarm_watch_football_live, swarm_watch:swarm_watch_football_schedule]
+
+  - id: mail_important
+    description: New mail from a person or an important service (bank, delivery, doctor, work) is reported once; newsletters and ads are not.
+    source: mail
+    expect: {type: notice, importance: [low, normal, high], once: true}
+    severity: orange
+    judge: true
+    protects: [swarm_watch:swarm_watch_mail_report]
