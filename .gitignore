@@ -245,6 +245,7 @@ app/response_understand.py
 
 # AI agent instructions & config (local only)
 .claude/
+.agents/
 .mcp.json
 .github/copilot-instructions.md
 agent_docs/
@@ -268,6 +269,7 @@ LOGGING_GUIDELINES.md
 PROJECT_STATE.md
 SESSION_LOG.md
 CLAUDE.md
+AGENTS.md
 openrouter_model_catalog.md
 
 # Gmail OAuth token
