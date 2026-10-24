@@ -106,11 +106,11 @@ def test_due_tasks_skip_quiet_tasks():
 def test_football_check_uses_skill_teams_by_default():
     runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
     text = runner.render_task(
-        "watch_task.jinja2", task="football", teams=[], language="ru"
+        "swarm_watch", task="football", teams=[], language="ru"
     )
     assert "from your skill" in text
     text = runner.render_task(
-        "watch_task.jinja2", task="football", teams=["Bayern"], language="ru"
+        "swarm_watch", task="football", teams=["Bayern"], language="ru"
     )
     assert "Teams: Bayern." in text
 
@@ -157,7 +157,7 @@ def test_mail_agent_reads_mail():
 def test_watch_prompt_has_task_section(task):
     runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
     text = runner.render_task(
-        "watch_task.jinja2", task=task, teams=["Bayern"], language="ru"
+        "swarm_watch", task=task, teams=["Bayern"], language="ru"
     )
     assert "in this language: ru" in text
     assert "## What to check" in text

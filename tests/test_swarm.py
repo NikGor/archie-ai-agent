@@ -497,7 +497,7 @@ async def test_first_round_runs_in_parallel_on_one_chat_snapshot():
     assert peak == len(MEMBERS)
     calls = council.runner.ask.await_args_list
     assert len({id(c.args[2]) for c in calls[: len(MEMBERS)]}) == 1
-    assert _asked(council)[-1] == ("butler", "consul.jinja2")
+    assert _asked(council)[-1] == ("butler", "swarm_consul")
     posted = _posted(council)
     assert sorted(posted[:-1]) == sorted((m, "opinion", f"{m} 1") for m in MEMBERS)
     assert posted[-1] == ("butler", "decision", "Решено.")
