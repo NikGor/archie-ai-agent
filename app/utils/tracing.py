@@ -34,6 +34,8 @@ from app.monitoring.spec_rules import spec_versions
 logger = logging.getLogger(__name__)
 
 CHAT_TRACE_NAME = "handle-chat"
+# Stage 1 LLM call of a chat turn; chat monitoring reads its prompt (ARCHIE-256)
+COMMAND_TRACE_NAME = "decide-action"
 # Django sends conversation title generation as user "system"
 SYSTEM_USER_NAME = "system"
 UNTRACED_FORMATS = frozenset({"dashboard", "widget"})
