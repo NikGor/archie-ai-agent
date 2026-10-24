@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable
 from archie_shared.chat.models import ImageAttachment, LllmTrace
 from ..models.orchestration_sgr import DecisionResponse
 from ..models.state_models import UserState
-from ..models.tool_models import ToolResult
+from ..models.tool_models import ToolContext, ToolResult
 from ..models.ws_models import StatusCallback, StatusNotifier
 from ..tools.tool_factory import ToolFactory
 from ..utils.tool_executor import execute_tool_calls
@@ -164,6 +164,7 @@ class CommandLoop:
                         tool_calls=decision.sgr.tool_calls,
                         tool_factory=self.tool_factory,
                         on_status=on_status,
+                        context=ToolContext(user_timezone=user_state.user_timezone),
                     )
                 self.metrics.add_stage2(s2_timer.duration_ms)
                 tool_results.extend(new_results)

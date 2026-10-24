@@ -5,11 +5,30 @@ from google import genai
 from google.genai import types
 from langfuse import get_client
 from app.config import settings
+from app.utils.general_utils import local_now
 
 
 logger = logging.getLogger(__name__)
 
 SEARCH_MODEL = "gemini-3-flash-preview"
+
+# Without it Gemini gives times in the zone of the source page: UK, MSK, ET (ARCHIE-257)
+SEARCH_INSTRUCTION = (
+    "The user is in the {timezone} time zone. The local date and time there is {now}. "
+    "Give every time in {timezone}. "
+    "If a source gives a time in a different time zone, convert it to {timezone}. "
+    "Use the UTC offset that applies on the date of the event. "
+    "Say once which time zone the times use. "
+    "If the time zone of a source time is not clear, say so."
+)
+
+
+def build_search_instruction(user_timezone: str) -> str:
+    """System instruction that makes the search answer give times in the user's zone."""
+    now = local_now(user_timezone)
+    return SEARCH_INSTRUCTION.format(
+        timezone=now.tzinfo, now=now.strftime("%A, %d.%m.%Y %H:%M %Z")
+    )
 
 
 def _usage_details(usage: types.GenerateContentResponseUsageMetadata) -> dict[str, int]:
@@ -21,7 +40,10 @@ def _usage_details(usage: types.GenerateContentResponseUsageMetadata) -> dict[st
     }
 
 
-async def google_search_tool(query: str) -> dict[str, Any]:
+# user_timezone is not in Args: ToolContext gives it, the LLM does not see it (ARCHIE-257)
+async def google_search_tool(
+    query: str, user_timezone: str = settings.default_timezone
+) -> dict[str, Any]:
     """
     Web search for general information, news, facts, events, articles.
     DO NOT use for finding physical locations, places, businesses, or addresses.
@@ -42,7 +64,8 @@ async def google_search_tool(query: str) -> dict[str, Any]:
         Dict with search results including text, sources, and metadata
     """
     logger.info(
-        f"google_search_001: Search requested for query: \033[36m{query}\033[0m"
+        f"google_search_001: Search requested for query: \033[36m{query}\033[0m, "
+        f"timezone: \033[35m{user_timezone}\033[0m"
     )
 
     try:
@@ -60,7 +83,10 @@ async def google_search_tool(query: str) -> dict[str, Any]:
         client = genai.Client(api_key=api_key)
 
         grounding_tool = types.Tool(google_search=types.GoogleSearch())
-        config = types.GenerateContentConfig(tools=[grounding_tool])
+        instruction = build_search_instruction(user_timezone)
+        config = types.GenerateContentConfig(
+            tools=[grounding_tool], system_instruction=instruction
+        )
 
         logger.info("google_search_002: Calling Gemini with Google Search grounding")
         # client.models.generate_content is a blocking (sync) SDK call — running it
@@ -68,7 +94,11 @@ async def google_search_tool(query: str) -> dict[str, Any]:
         # that asyncio.gather() is supposed to run concurrently.
         # google-genai has no Langfuse integration: record the generation by hand (ARCHIE-211)
         with get_client().start_as_current_observation(
-            as_type="generation", name="search-web", model=SEARCH_MODEL, input=query
+            as_type="generation",
+            name="search-web",
+            model=SEARCH_MODEL,
+            input=query,
+            metadata={"system_instruction": instruction},
         ) as generation:
             response = await asyncio.to_thread(
                 client.models.generate_content,
