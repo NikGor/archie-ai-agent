@@ -1,6 +1,7 @@
 """Tests for the spontaneous swarm checks, controls and memory (ARCHIE-238)."""
 
 from datetime import datetime, timedelta
+from itertools import pairwise
 from unittest.mock import AsyncMock, MagicMock
 from zoneinfo import ZoneInfo
 import pytest
@@ -20,7 +21,9 @@ from app.swarm.schedule import (
     is_active,
     parse_quiet_until,
     pick_delay_seconds,
+    pick_follow_up,
     pick_task,
+    plan_wake,
     voice_allowed,
 )
 from app.swarm.ticker import SwarmTicker, select_outputs
@@ -105,9 +108,7 @@ def test_due_tasks_skip_quiet_tasks():
 
 def test_football_check_uses_skill_teams_by_default():
     runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
-    text = runner.render_task(
-        "swarm_watch", task="football", teams=[], language="ru"
-    )
+    text = runner.render_task("swarm_watch", task="football", teams=[], language="ru")
     assert "from your skill" in text
     text = runner.render_task(
         "swarm_watch", task="football", teams=["Bayern"], language="ru"
@@ -156,9 +157,7 @@ def test_mail_agent_reads_mail():
 @pytest.mark.parametrize("task", ["home", "mail", "calendar", "football"])
 def test_watch_prompt_has_task_section(task):
     runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
-    text = runner.render_task(
-        "swarm_watch", task=task, teams=["Bayern"], language="ru"
-    )
+    text = runner.render_task("swarm_watch", task=task, teams=["Bayern"], language="ru")
     assert "in this language: ru" in text
     assert "## What to check" in text
     assert "today_note" in text
@@ -220,6 +219,7 @@ def _ticker(outcome: SwarmWatchReply, mode: str = "running") -> SwarmTicker:
     memory = MagicMock()
     for name in [
         "set_quiet_until",
+        "set_follow_up",
         "add_day_note",
         "mark_task_run",
         "set_last_run",
@@ -233,6 +233,7 @@ def _ticker(outcome: SwarmWatchReply, mode: str = "running") -> SwarmTicker:
         return_value=SwarmSettings(football_teams=["Bayern"])
     )
     memory.get_quiet_until = AsyncMock(return_value={})
+    memory.get_follow_ups = AsyncMock(return_value={})
     memory.get_last_task_runs = AsyncMock(return_value={})
     memory.get_last_run = AsyncMock(return_value=None)
     memory.list_facts = AsyncMock(return_value=[])
@@ -261,12 +262,13 @@ def _ticker(outcome: SwarmWatchReply, mode: str = "running") -> SwarmTicker:
 
 
 def _outcome(
-    reply: str, importance: str = "normal", quiet: str = ""
+    reply: str, importance: str = "normal", quiet: str = "", follow_up: bool = False
 ) -> SwarmWatchReply:
     return SwarmWatchReply(
         reply=reply,
         importance=importance,
         today_note="seen",
+        follow_up=follow_up,
         quiet_until=quiet,
         remember_today=[],
     )
@@ -452,6 +454,7 @@ async def test_empty_note_is_not_saved():
             reply="",
             importance="low",
             today_note=" ",
+            follow_up=False,
             quiet_until="",
             remember_today=[],
         )
@@ -530,6 +533,7 @@ async def test_check_keeps_the_facts_it_chose_for_today():
         reply="",
         importance="low",
         today_note="13°, дождь к вечеру",
+        follow_up=False,
         quiet_until="",
         remember_today=["Сегодня 6–15°, дождь после 19:00"],
     )
@@ -583,3 +587,181 @@ async def test_cron_alert_starts_its_own_run():
     ticker = _ticker(_outcome(""))
     await ticker.post_alert("cron", "Матч через 5 минут", "high")
     assert ticker.bus.post.await_args.kwargs["run_id"] is None
+
+
+# --- live events (ARCHIE-286) ---
+
+
+def test_pick_follow_up_takes_the_earliest_due_check():
+    now = _at(24, 18, 41)
+    follow_ups = {"football": _at(24, 18, 40), "calendar": _at(24, 18, 30)}
+    assert pick_follow_up(["home", "football", "calendar"], follow_ups, now) == (
+        "calendar"
+    )
+    assert pick_follow_up(["home", "football"], follow_ups, now) == "football"
+    assert pick_follow_up(["football"], {"football": _at(24, 18, 45)}, now) is None
+    assert pick_follow_up([], follow_ups, now) is None
+
+
+def test_follow_up_adds_a_wake_up_before_the_regular_one():
+    swarm_settings = SwarmSettings()
+    now, regular = _at(24, 18, 41), _at(24, 18, 53)
+    assert plan_wake(now, regular, _at(24, 18, 46), swarm_settings) == _at(24, 18, 46)
+    # A follow-up time that passed while another check ran: wake up at once
+    assert plan_wake(now, regular, _at(24, 18, 40), swarm_settings) == now
+    assert plan_wake(now, regular, _at(24, 19, 30), swarm_settings) == regular
+    assert plan_wake(now, regular, None, swarm_settings) == regular
+    # Outside the active hours the follow-up has no effect
+    night, morning = _at(25, 0, 30), _at(25, 8, 2)
+    assert plan_wake(night, morning, _at(25, 0, 20), swarm_settings) == morning
+
+
+async def test_live_match_asks_follow_up_and_drops_quiet_until():
+    ticker = _ticker(_outcome("Гол! 1:0", quiet="17:55", follow_up=True))
+    now = _at(24, 15, 1)
+    await ticker._watch("football", SwarmSettings(), now, "ru")
+    ticker.memory.set_quiet_until.assert_awaited_once_with("football", None)
+    ticker.memory.set_follow_up.assert_awaited_once_with(
+        "football", now + timedelta(minutes=5)
+    )
+
+
+async def test_check_runs_when_its_quiet_time_ends():
+    ticker = _ticker(_outcome("", quiet="17:55"))
+    await ticker._watch("football", SwarmSettings(), _at(24, 15, 1), "ru")
+    ticker.memory.set_quiet_until.assert_awaited_once_with("football", _at(24, 17, 55))
+    ticker.memory.set_follow_up.assert_awaited_once_with("football", _at(24, 17, 55))
+
+
+async def test_home_check_gets_no_follow_up():
+    ticker = _ticker(_outcome("", follow_up=True))
+    await ticker._watch("home", SwarmSettings(), _at(24, 15), "ru")
+    ticker.memory.set_follow_up.assert_not_awaited()
+
+
+async def test_due_follow_up_goes_before_the_oldest_check(monkeypatch):
+    ticker = _ticker(_outcome(""))
+    ticker.memory.get_last_task_runs = AsyncMock(
+        return_value={"home": 1.0, "mail": 2.0, "calendar": 3.0, "football": 9.0}
+    )
+    ticker.memory.get_follow_ups = AsyncMock(return_value={"football": _at(24, 18, 5)})
+    monkeypatch.setattr("app.swarm.ticker.local_now", lambda _: _at(24, 18, 6))
+    await ticker.run_check()
+    assert ticker.runner.watch.await_args.args[1] == "football"
+
+
+async def test_failed_check_drops_its_follow_up():
+    ticker = _ticker(_outcome(""))
+    ticker.runner.watch = AsyncMock(side_effect=RuntimeError("boom"))
+    await ticker.run_check("football")
+    ticker.memory.set_follow_up.assert_awaited_once_with("football", None)
+
+
+async def test_follow_up_of_a_disabled_check_is_ignored():
+    ticker = _ticker(_outcome(""))
+    ticker.memory.get_follow_ups = AsyncMock(return_value={"football": _at(24, 18)})
+    swarm_settings = SwarmSettings(tasks=["home", "football"])
+    assert await ticker._next_follow_up(swarm_settings) == _at(24, 18)
+    ticker.roster.get_enabled_ids = AsyncMock(return_value=ALL_AGENTS - {"football"})
+    assert await ticker._next_follow_up(swarm_settings) is None
+    assert await ticker._next_follow_up(SwarmSettings(tasks=["home"])) is None
+
+
+class _FakeMemory:
+    """Redis-free memory for a simulated swarm day."""
+
+    def __init__(self) -> None:
+        self.quiet: dict[str, datetime] = {}
+        self.follow_ups: dict[str, datetime] = {}
+        self.last_runs: dict[str, float] = {}
+        self.clock = _at(24, 12)
+
+    async def get_settings(self) -> SwarmSettings:
+        return SwarmSettings()
+
+    async def get_quiet_until(self) -> dict[str, datetime]:
+        return dict(self.quiet)
+
+    async def set_quiet_until(self, task: str, until: datetime | None) -> None:
+        self.quiet.pop(task, None)
+        if until:
+            self.quiet[task] = until
+
+    async def get_follow_ups(self) -> dict[str, datetime]:
+        return dict(self.follow_ups)
+
+    async def set_follow_up(self, task: str, at: datetime | None) -> None:
+        self.follow_ups.pop(task, None)
+        if at:
+            self.follow_ups[task] = at
+
+    async def get_last_task_runs(self) -> dict[str, float]:
+        return dict(self.last_runs)
+
+    async def mark_task_run(self, task: str, _: float) -> None:
+        # The fake clock orders the runs, not the wall clock
+        self.last_runs[task] = self.clock.timestamp()
+
+    async def add_today_facts(self, *_) -> None:
+        pass
+
+    async def add_day_note(self, *_) -> None:
+        pass
+
+    async def set_last_run(self, *_) -> None:
+        pass
+
+    async def get_mode(self) -> str:
+        return "running"
+
+    async def get_last_run(self) -> None:
+        return None
+
+    async def list_facts(self) -> list:
+        return []
+
+    async def get_today_facts(self, _) -> list:
+        return []
+
+
+async def test_live_match_is_checked_every_few_minutes(monkeypatch):
+    """24.10.2026: Napoli - Roma 18:00-19:55 while four other checks share the
+    queue. Before kickoff the football check sets quiet_until to the kickoff;
+    during the match it asks for a follow-up and also writes a quiet_until,
+    which must not apply (on 24.10 a quiet_until hid a live match)."""
+    kickoff, final = _at(24, 18), _at(24, 19, 55)
+    memory = _FakeMemory()
+    ticker = _ticker(_outcome(""))
+    ticker.memory = memory
+
+    async def watch(_profile, task, _history, _prompt):
+        live = task == "football" and kickoff <= memory.clock < final
+        quiet = "18:00" if task == "football" and memory.clock < kickoff else ""
+        return SwarmWatchDraft(
+            outcome=_outcome("", quiet="23:59" if live else quiet, follow_up=live),
+            usage=SwarmUsage(model="m"),
+        )
+
+    ticker.runner.watch = AsyncMock(side_effect=watch)
+    monkeypatch.setattr("app.swarm.ticker.local_now", lambda _: memory.clock)
+    football: list[datetime] = []
+    others = 0
+    while memory.clock < _at(24, 21):
+        memory.clock += timedelta(seconds=await ticker.plan_next_run())
+        before = ticker.runner.watch.await_count
+        await ticker.run_check()
+        assert ticker.runner.watch.await_count == before + 1
+        task = ticker.runner.watch.await_args.args[1]
+        if task == "football":
+            football.append(memory.clock)
+        elif kickoff <= memory.clock < final:
+            others += 1
+    # The first check sets the quiet time; when it ends, the check runs at once
+    assert football[0] < _at(24, 17) and football[1] == kickoff
+    during = [t for t in football if kickoff <= t <= final]
+    gaps = [(b - a).total_seconds() for a, b in pairwise(during)]
+    assert max(gaps) <= 5 * 60 + 1
+    assert during[-1] >= final - timedelta(minutes=5)
+    # The final score check is followed by no more follow-ups
+    assert "football" not in memory.follow_ups
+    assert others >= 4
