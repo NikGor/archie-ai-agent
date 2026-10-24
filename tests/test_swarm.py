@@ -1,6 +1,8 @@
 """Tests for the agent swarm chat (ARCHIE-199)."""
 
 import asyncio
+import contextlib
+from datetime import date, datetime
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
@@ -140,7 +142,7 @@ def _dispatcher() -> SwarmDispatcher:
         hub=SwarmHub(),
         bus=MagicMock(post=AsyncMock()),
         roster=roster,
-        runner=MagicMock(),
+        runner=MagicMock(get_user_state=AsyncMock(return_value=make_user_state())),
         council=MagicMock(discuss=AsyncMock(return_value=None), execute=AsyncMock()),
         memory=MagicMock(get_mode=AsyncMock(return_value="running")),
     )
@@ -336,6 +338,27 @@ async def test_agent_reply_keeps_the_run_of_its_trigger():
     trigger = _message(text="@light").model_copy(update={"run_id": "run-1"})
     await dispatcher._run_agent("light", trigger)
     assert dispatcher.bus.post.await_args.kwargs["run_id"] == "run-1"
+
+
+async def test_agent_turn_trace_uses_the_owner_day(monkeypatch):
+    """ARCHIE-281: the Langfuse session is the owner's day, not the server's."""
+    days: list[date] = []
+
+    @contextlib.contextmanager
+    def fake_trace(name, run_id, agent_id, day, trace_input, **metadata):
+        days.append(day)
+        yield MagicMock()
+
+    monkeypatch.setattr("app.swarm.dispatcher.trace_swarm_run", fake_trace)
+    monkeypatch.setattr(
+        "app.swarm.dispatcher.local_now",
+        lambda tz: datetime(2026, 10, 25, 0, 1),
+    )
+    dispatcher = _dispatcher()
+    dispatcher.bus.get_history = AsyncMock(return_value=[])
+    dispatcher.runner.run = AsyncMock(return_value=None)
+    await dispatcher._run_agent("light", _message(text="@light"))
+    assert days == [date(2026, 10, 25)]
 
 
 async def test_failed_agent_note_keeps_the_run():
