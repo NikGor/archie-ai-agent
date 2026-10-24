@@ -42,4 +42,4 @@ sections:
     level: 2
     style: lines
     when: "task == 'weather'"
-    rules: [swarm_watch_weather_read, swarm_watch_weather_report]
+    rules: [swarm_watch_weather_read, swarm_watch_weather_report, swarm_watch_weather_same_event, swarm_watch_weather_importance]
