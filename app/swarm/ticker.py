@@ -30,8 +30,9 @@ from archie_shared.swarm.models import (
 )
 from ..config import settings as app_settings
 from ..utils.general_utils import local_now
+from ..utils.tracing import trace_swarm_run
 from .agents import SWARM_AGENTS, SwarmRoster
-from .bus import SwarmBus, SwarmHub
+from .bus import SwarmBus, SwarmHub, new_run_id
 from .dispatcher import SwarmDispatcher
 from .memory import DayNote, SwarmMemory
 from .runner import SwarmAgentRunner
@@ -174,6 +175,7 @@ class SwarmTicker:
 
     async def run_check(self, task: SwarmWatchTask | None = None) -> None:
         """Run one check: the given one, or the one that waited longest."""
+        run_id = new_run_id()
         try:
             swarm_settings = await self.memory.get_settings()
             state = await self.runner.get_user_state()
@@ -201,6 +203,7 @@ class SwarmTicker:
                 swarm_settings,
                 now,
                 state.language or app_settings.default_language,
+                run_id,
             )
         except Exception as exc:
             logger.exception("swarm_ticker_error_001: Check failed")
@@ -211,6 +214,7 @@ class SwarmTicker:
                     kind="system",
                     text=f"{task} check failed: {exc}",
                     depth=app_settings.swarm_max_depth,
+                    run_id=run_id,
                 )
                 await self._finish(task, "failed")
 
@@ -220,23 +224,29 @@ class SwarmTicker:
         swarm_settings: SwarmSettings,
         now: datetime,
         language: str,
+        run_id: str | None = None,
     ) -> None:
+        run_id = run_id or new_run_id()
         agent_id = WATCH_AGENTS[task]
-        logger.info(f"swarm_ticker_005: Check \033[36m{task}\033[0m")
+        logger.info(f"swarm_ticker_005: Check \033[36m{task}\033[0m run={run_id}")
         await self.memory.mark_task_run(task, time.time())
         self.hub.publish(SwarmTypingEvent(agent_id=agent_id, active=True))
         try:
-            draft = await self.runner.watch(
-                SWARM_AGENTS[agent_id],
-                task,
-                await self.bus.get_history(WATCH_HISTORY_SIZE),
-                self.runner.render_task(
-                    "watch_task.jinja2",
-                    task=task,
-                    teams=swarm_settings.football_teams,
-                    language=language,
-                ),
-            )
+            with trace_swarm_run(
+                "swarm-check", run_id, agent_id, f"{task} check", task=task
+            ) as root:
+                draft = await self.runner.watch(
+                    SWARM_AGENTS[agent_id],
+                    task,
+                    await self.bus.get_history(WATCH_HISTORY_SIZE),
+                    self.runner.render_task(
+                        "watch_task.jinja2",
+                        task=task,
+                        teams=swarm_settings.football_teams,
+                        language=language,
+                    ),
+                )
+                root.update(output=draft.outcome.model_dump(mode="json"))
         finally:
             self.hub.publish(SwarmTypingEvent(agent_id=agent_id, active=False))
         outcome = draft.outcome
@@ -269,10 +279,13 @@ class SwarmTicker:
                 text=outcome.today_note.strip() or "ничего нового",
                 usage=draft.usage,
                 mentions=[],
+                run_id=run_id,
             )
             await self._finish(task, "silent")
             return
-        await self.post_alert(agent_id, alert, outcome.importance, draft.usage, now)
+        await self.post_alert(
+            agent_id, alert, outcome.importance, draft.usage, now, run_id
+        )
         await self._finish(task, "reported")
 
     async def post_alert(
@@ -282,8 +295,10 @@ class SwarmTicker:
         importance: SwarmImportance,
         usage: SwarmUsage | None = None,
         now: datetime | None = None,
+        run_id: str | None = None,
     ) -> SwarmMessage:
-        """Post an alert; its importance decides who else delivers it."""
+        """Post an alert; its importance decides who else delivers it.
+        Without `run_id` (a cron alert) the alert starts a new run."""
         swarm_settings = await self.memory.get_settings()
         if now is None:
             now = local_now((await self.runner.get_user_state()).user_timezone)
@@ -299,6 +314,7 @@ class SwarmTicker:
             usage=usage,
             mentions=outputs,
             importance=importance,
+            run_id=run_id,
         )
 
     async def _finish(self, task: SwarmWatchTask, outcome: str) -> None:
