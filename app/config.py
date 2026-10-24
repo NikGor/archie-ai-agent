@@ -57,6 +57,8 @@ class Settings(BaseSettings):
     swarm_stream_max_length: int = 500
     swarm_tool_result_max_chars: int = 1000
     swarm_max_tool_rounds: int = 3
+    # A check that follows a live event (a match) runs again after this pause (ARCHIE-286)
+    swarm_follow_up_minutes: int = 5
     swarm_user_name: str | None = None
     # Archie web app (Django) as the agent reaches it: alert chats (ARCHIE-247)
     web_django_url: str = "http://archie-web:8000"
