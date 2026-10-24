@@ -9,7 +9,6 @@ every turn small.
 
 import json
 import logging
-import os
 from datetime import timedelta
 from typing import Any
 from archie_shared.chat.models import LllmTrace
@@ -19,7 +18,6 @@ from archie_shared.swarm.models import (
     SwarmUsage,
     SwarmWatchTask,
 )
-from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel, Field
 from ..agent.prompt_builder import PromptBuilder
 from ..agent.prompt_compiler import PromptCompiler
@@ -56,10 +54,6 @@ LATE_NIGHT_END_HOUR = 5
 # Day memory lines in a prompt: notes of the own check, or alerts of all checks.
 DAY_NOTES_IN_PROMPT = 10
 
-PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "agent", "prompts")
-SWARM_PROMPTS_DIR = os.path.join(PROMPTS_DIR, "swarm")
-
-
 FINAL_REPLY_TASK = (
     "Write your chat reply now. You must reply: say what you did, "
     "or say that you could not do the task and why."
@@ -68,17 +62,6 @@ WATCH_FINAL_TASK = (
     "Write the outcome of the check now. Write an alert only if something is "
     "new for the user. Else leave the reply empty."
 )
-
-
-def create_swarm_prompt_env() -> Environment:
-    # No autoescape: prompts are plain text and JSON parameters must stay readable.
-    env = Environment(loader=FileSystemLoader(SWARM_PROMPTS_DIR), autoescape=False)
-    # Personas are compiled specs shared with Stage 3 (ARCHIE-212)
-    compiler = PromptCompiler()
-    env.globals["persona_prompt"] = lambda persona: compiler.compile(
-        f"persona_{persona}"
-    )
-    return env
 
 
 def format_chat_line(message: SwarmMessage) -> str:
@@ -130,7 +113,8 @@ class SwarmAgentRunner:
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.roster = roster or SwarmRoster()
         self.memory = memory or SwarmMemory()
-        self.env = create_swarm_prompt_env()
+        # Swarm prompts are rule specs (specs/swarm, rules/swarm.json; ARCHIE-285)
+        self.compiler = PromptCompiler()
 
     async def get_user_state(self) -> UserState:
         """State of the swarm owner; settings.swarm_user_name wins if set."""
@@ -142,7 +126,8 @@ class SwarmAgentRunner:
         tools = self.tool_factory.get_tool_schemas(
             model, "plain", allowed_tools=set(profile.tools)
         )
-        return self.env.get_template("swarm_base.jinja2").render(
+        return self.compiler.compile(
+            "swarm_base",
             agent=profile,
             agents=list(SWARM_AGENTS.values()),
             groups=SWARM_GROUPS,
@@ -245,8 +230,9 @@ class SwarmAgentRunner:
             {"role": "user", "content": task},
         ]
 
-    def render_task(self, template: str, **context: Any) -> str:
-        return self.env.get_template(template).render(**context)
+    def render_task(self, spec: str, **context: Any) -> str:
+        """Task prompt of a turn from a swarm spec (swarm_watch, swarm_consul, ...)."""
+        return self.compiler.compile(spec, **context)
 
     async def ask(
         self,

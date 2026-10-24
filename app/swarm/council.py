@@ -91,7 +91,7 @@ class SwarmCouncil:
             turn, turn_usage = await self._ask(
                 consul,
                 trigger,
-                "consul.jinja2",
+                "swarm_consul",
                 ConsulDecision if last else ConsulTurn,
                 round=round_number,
                 last=last,
@@ -132,7 +132,7 @@ class SwarmCouncil:
             opinion, usage = await self._ask(
                 member,
                 trigger,
-                "council_opinion.jinja2",
+                "swarm_council_opinion",
                 SwarmReply,
                 history=history,
                 round=round_number,

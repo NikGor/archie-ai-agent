@@ -245,7 +245,7 @@ class SwarmTicker:
                     task,
                     await self.bus.get_history(WATCH_HISTORY_SIZE),
                     self.runner.render_task(
-                        "watch_task.jinja2",
+                        "swarm_watch",
                         task=task,
                         teams=swarm_settings.football_teams,
                         language=language,
