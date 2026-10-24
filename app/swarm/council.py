@@ -178,6 +178,7 @@ class SwarmCouncil:
                         if a == step.agent_id or a not in plan.delivered
                     ],
                     paired=False,
+                    run_id=plan.decision.run_id,
                 )
                 if step.wait and number < total:
                     await self._wait_reply(queue, task, step.agent_id)
@@ -210,6 +211,7 @@ class SwarmCouncil:
                 text=f"{agent_id} did not answer in time, the next step starts",
                 reply_to=task.message_id,
                 depth=settings.swarm_max_depth,
+                run_id=task.run_id,
             )
 
     async def _ask(
@@ -245,7 +247,9 @@ class SwarmCouncil:
         """Only plan steps wake agents; an "@" in the reply is removed, so
         offering an action never runs it (ARCHIE-204)."""
         # An alert already went to its outputs: do not deliver it there again.
-        delivered = set(trigger.mentions) & OUTPUT_AGENTS if trigger.kind == "alert" else set()
+        delivered = (
+            set(trigger.mentions) & OUTPUT_AGENTS if trigger.kind == "alert" else set()
+        )
         steps = [
             s
             for s in decision.steps
@@ -305,4 +309,5 @@ class SwarmCouncil:
             mentions=[] if kind == "opinion" else mentions,
             paired=paired,
             round_number=round_number,
+            run_id=trigger.run_id,
         )
