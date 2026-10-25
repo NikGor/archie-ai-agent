@@ -13,7 +13,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from croniter import CroniterBadCronError, croniter  # type: ignore[import-untyped]
 from redis.exceptions import RedisError
 from app.backend.redis_factory import get_async_redis
-from app.config import TOOLS_CONFIG, settings
+from app.config import settings
+from app.tools.catalog import tool_registry
 
 
 logger = logging.getLogger(__name__)
@@ -33,11 +34,7 @@ def _iso(value: datetime) -> str:
 
 
 def _configured_tools() -> dict[str, str]:
-    return {
-        name: module_path
-        for tools in TOOLS_CONFIG.values()
-        for name, module_path in tools.items()
-    }
+    return {name: tool_registry.module_path(name) for name in tool_registry.names()}
 
 
 def _timezone(name: str) -> ZoneInfo:
