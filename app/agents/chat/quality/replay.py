@@ -14,6 +14,7 @@ from archie_shared.evals.models import (
 )
 from archie_shared.monitoring.models import MonitorMessage, MonitorRuleScore
 from app.agents.chat.pipeline import ChatPipeline
+from app.agents.chat.requests import ChatRunRequest
 from app.agents.chat.tool_access import chat_tool_names
 from app.config import MAX_COMMAND_ITERATIONS, settings
 from app.models.orchestration_sgr import DecisionResponse
@@ -186,13 +187,15 @@ class ChatCaseReplay:
             await on_step(update.step)
 
         response = await self.agent_factory.arun(
-            messages=[{"role": "user", "content": case.input}],
-            command_model=model,
-            final_output_model=model,
-            response_format=case.response_format,
-            user_name=settings.eval_user_name,
-            on_status=on_status,
-            demo_mode=True,
+            ChatRunRequest(
+                messages=[{"role": "user", "content": case.input}],
+                command_model=model,
+                final_output_model=model,
+                response_format=case.response_format,
+                user_name=settings.eval_user_name,
+                on_status=on_status,
+                demo_mode=True,
+            )
         )
         trace = response.pipeline_trace
         total_tokens = _sum_tokens(trace)
