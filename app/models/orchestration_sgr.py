@@ -1,5 +1,5 @@
 from typing import Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from ..platform.tools.models import Parameter, ToolCall
 from ..utils.intent_config import IntentType
 
@@ -29,7 +29,11 @@ ChatToolName = Literal[
 
 class ActionType(BaseModel):
     type: Literal["function_call", "parameters_request", "final_response"]
-    reasoning: str = Field(description="Why this action type was chosen")
+    # Schema name "rationale": Claude 5.5 refuses a "reasoning" field as output
+    # extraction (content_filter); Python keeps .reasoning
+    model_config = ConfigDict(populate_by_name=True)
+
+    reasoning: str = Field(alias="rationale", description="Why this action type was chosen")
 
 
 class ToolCallRequest(BaseModel):
@@ -54,15 +58,15 @@ class ToolCallRequest(BaseModel):
 
 
 class SGROrchestration(BaseModel):
-    """SGR trace for orchestration and decision-making phase"""
+    """Decision of the command stage"""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     action: ActionType
     tool_calls: list[ToolCallRequest] = Field(
         description="Tools to execute (can be parallel)",
     )
-    reasoning: str = Field(
-        description="Step-by-step reasoning for this orchestration decision"
-    )
+    reasoning: str = Field(alias="rationale", description="Why this decision was made")
     intents: list[IntentType] = Field(
         default_factory=list,
         description=(
