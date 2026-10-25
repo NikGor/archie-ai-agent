@@ -25,12 +25,13 @@ from archie_shared.swarm.models import (
     SwarmUsage,
 )
 from pydantic import BaseModel, Field
-from ..config import settings
-from ..utils.general_utils import local_now
-from .agents import SWARM_AGENTS, add_paired_outputs
-from .bus import SwarmBus, SwarmHub
-from .models import ConsulDecision, ConsulTurn, CouncilStep, SwarmReply
-from .runner import SwarmAgentRunner, format_chat_line
+from app.agents.swarm.agents import SWARM_AGENTS, add_paired_outputs
+from app.agents.swarm.bus import SwarmBus, SwarmHub
+from app.agents.swarm.messages import format_chat_line
+from app.agents.swarm.models import ConsulDecision, ConsulTurn, CouncilStep, SwarmReply
+from app.agents.swarm.runner import SwarmAgentRunner
+from app.config import settings
+from app.utils.general_utils import local_now
 
 
 logger = logging.getLogger(__name__)
@@ -231,7 +232,7 @@ class SwarmCouncil:
                 SWARM_AGENTS[agent_id],
                 trigger,
                 history,
-                self.runner.render_task(template, **context),
+                self.runner.prompts.render_task(template, **context),
                 schema,
             )
         finally:

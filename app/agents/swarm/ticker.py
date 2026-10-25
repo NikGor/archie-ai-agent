@@ -32,15 +32,12 @@ from archie_shared.swarm.models import (
     SwarmUsage,
     SwarmWatchTask,
 )
-from ..config import settings as app_settings
-from ..utils.general_utils import local_now
-from ..utils.tracing import trace_swarm_run
-from .agents import SWARM_AGENTS, SwarmRoster
-from .bus import SwarmBus, SwarmHub, new_run_id
-from .dispatcher import SwarmDispatcher
-from .memory import DayNote, SwarmMemory
-from .runner import SwarmAgentRunner
-from .schedule import (
+from app.agents.swarm.agents import SWARM_AGENTS, SwarmRoster
+from app.agents.swarm.bus import SwarmBus, SwarmHub, new_run_id
+from app.agents.swarm.dispatcher import SwarmDispatcher
+from app.agents.swarm.memory import DayNote, SwarmMemory
+from app.agents.swarm.runner import SwarmAgentRunner
+from app.agents.swarm.schedule import (
     due_tasks,
     is_active,
     parse_quiet_until,
@@ -50,6 +47,9 @@ from .schedule import (
     plan_wake,
     voice_allowed,
 )
+from app.config import settings as app_settings
+from app.utils.general_utils import local_now
+from app.utils.tracing import trace_swarm_run
 
 
 logger = logging.getLogger(__name__)
@@ -289,7 +289,7 @@ class SwarmTicker:
                     SWARM_AGENTS[agent_id],
                     task,
                     await self.bus.get_history(WATCH_HISTORY_SIZE),
-                    self.runner.render_task(
+                    self.runner.prompts.render_task(
                         "swarm_watch",
                         task=task,
                         teams=swarm_settings.football_teams,
