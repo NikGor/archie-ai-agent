@@ -32,7 +32,6 @@ from opentelemetry.sdk.trace.sampling import (
 )
 from opentelemetry.trace import Link, SpanKind, TraceState
 from opentelemetry.util.types import Attributes
-from app.monitoring.spec_rules import spec_versions
 
 
 logger = logging.getLogger(__name__)
@@ -122,13 +121,23 @@ def is_traced_request(request: ChatRequest) -> bool:
     )
 
 
+SpecVersions = Callable[[str], dict[str, str]]
+
+
+def _no_spec_versions(_response_format: str) -> dict[str, str]:
+    return {}
+
+
 def trace_chat_turn(
     handler: Callable[Concatenate[ChatRequest, P], Awaitable[ChatMessage]],
+    spec_versions: SpecVersions = _no_spec_versions,
 ) -> Callable[Concatenate[ChatRequest, P], Awaitable[ChatMessage]]:
     """Wrap a chat handler in the root observation of the turn.
 
     One trace per turn, grouped into a session per conversation. Trace input is
-    the user's text, output is the Content the frontend renders.
+    the user's text, output is the Content the frontend renders. `spec_versions`
+    gives the prompt spec versions of a response format: the chat passes its
+    own (ARCHIE-296), so this low layer does not import the chat.
     """
 
     @functools.wraps(handler)
@@ -157,8 +166,7 @@ def trace_chat_turn(
                     # Prompt spec versions that produced the turn: chat monitoring
                     # and prompt fixes compare traces before / after a fix (ARCHIE-213)
                     "spec_versions": spec_versions(
-                        message.response_format or request.response_format,
-                        trace_found=True,
+                        message.response_format or request.response_format
                     ),
                 },
             )

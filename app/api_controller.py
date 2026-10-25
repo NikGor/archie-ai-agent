@@ -5,6 +5,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from archie_shared.chat.models import ChatMessage, ChatRequest
 from .agents.chat.pipeline import ChatPipeline
+from .agents.chat.quality.rules import spec_versions
 from .config import DEFAULT_MODEL
 from .models.ws_models import StatusUpdate, StreamCallback, StreamEventCallback
 from .platform.llm.catalog import supports_vision
@@ -24,7 +25,6 @@ def get_chat_pipeline() -> ChatPipeline:
     """The chat pipeline of this process, built on first use (ARCHIE-171)."""
     return ChatPipeline()
 
-@trace_chat_turn
 async def handle_chat(
     user_request: ChatRequest,
     on_status: StatusCallback = None,
@@ -93,3 +93,11 @@ async def handle_chat(
     logger.info("=== STEP 4: Response Ready ===")
 
     return assistant_message
+
+
+def _chat_spec_versions(response_format: str) -> dict[str, str]:
+    return spec_versions(response_format, trace_found=True)
+
+
+# One Langfuse trace per chat turn, with the spec versions that produced it
+handle_chat = trace_chat_turn(handle_chat, spec_versions=_chat_spec_versions)
