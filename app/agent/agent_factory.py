@@ -7,7 +7,7 @@ from ..config import DEFAULT_MODEL, MAX_COMMAND_ITERATIONS
 from ..models.orchestration_sgr import DecisionResponse
 from ..models.output_models import AgentResponse
 from ..models.state_models import UserState
-from ..models.tool_models import ToolResult
+from ..platform.tools.models import ToolResult
 from ..models.ws_models import (
     StatusCallback,
     StatusNotifier,
@@ -18,13 +18,15 @@ from ..platform.llm.catalog import get_provider_for_model
 from ..platform.llm.context import ConversationContext
 from ..platform.llm.registry import get_client, parse_llm_response
 from ..tools.output import create_output
-from ..tools.tool_factory import ToolFactory
+from ..platform.tools.registry import ToolRegistry
+from ..tools.catalog import tool_registry as default_tool_registry
 from ..utils.trace_utils import StepTimer
 from ..utils.tracing import COMMAND_TRACE_NAME
 from .command_loop import CommandLoop
 from .pipeline_metrics import PipelineMetrics
 from .prompt_builder import PromptBuilder
 from .response_format_router import select_response_format
+from .tool_access import chat_tool_names
 
 
 logger = logging.getLogger(__name__)
@@ -34,12 +36,12 @@ class AgentFactory:
     def __init__(
         self,
         prompt_builder: PromptBuilder | None = None,
-        tool_factory: ToolFactory | None = None,
+        tool_registry: ToolRegistry | None = None,
         state_service: StateService | None = None,
         demo_mode: bool = False,
     ):
         self.prompt_builder = prompt_builder or PromptBuilder()
-        self.tool_factory = tool_factory or ToolFactory(demo_mode=demo_mode)
+        self.tool_registry = tool_registry or default_tool_registry
         self.state_service = state_service or StateService()
         self.tool_result_store = ToolResultStore()
         self.demo_mode = demo_mode
@@ -68,7 +70,7 @@ class AgentFactory:
         """
         logger.info("=== Stage 1: Command Decision ===")
         client = get_client(provider)
-        tools = self.tool_factory.get_tool_schemas(model, response_format)
+        tools = self.tool_registry.schemas(model, chat_tool_names(response_format))
         messages = self.prompt_builder.build_command_messages(
             user_input=user_input,
             state=user_state.model_dump(),
@@ -227,7 +229,10 @@ class AgentFactory:
         )
         metrics = PipelineMetrics()
         command_loop = CommandLoop(
-            self.tool_factory, metrics, max_command_iterations or MAX_COMMAND_ITERATIONS
+            self.tool_registry,
+            metrics,
+            max_command_iterations or MAX_COMMAND_ITERATIONS,
+            demo_mode=self.demo_mode,
         )
         loop_result = await command_loop.run(
             make_command_call=self._make_command_call,
