@@ -3,7 +3,7 @@
 import json
 import logging
 from json_repair import repair_json
-from ...models.output_models import UIResponse
+from app.models.output_models import UIResponse
 
 
 logger = logging.getLogger(__name__)

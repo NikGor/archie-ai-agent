@@ -4,8 +4,8 @@ import time
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 from archie_shared.chat.models import ReasoningEffort
-from ...platform.llm.base import LLMClient
-from ...utils.stream_utils import JsonPathExtractor
+from app.platform.llm.base import LLMClient
+from app.utils.stream_utils import JsonPathExtractor
 
 
 async def stream_and_collect(

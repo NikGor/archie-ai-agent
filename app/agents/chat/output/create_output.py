@@ -5,23 +5,24 @@ decisions and tool results.
 import logging
 from typing import Any
 from archie_shared.chat.models import ReasoningEffort
-from ... import config
-from ...agent.prompt_builder import PromptBuilder
-from ...models.output_models import (
+from app import config
+from app.agents.chat.messages import ChatPromptBuilder
+from app.agents.chat.output.postprocess import build_agent_response
+from app.agents.chat.output.runners import stream_and_collect
+from app.models.output_models import (
     AgentResponse,
     Level2Response,
     PlainResponse,
     get_response_model_for_format,
 )
-from ...platform.tools.models import ToolResult
-from ...models.ws_models import StreamCallback, StreamEventCallback
-from ...platform.llm.catalog import get_provider_for_model
-from ...platform.llm.registry import get_client, parse_llm_response
-from ...utils.llm_parser import parse_assembled_stream
-from ...utils.schema_filter import build_filtered_ui_response
-from ...utils.stream_utils import JsonPathExtractor
-from .postprocess import build_agent_response
-from .runners import stream_and_collect
+from app.models.ws_models import StreamCallback, StreamEventCallback
+from app.platform.llm.catalog import get_provider_for_model
+from app.platform.llm.registry import get_client, parse_llm_response
+from app.platform.prompts.context import datetime_note
+from app.platform.tools.models import ToolResult
+from app.utils.llm_parser import parse_assembled_stream
+from app.utils.schema_filter import build_filtered_ui_response
+from app.utils.stream_utils import JsonPathExtractor
 
 
 _STREAMABLE_FORMATS = frozenset({"plain", "voice", "formatted_text"})
@@ -36,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 
 def _build_static_prompt(
-    prompt_builder: PromptBuilder,
+    prompt_builder: ChatPromptBuilder,
     response_format: str,
     intents: list[str],
     state: dict,
@@ -56,7 +57,7 @@ def _build_static_prompt(
 
 
 def _build_volatile_prompt(
-    prompt_builder: PromptBuilder,
+    prompt_builder: ChatPromptBuilder,
     command_summary: str,
     state: dict,
     tool_results: list[ToolResult] | None,
@@ -70,11 +71,11 @@ def _build_volatile_prompt(
         logger.info(
             f"create_output_003: Added \033[33m{len(tool_results)}\033[0m tool results to context"
         )
-    datetime_note = prompt_builder.build_datetime_note(state)
+    datetime_line = datetime_note(state)
     return f"""# Command Summary
 {command_summary}
 
-{datetime_note}{tools_context}
+{datetime_line}{tools_context}
 
 Create a complete, well-formatted response in the specified format."""
 
@@ -119,7 +120,7 @@ async def create_output(
     logger.info("create_output_001: Creating final output response")
     logger.info(f"create_output_002: Format: \033[36m{response_format}\033[0m")
 
-    prompt_builder = PromptBuilder()
+    prompt_builder = ChatPromptBuilder()
     provider = get_provider_for_model(model)
     client = get_client(provider)
     logger.info(
