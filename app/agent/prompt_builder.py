@@ -7,7 +7,7 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from archie_shared.chat.models import ImageAttachment
 from ..models.tool_models import ToolResult
-from ..utils.image_utils import build_user_content
+from ..platform.llm.registry import get_provider
 from ..utils.skill_utils import list_skills
 from .prompt_compiler import PromptCompiler
 
@@ -119,7 +119,7 @@ class PromptBuilder:
         messages.append(
             {
                 "role": "user",
-                "content": build_user_content(user_input, images, provider),
+                "content": get_provider(provider).user_content(user_input, images),
             }
         )
         return messages
