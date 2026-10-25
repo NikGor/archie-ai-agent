@@ -1,0 +1,4 @@
+sections:
+  - title: Home diagnosis
+    style: numbered
+    rules: [ephemeral_ha_read, ephemeral_ha_logs]
