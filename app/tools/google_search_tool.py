@@ -41,6 +41,90 @@ def _usage_details(usage: types.GenerateContentResponseUsageMetadata) -> dict[st
 
 
 # user_timezone is not in Args: ToolContext gives it, the LLM does not see it (ARCHIE-257)
+async def _generate(client: Any, query: str, user_timezone: str) -> Any:
+    """One Gemini call with Google Search grounding, recorded in Langfuse."""
+    grounding_tool = types.Tool(google_search=types.GoogleSearch())
+    instruction = build_search_instruction(user_timezone)
+    config = types.GenerateContentConfig(
+        tools=[grounding_tool], system_instruction=instruction
+    )
+    logger.info("google_search_002: Calling Gemini with Google Search grounding")
+    # client.models.generate_content is a blocking (sync) SDK call — running it
+    # directly inside this coroutine serializes parallel google_search_tool calls
+    # that asyncio.gather() is supposed to run concurrently.
+    # google-genai has no Langfuse integration: record the generation by hand (ARCHIE-211)
+    with get_client().start_as_current_observation(
+        as_type="generation",
+        name="search-web",
+        model=SEARCH_MODEL,
+        input=query,
+        metadata={"system_instruction": instruction},
+    ) as generation:
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=SEARCH_MODEL,
+            contents=query,
+            config=config,
+        )
+        generation.update(
+            output=response.text,
+            usage_details=_usage_details(response.usage_metadata),
+        )
+    return response
+
+
+def _sources(grounding_metadata: Any) -> list[dict[str, Any]]:
+    return [
+        {
+            "index": idx + 1,
+            "title": chunk.web.title if hasattr(chunk.web, "title") else "No title",
+            "url": chunk.web.uri if hasattr(chunk.web, "uri") else "",
+        }
+        for idx, chunk in enumerate(grounding_metadata.grounding_chunks or [])
+        if chunk.web
+    ]
+
+
+def _search_result(query: str, response: Any) -> dict[str, Any]:
+    """The answer with its web sources, or a model-knowledge answer."""
+    text = response.text or ""
+    grounding_metadata = response.candidates[0].grounding_metadata
+    logger.info(
+        f"google_search_003: Response received, length: \033[33m{len(text)}\033[0m chars"
+    )
+    if not grounding_metadata:
+        logger.info(
+            "google_search_004: No grounding metadata, answered from model knowledge"
+        )
+        return {
+            "success": True,
+            "query": query,
+            "answer": text,
+            "grounded": False,
+            "sources": [],
+            "message": "Answer generated from model knowledge (no web search performed)",
+        }
+    sources = _sources(grounding_metadata)
+    web_queries = list(grounding_metadata.web_search_queries or [])
+    logger.info(
+        f"google_search_005: Found \033[33m{len(sources)}\033[0m sources, "
+        f"\033[33m{len(web_queries)}\033[0m search queries"
+    )
+    return {
+        "success": True,
+        "query": query,
+        "answer": text,
+        "grounded": True,
+        "sources": sources,
+        "search_queries": web_queries,
+        "grounding_supports": (
+            len(grounding_metadata.grounding_supports)
+            if grounding_metadata.grounding_supports
+            else 0
+        ),
+    }
+
+
 async def google_search_tool(
     query: str, user_timezone: str = settings.default_timezone
 ) -> dict[str, Any]:
@@ -80,37 +164,7 @@ async def google_search_tool(
                 "query": query,
             }
 
-        client = genai.Client(api_key=api_key)
-
-        grounding_tool = types.Tool(google_search=types.GoogleSearch())
-        instruction = build_search_instruction(user_timezone)
-        config = types.GenerateContentConfig(
-            tools=[grounding_tool], system_instruction=instruction
-        )
-
-        logger.info("google_search_002: Calling Gemini with Google Search grounding")
-        # client.models.generate_content is a blocking (sync) SDK call — running it
-        # directly inside this coroutine serializes parallel google_search_tool calls
-        # that asyncio.gather() is supposed to run concurrently.
-        # google-genai has no Langfuse integration: record the generation by hand (ARCHIE-211)
-        with get_client().start_as_current_observation(
-            as_type="generation",
-            name="search-web",
-            model=SEARCH_MODEL,
-            input=query,
-            metadata={"system_instruction": instruction},
-        ) as generation:
-            response = await asyncio.to_thread(
-                client.models.generate_content,
-                model=SEARCH_MODEL,
-                contents=query,
-                config=config,
-            )
-            generation.update(
-                output=response.text,
-                usage_details=_usage_details(response.usage_metadata),
-            )
-
+        response = await _generate(genai.Client(api_key=api_key), query, user_timezone)
         if not response or not response.candidates:
             logger.warning("google_search_warning_001: Empty response from Gemini")
             return {
@@ -118,66 +172,7 @@ async def google_search_tool(
                 "message": "Empty response from search API",
                 "query": query,
             }
-
-        candidate = response.candidates[0]
-        text = response.text or ""
-        grounding_metadata = candidate.grounding_metadata
-
-        logger.info(
-            f"google_search_003: Response received, length: \033[33m{len(text)}\033[0m chars"
-        )
-
-        if not grounding_metadata:
-            logger.info(
-                "google_search_004: No grounding metadata, answered from model knowledge"
-            )
-            return {
-                "success": True,
-                "query": query,
-                "answer": text,
-                "grounded": False,
-                "sources": [],
-                "message": "Answer generated from model knowledge (no web search performed)",
-            }
-
-        sources = []
-        if grounding_metadata.grounding_chunks:
-            for idx, chunk in enumerate(grounding_metadata.grounding_chunks):
-                if chunk.web:
-                    sources.append(
-                        {
-                            "index": idx + 1,
-                            "title": (
-                                chunk.web.title
-                                if hasattr(chunk.web, "title")
-                                else "No title"
-                            ),
-                            "url": chunk.web.uri if hasattr(chunk.web, "uri") else "",
-                        }
-                    )
-
-        web_queries = []
-        if grounding_metadata.web_search_queries:
-            web_queries = list(grounding_metadata.web_search_queries)
-
-        logger.info(
-            f"google_search_005: Found \033[33m{len(sources)}\033[0m sources, "
-            f"\033[33m{len(web_queries)}\033[0m search queries"
-        )
-
-        return {
-            "success": True,
-            "query": query,
-            "answer": text,
-            "grounded": True,
-            "sources": sources,
-            "search_queries": web_queries,
-            "grounding_supports": (
-                len(grounding_metadata.grounding_supports)
-                if grounding_metadata.grounding_supports
-                else 0
-            ),
-        }
+        return _search_result(query, response)
 
     except Exception as e:
         logger.error(f"google_search_error_002: \033[31m{e!s}\033[0m")
