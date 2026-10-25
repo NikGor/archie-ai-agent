@@ -4,6 +4,7 @@ import json
 import logging
 from typing import Any
 from archie_shared.chat.models import ImageAttachment
+from app.agents.chat.formats import resolve_format
 from app.platform.llm.registry import get_provider
 from app.platform.prompts.compiler import PromptCompiler
 from app.platform.prompts.context import datetime_note
@@ -105,19 +106,7 @@ class ChatPromptBuilder:
     @staticmethod
     def format_spec_name(response_format: str) -> str:
         """Return the format spec name for a response format."""
-        format_aliases = {"voice": "plain"}
-        actual_format = format_aliases.get(response_format, response_format)
-        if actual_format in [
-            "plain",
-            "gemini_tts",
-            "ui_answer",
-            "level2_answer",
-            "level3_answer",
-            "dashboard",
-            "widget",
-        ]:
-            return f"format_{actual_format}"
-        return "format_formatted_text"
+        return resolve_format(response_format).prompt_spec
 
     def build_format_instructions(
         self, response_format: str, intents: list[str] | None = None
