@@ -5,9 +5,9 @@ import logging
 from typing import Literal
 from pydantic import BaseModel, Field
 from app.config import settings
-from app.platform.tools.models import ToolResult
 from app.platform.llm.decisions import DecisionsError, decide
-from .prompt_compiler import PromptCompiler
+from app.platform.prompts.compiler import PromptCompiler
+from app.platform.tools.models import ToolResult
 
 
 logger = logging.getLogger(__name__)
