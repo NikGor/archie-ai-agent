@@ -2,7 +2,9 @@
 
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any
+from pydantic import BaseModel, Field
 from app.backend.homeassistant_mcp_client import HomeAssistantMCPError, call_tool
 from app.utils.arg_coercion import coerce_float, coerce_int
 
@@ -45,7 +47,181 @@ async def _search_and_play(
     )
 
 
-async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
+class ControlRequest(BaseModel):
+    """Arguments of one smarthome_control_tool call after coercion (ARCHIE-304)."""
+
+    device_name: str | None = Field(default=None, description="Entity name or scene")
+    area: str | None = Field(default=None, description="Area name")
+    floor: str | None = Field(default=None, description="Floor name")
+    brightness: int | None = Field(default=None, description="0-100 percent")
+    color_temp: int | None = Field(default=None, description="Kelvin")
+    color: str | None = Field(default=None, description="Named color")
+    temperature: float | None = Field(
+        default=None, description="Target or set temperature"
+    )
+    volume_percent: int | None = Field(default=None, description="Volume 0-100")
+    volume_step: str | None = Field(default=None, description="up | down")
+    search_query: str | None = Field(default=None, description="Media search")
+    media_class: str | None = Field(default=None, description="Media type")
+    message: str | None = Field(default=None, description="Broadcast text")
+
+    def target(self) -> dict[str, Any]:
+        return {
+            key: value
+            for key, value in (
+                ("name", self.device_name),
+                ("area", self.area),
+                ("floor", self.floor),
+            )
+            if value
+        }
+
+
+class ControlArgumentError(ValueError):
+    """A required argument of the action is missing."""
+
+
+def _require(value: object, name: str, action: str) -> None:
+    if value is None or value == "":
+        raise ControlArgumentError(f"{name} is required for action={action}")
+
+
+# Actions that call one Home Assistant intent with the plain target
+_TARGET_INTENTS = {
+    "turn_on": "HassTurnOn",
+    "turn_off": "HassTurnOff",
+    "media_pause": "HassMediaPause",
+    "media_unpause": "HassMediaUnpause",
+    "media_next": "HassMediaNext",
+    "media_previous": "HassMediaPrevious",
+    "cancel_timers": "HassCancelAllTimers",
+}
+
+
+async def _set_light(_action: str, request: ControlRequest) -> Any:
+    set_args = request.target()
+    if request.brightness is not None:
+        set_args["brightness"] = request.brightness
+    if request.color_temp is not None:
+        set_args["temperature"] = request.color_temp
+    if request.color is not None:
+        set_args["color"] = request.color
+    return await call_tool("HassLightSet", set_args)
+
+
+async def _set_temperature(action: str, request: ControlRequest) -> Any:
+    _require(request.temperature, "temperature", action)
+    return await call_tool(
+        "HassClimateSetTemperature",
+        {**request.target(), "temperature": request.temperature},
+    )
+
+
+async def _step_temperature(action: str, request: ControlRequest) -> Any:
+    target = request.target()
+    live_context = await call_tool("GetLiveContext", {**target, "domain": "climate"})
+    current_temp = _extract_current_temperature(live_context)
+    if current_temp is None:
+        raise ControlArgumentError(
+            f"Could not read current temperature for {request.device_name or request.area}"
+        )
+    step = _TEMPERATURE_STEP if action == "increase_temperature" else -_TEMPERATURE_STEP
+    request.temperature = current_temp + step
+    return await call_tool(
+        "HassClimateSetTemperature", {**target, "temperature": request.temperature}
+    )
+
+
+async def _set_volume(action: str, request: ControlRequest) -> Any:
+    _require(request.volume_percent, "volume_percent", action)
+    return await call_tool(
+        "HassSetVolume", {**request.target(), "volume_level": request.volume_percent}
+    )
+
+
+async def _volume_step(action: str, request: ControlRequest) -> Any:
+    _require(request.volume_step, "volume_step", action)
+    return await call_tool(
+        "HassSetVolumeRelative",
+        {**request.target(), "volume_step": request.volume_step},
+    )
+
+
+async def _mute(action: str, request: ControlRequest) -> Any:
+    if action == "media_mute":
+        return await call_tool(
+            "HassMediaPlayerMute", {**request.target(), "is_volume_muted": "true"}
+        )
+    return await call_tool(
+        "HassMediaPlayerUnmute", {**request.target(), "is_volume_muted": "false"}
+    )
+
+
+async def _media_search_and_play(action: str, request: ControlRequest) -> Any:
+    _require(request.search_query, "search_query", action)
+    assert request.search_query is not None
+    return await _search_and_play(
+        request.target(), request.search_query, request.media_class
+    )
+
+
+async def _broadcast(action: str, request: ControlRequest) -> Any:
+    _require(request.message, "message", action)
+    return await call_tool("HassBroadcast", {"message": request.message})
+
+
+async def _activate_scene(action: str, request: ControlRequest) -> Any:
+    _require(request.device_name, "device_name", action)
+    return await call_tool("HassTurnOn", request.target())
+
+
+async def _vacuum(action: str, request: ControlRequest) -> Any:
+    # Vacuums have no area and no TURN_ON feature, so HassTurnOn can't start them. # ARCHIE-244
+    vacuum_args: dict[str, Any] = {"domain": ["vacuum"]}
+    if request.device_name:
+        vacuum_args["name"] = request.device_name
+    intent = "HassVacuumStart" if action == "vacuum_start" else "HassVacuumReturnToBase"
+    return await call_tool(intent, vacuum_args)
+
+
+async def _vacuum_clean_area(action: str, request: ControlRequest) -> Any:
+    _require(request.area, "area", action)
+    clean_args: dict[str, Any] = {"area": request.area}
+    if request.device_name:
+        clean_args["name"] = request.device_name
+    return await call_tool("HassVacuumCleanArea", clean_args)
+
+
+ControlHandler = Callable[[str, ControlRequest], Awaitable[Any]]
+
+_ACTIONS: dict[str, ControlHandler] = {
+    "set_light": _set_light,
+    "set_temperature": _set_temperature,
+    "increase_temperature": _step_temperature,
+    "decrease_temperature": _step_temperature,
+    "media_set_volume": _set_volume,
+    "media_volume_step": _volume_step,
+    "media_mute": _mute,
+    "media_unmute": _mute,
+    "media_search_and_play": _media_search_and_play,
+    "broadcast": _broadcast,
+    "activate_scene": _activate_scene,
+    "vacuum_start": _vacuum,
+    "vacuum_return_to_base": _vacuum,
+    "vacuum_clean_area": _vacuum_clean_area,
+}
+
+
+async def _run_action(action: str, request: ControlRequest) -> Any:
+    if action in _TARGET_INTENTS:
+        return await call_tool(_TARGET_INTENTS[action], request.target())
+    handler = _ACTIONS.get(action)
+    if handler is None:
+        raise ControlArgumentError(f"Unknown action: {action}")
+    return await handler(action, request)
+
+
+async def smarthome_control_tool(
     action: str,
     device_name: str | None = None,
     area: str | None = None,
@@ -119,144 +295,31 @@ async def smarthome_control_tool(  # noqa: PLR0911, PLR0912
             },
         }
 
-    target: dict[str, Any] = {}
-    if device_name:
-        target["name"] = device_name
-    if area:
-        target["area"] = area
-    if floor:
-        target["floor"] = floor
-
+    request = ControlRequest(
+        device_name=device_name,
+        area=area,
+        floor=floor,
+        brightness=brightness,
+        color_temp=color_temp,
+        color=color,
+        temperature=temperature,
+        volume_percent=volume_percent,
+        volume_step=volume_step,
+        search_query=search_query,
+        media_class=media_class,
+        message=message,
+    )
     try:
-        if action == "turn_on":
-            ha_result = await call_tool("HassTurnOn", target)
-        elif action == "turn_off":
-            ha_result = await call_tool("HassTurnOff", target)
-        elif action == "set_light":
-            set_args = dict(target)
-            if brightness is not None:
-                set_args["brightness"] = brightness
-            if color_temp is not None:
-                set_args["temperature"] = color_temp
-            if color is not None:
-                set_args["color"] = color
-            ha_result = await call_tool("HassLightSet", set_args)
-        elif action == "set_temperature":
-            if temperature is None:
-                return {
-                    "status": "error",
-                    "message": "temperature is required for action=set_temperature",
-                }
-            ha_result = await call_tool(
-                "HassClimateSetTemperature", {**target, "temperature": temperature}
-            )
-        elif action in ("increase_temperature", "decrease_temperature"):
-            live_context = await call_tool(
-                "GetLiveContext", {**target, "domain": "climate"}
-            )
-            current_temp = _extract_current_temperature(live_context)
-            if current_temp is None:
-                return {
-                    "status": "error",
-                    "message": f"Could not read current temperature for {device_name or area}",
-                }
-            temperature = current_temp + (
-                _TEMPERATURE_STEP
-                if action == "increase_temperature"
-                else -_TEMPERATURE_STEP
-            )
-            ha_result = await call_tool(
-                "HassClimateSetTemperature", {**target, "temperature": temperature}
-            )
-        elif action == "media_pause":
-            ha_result = await call_tool("HassMediaPause", target)
-        elif action == "media_unpause":
-            ha_result = await call_tool("HassMediaUnpause", target)
-        elif action == "media_next":
-            ha_result = await call_tool("HassMediaNext", target)
-        elif action == "media_previous":
-            ha_result = await call_tool("HassMediaPrevious", target)
-        elif action == "media_set_volume":
-            if volume_percent is None:
-                return {
-                    "status": "error",
-                    "message": "volume_percent is required for action=media_set_volume",
-                }
-            ha_result = await call_tool(
-                "HassSetVolume", {**target, "volume_level": volume_percent}
-            )
-        elif action == "media_volume_step":
-            if not volume_step:
-                return {
-                    "status": "error",
-                    "message": "volume_step is required for action=media_volume_step",
-                }
-            ha_result = await call_tool(
-                "HassSetVolumeRelative", {**target, "volume_step": volume_step}
-            )
-        elif action == "media_mute":
-            ha_result = await call_tool(
-                "HassMediaPlayerMute", {**target, "is_volume_muted": "true"}
-            )
-        elif action == "media_unmute":
-            ha_result = await call_tool(
-                "HassMediaPlayerUnmute", {**target, "is_volume_muted": "false"}
-            )
-        elif action == "media_search_and_play":
-            if not search_query:
-                return {
-                    "status": "error",
-                    "message": "search_query is required for action=media_search_and_play",
-                }
-            ha_result = await _search_and_play(target, search_query, media_class)
-        elif action == "broadcast":
-            if not message:
-                return {
-                    "status": "error",
-                    "message": "message is required for action=broadcast",
-                }
-            ha_result = await call_tool("HassBroadcast", {"message": message})
-        elif action == "cancel_timers":
-            ha_result = await call_tool("HassCancelAllTimers", target)
-        elif action == "activate_scene":
-            if not device_name:
-                return {
-                    "status": "error",
-                    "message": "device_name is required for action=activate_scene",
-                }
-            ha_result = await call_tool("HassTurnOn", target)
-        elif action in ("vacuum_start", "vacuum_return_to_base"):
-            # Vacuums have no area and no TURN_ON feature, so HassTurnOn can't start them. # ARCHIE-244
-            vacuum_args: dict[str, Any] = {"domain": ["vacuum"]}
-            if device_name:
-                vacuum_args["name"] = device_name
-            ha_result = await call_tool(
-                "HassVacuumStart"
-                if action == "vacuum_start"
-                else "HassVacuumReturnToBase",
-                vacuum_args,
-            )
-        elif action == "vacuum_clean_area":
-            if not area:
-                return {
-                    "status": "error",
-                    "message": "area is required for action=vacuum_clean_area",
-                }
-            clean_args: dict[str, Any] = {"area": area}
-            if device_name:
-                clean_args["name"] = device_name
-            ha_result = await call_tool("HassVacuumCleanArea", clean_args)
-        else:
-            return {
-                "status": "error",
-                "message": f"Unknown action: {action}",
-            }
+        ha_result = await _run_action(action, request)
+    except ControlArgumentError as e:
+        return {"status": "error", "message": str(e)}
     except HomeAssistantMCPError as e:
         logger.error(f"smarthome_control_error_001: \033[31m{e}\033[0m")
         return {
             "status": "error",
             "message": f"Home Assistant error: {e}",
         }
+    temperature = request.temperature
 
     logger.info(f"smarthome_control_002: Action \033[36m{action}\033[0m succeeded")
     return {
