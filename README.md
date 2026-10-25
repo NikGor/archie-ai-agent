@@ -170,9 +170,9 @@ make fix                             # ruff --fix, format
 
 ### Prompts and personas
 
-Prompts are YAML specs in `app/agent/prompts/specs/` (`cmd_prompt`, `assistant_prompt`,
+Prompts are YAML specs in `app/prompts/specs/` (`cmd_prompt`, `assistant_prompt`,
 `formats/format_*`, `personas/persona_*`) that list rules from JSON catalogs in
-`app/agent/prompts/rules/`; `prompt_compiler.py` builds them. Swarm prompts are Jinja2
+`app/prompts/rules/`; `prompt_compiler.py` builds them. Swarm prompts are Jinja2
 (`prompts/swarm/`).
 
 To add a persona: add `yourname_*` rules to `rules/personas.json` and a spec
