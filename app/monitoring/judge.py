@@ -17,9 +17,9 @@ from archie_shared.monitoring.models import (
 )
 from pydantic import BaseModel, Field
 from app.agent.prompt_builder import PromptBuilder
-from app.backend.llm.decisions import DecisionsError as JudgeError
-from app.backend.llm.decisions import decide as _decide
 from app.evals.prompt_descriptions import PROMPT_DESCRIPTIONS
+from app.platform.llm.decisions import DecisionsError as JudgeError
+from app.platform.llm.decisions import decide as _decide
 from app.tools.tool_factory import ToolFactory
 from app.utils.skill_utils import list_skills
 from .outcome import GOAL_KEY as OUTCOME_GOAL_KEY
@@ -130,8 +130,7 @@ def _compact(value: object, limit: int = _STRING_LIMITS[0]) -> object:
             if key not in _SKIPPED_KEYS
             # Link fields (open_map_url, ...) drive buttons and are never shown as
             # text; the judge read them as raw URLs in the answer
-            and not key.endswith("url")
-            and item not in (None, "", [], {})
+            and not key.endswith("url") and item not in (None, "", [], {})
         }
     if isinstance(value, list):
         return [_compact(item, limit) for item in value]
