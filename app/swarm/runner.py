@@ -2,7 +2,7 @@
 
 `ask` is a single structured call without tools, used by council steps.
 
-Reuses the main pipeline's low level: LLM clients, parser, ToolFactory and
+Reuses the platform: LLM clients, parser, tool registry and
 execute_tool_calls. Skips the heavy cmd_prompt / create_output stages to keep
 every turn small.
 """
@@ -23,15 +23,16 @@ from ..agent.prompt_builder import PromptBuilder
 from ..agent.prompt_compiler import PromptCompiler
 from ..backend.state_service import StateService
 from ..config import settings
-from ..models.orchestration_sgr import ToolCallRequest
 from ..models.state_models import UserState
-from ..models.tool_models import ToolContext, ToolResult
+from ..platform.tools.models import ToolCall, ToolContext, ToolResult
 from ..platform.llm.catalog import get_provider_for_model
 from ..platform.llm.registry import get_client, parse_llm_response
-from ..tools.tool_factory import ToolFactory
+from ..platform.tools.registry import ToolRegistry
+from ..tools.catalog import tool_registry as default_tool_registry
 from ..utils.general_utils import local_now
 from ..utils.skill_utils import load_skill, load_skill_references
-from ..utils.tool_executor import execute_tool_calls
+from ..platform.tools.executor import execute_tool_calls
+from . import tools as _swarm_tools  # noqa: F401  registers the swarm tool group
 from .agents import SWARM_AGENTS, SWARM_GROUPS, SwarmRoster
 from .memory import DayNote, SwarmMemory
 from .models import (
@@ -97,17 +98,13 @@ def format_day_note(note: DayNote) -> str:
 class SwarmAgentRunner:
     def __init__(
         self,
-        tool_factory: ToolFactory | None = None,
+        tool_registry: ToolRegistry | None = None,
         state_service: StateService | None = None,
         prompt_builder: PromptBuilder | None = None,
         roster: SwarmRoster | None = None,
         memory: SwarmMemory | None = None,
     ) -> None:
-        self.tool_factory = tool_factory or ToolFactory()
-        # Dry run: tools with side effects run in demo mode, reads stay real.
-        # Both factories share one tool registry (filled by get_tool_schemas).
-        self.action_factory = ToolFactory(demo_mode=settings.swarm_dry_run)
-        self.action_factory.tools = self.tool_factory.tools
+        self.tool_registry = tool_registry or default_tool_registry
         self.state_service = state_service or StateService()
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.roster = roster or SwarmRoster()
@@ -122,9 +119,7 @@ class SwarmAgentRunner:
 
     def build_system_prompt(self, profile: SwarmAgentProfile, model: str) -> str:
         """Static, cacheable part: rules, roster, tools and skill of the agent."""
-        tools = self.tool_factory.get_tool_schemas(
-            model, "plain", allowed_tools=set(profile.tools)
-        )
+        tools = self.tool_registry.schemas(model, profile.tools)
         return self.compiler.compile(
             "swarm_base",
             agent=profile,
@@ -423,9 +418,11 @@ class SwarmAgentRunner:
                 )
         reads = [c for c in allowed if is_read_only(c)]
         writes = [c for c in allowed if not is_read_only(c)]
+        # Dry run: calls with side effects run in demo mode, reads stay real
+        write_context = context.model_copy(update={"demo_mode": settings.swarm_dry_run})
         results = await self._run_calls(
-            profile, reads, self.tool_factory, context
-        ) + await self._run_calls(profile, writes, self.action_factory, context)
+            profile, reads, context
+        ) + await self._run_calls(profile, writes, write_context)
         allowed = reads + writes
         for call, result in zip(allowed, results, strict=True):
             if not is_read_only(call):
@@ -436,27 +433,24 @@ class SwarmAgentRunner:
                 )
         return results, actions
 
-    @staticmethod
     async def _run_calls(
+        self,
         profile: SwarmAgentProfile,
         calls: list[SwarmToolCall],
-        factory: ToolFactory,
         context: ToolContext,
     ) -> list[ToolResult]:
         if not calls:
             return []
         return await execute_tool_calls(
             tool_calls=[
-                ToolCallRequest(
+                ToolCall(
                     tool_name=call.tool_name,
                     arguments=call.arguments,
-                    missing_parameters=[],
-                    is_confirmed=True,
                     reason=f"swarm agent {profile.agent_id}",
                 )
                 for call in calls
             ],
-            tool_factory=factory,
+            registry=self.tool_registry,
             context=context,
         )
 
