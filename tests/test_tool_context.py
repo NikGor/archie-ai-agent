@@ -1,6 +1,6 @@
 """The user's timezone reaches the web search (ARCHIE-257).
 
-ToolFactory gives ToolContext fields to the tools that declare them,
+The tool registry gives ToolContext fields to the tools that declare them,
 tool_executor and CommandLoop pass the context, and google_search_tool tells
 Gemini to give times in the user's timezone. The LLM never sees the parameter.
 """
@@ -19,12 +19,12 @@ from app.models.orchestration_sgr import (
     SGROrchestration,
     ToolCallRequest,
 )
-from app.models.tool_models import ToolContext, ToolResult
+from app.platform.tools.models import ToolContext, ToolResult
 from app.models.ws_models import StatusNotifier
 from app.platform.llm.context import ConversationContext
 from app.tools.google_search_tool import build_search_instruction, google_search_tool
-from app.tools.tool_factory import ToolFactory
-from app.utils.tool_executor import execute_tool_calls
+from app.platform.tools.registry import ToolGroup, ToolRegistry
+from app.platform.tools.executor import execute_tool_calls
 from app.utils.tools_utils import openai_parse
 from tests.conftest import make_user_state
 
@@ -40,13 +40,15 @@ async def _tool_without_timezone(query: str) -> dict:
     return {"query": query}
 
 
-def _factory() -> ToolFactory:
-    factory = ToolFactory()
-    factory.tools = {
+def _factory() -> ToolRegistry:
+    registry = ToolRegistry(
+        [ToolGroup(name="test", tools={"google_search_tool": "x", "notes_tool": "y"})]
+    )
+    registry._functions = {
         "google_search_tool": _tool_with_timezone,
         "notes_tool": _tool_without_timezone,
     }
-    return factory
+    return registry
 
 
 def _search_call(query: str) -> ToolCallRequest:
@@ -74,27 +76,27 @@ def _decision(
     )
 
 
-# --- ToolFactory / tool_executor ---
+# --- tool registry / executor ---
 
 
 async def test_execute_tool_gives_context_only_to_tools_that_declare_it():
     factory = _factory()
-    assert await factory.execute_tool("google_search_tool", {"query": "q"}, BERLIN) == {
+    assert await factory.execute("google_search_tool", {"query": "q"}, BERLIN) == {
         "query": "q",
         "user_timezone": "Europe/Berlin",
     }
-    assert await factory.execute_tool("notes_tool", {"query": "q"}, BERLIN) == {
+    assert await factory.execute("notes_tool", {"query": "q"}, BERLIN) == {
         "query": "q"
     }
 
 
 async def test_execute_tool_without_context_keeps_the_tool_default():
-    result = await _factory().execute_tool("google_search_tool", {"query": "q"})
+    result = await _factory().execute("google_search_tool", {"query": "q"})
     assert result["user_timezone"] == "UTC"
 
 
 async def test_context_wins_over_an_argument_from_the_llm():
-    result = await _factory().execute_tool(
+    result = await _factory().execute(
         "google_search_tool", {"query": "q", "user_timezone": "Asia/Tokyo"}, BERLIN
     )
     assert result["user_timezone"] == "Europe/Berlin"
@@ -102,7 +104,9 @@ async def test_context_wins_over_an_argument_from_the_llm():
 
 async def test_execute_tool_calls_passes_context_to_every_call():
     results = await execute_tool_calls(
-        [_search_call("a"), _search_call("b")], _factory(), context=BERLIN
+        [_search_call("a").to_call(), _search_call("b").to_call()],
+        _factory(),
+        context=BERLIN,
     )
     assert [r.output["user_timezone"] for r in results] == ["Europe/Berlin"] * 2
 

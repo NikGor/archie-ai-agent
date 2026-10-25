@@ -27,7 +27,9 @@ from app.swarm.schedule import (
     voice_allowed,
 )
 from app.swarm.ticker import SwarmTicker, select_outputs
-from app.tools.tool_factory import ToolFactory
+import app.swarm.tools  # noqa: F401
+from app.agent.tool_access import chat_tool_names
+from app.tools.catalog import tool_registry
 from tests.conftest import make_user_state
 
 
@@ -107,7 +109,7 @@ def test_due_tasks_skip_quiet_tasks():
 
 
 def test_football_check_uses_skill_teams_by_default():
-    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
     text = runner.render_task("swarm_watch", task="football", teams=[], language="ru")
     assert "from your skill" in text
     text = runner.render_task(
@@ -156,7 +158,7 @@ def test_mail_agent_reads_mail():
 
 @pytest.mark.parametrize("task", ["home", "mail", "calendar", "football"])
 def test_watch_prompt_has_task_section(task):
-    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
     text = runner.render_task("swarm_watch", task=task, teams=["Bayern"], language="ru")
     assert "in this language: ru" in text
     assert "## What to check" in text
@@ -199,7 +201,7 @@ NOTES = [
 async def test_watcher_sees_own_notes_and_others_see_alerts():
     fact = MagicMock(text="Не сообщать про влажность")
     runner = SwarmAgentRunner(
-        tool_factory=ToolFactory(),
+        tool_registry=tool_registry,
         state_service=MagicMock(),
         memory=_memory([fact], NOTES),
     )
@@ -548,7 +550,7 @@ async def test_all_agents_see_today_memory():
     memory = _memory()
     memory.get_today_facts = AsyncMock(return_value=["Сегодня дождь после 19:00"])
     runner = SwarmAgentRunner(
-        tool_factory=ToolFactory(), state_service=MagicMock(), memory=memory
+        tool_registry=tool_registry, state_service=MagicMock(), memory=memory
     )
     lines = await runner.build_memory_lines(make_user_state(), None)
     assert lines == ["Today's memory:", "- Сегодня дождь после 19:00"]
@@ -564,12 +566,9 @@ def test_weather_agent_reads_weather_only():
 
 
 def test_main_chat_does_not_get_the_weather_tool():
-    factory = ToolFactory()
-    names = {t["name"] for t in factory.get_tool_schemas("gpt-5.6-luna", "plain")}
+    names = {t["name"] for t in tool_registry.schemas("gpt-5.6-luna", chat_tool_names("plain"))}
     assert "weather_tool" not in names
-    swarm = factory.get_tool_schemas(
-        "gpt-5.6-luna", "plain", allowed_tools={"weather_tool"}
-    )
+    swarm = tool_registry.schemas("gpt-5.6-luna", ["weather_tool"])
     assert [t["name"] for t in swarm] == ["weather_tool"]
 
 

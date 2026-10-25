@@ -10,11 +10,12 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
 import pytest
-from app.models.tool_models import ToolResult
+from app.platform.tools.models import ToolResult
 from app.swarm.agents import SWARM_AGENTS
 from app.swarm.memory import DayNote
 from app.swarm.runner import SwarmAgentRunner
-from app.tools.tool_factory import ToolFactory
+import app.swarm.tools  # noqa: F401
+from app.tools.catalog import tool_registry
 from tests.conftest import make_user_state
 
 
@@ -103,7 +104,7 @@ def _runner(scenario: dict) -> SwarmAgentRunner:
         get_model=AsyncMock(side_effect=lambda profile: profile.default_model),
     )
     runner = SwarmAgentRunner(
-        tool_factory=ToolFactory(),
+        tool_registry=tool_registry,
         state_service=state_service,
         roster=roster,
         memory=memory,

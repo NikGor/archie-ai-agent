@@ -15,7 +15,7 @@ from archie_shared.swarm.models import (
 )
 from app.config import settings
 from app.models.orchestration_sgr import Parameter
-from app.models.tool_models import ToolContext, ToolResult
+from app.platform.tools.models import ToolContext, ToolResult
 from app.swarm.agents import SWARM_AGENTS, SwarmRoster
 from app.swarm.bus import SwarmBus, SwarmHub, clip_text, parse_mentions
 from app.swarm.council import CouncilPlan, SwarmCouncil
@@ -32,7 +32,9 @@ from app.swarm.models import (
 )
 from app.swarm.policy import READ_ONLY_TOOLS, check_tool_call
 from app.swarm.runner import SwarmAgentRunner, SwarmDraft, format_chat_line
-from app.tools.tool_factory import ToolFactory
+import app.swarm.tools  # noqa: F401
+from app.agent.tool_access import chat_tool_names
+from app.tools.catalog import tool_registry
 from tests.conftest import make_user_state
 
 
@@ -677,7 +679,7 @@ async def test_roster_stores_only_a_known_non_default_model():
 
 
 def test_marcus_prompt_has_germany_rules_and_persona():
-    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
     prompt = runner.build_system_prompt(SWARM_AGENTS["marcus"], "gpt-5.4-nano")
     assert "## Your job: Germany" in prompt
     assert "# Persona: Marcus" in prompt
@@ -703,7 +705,7 @@ def _runner() -> SwarmAgentRunner:
         get_model=AsyncMock(side_effect=lambda profile: profile.default_model),
     )
     runner = SwarmAgentRunner(
-        tool_factory=ToolFactory(),
+        tool_registry=tool_registry,
         state_service=state_service,
         roster=roster,
         memory=_memory(),
@@ -778,7 +780,7 @@ async def test_runner_stays_silent_on_empty_reply():
 
 
 def test_system_prompt_lists_only_profile_tools():
-    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
     prompt = runner.build_system_prompt(SWARM_AGENTS["football"], "gpt-5.4-nano")
     assert "google_search_tool" in prompt
     assert "smarthome_control_tool" not in prompt
@@ -788,21 +790,19 @@ def test_system_prompt_lists_only_profile_tools():
 
 @pytest.mark.parametrize("agent_id", list(SWARM_AGENTS))
 def test_every_profile_tool_is_configured(agent_id):
-    schemas = ToolFactory().get_tool_schemas(
-        "gpt-5.4-nano", "plain", allowed_tools=set(SWARM_AGENTS[agent_id].tools)
-    )
+    schemas = tool_registry.schemas("gpt-5.4-nano", SWARM_AGENTS[agent_id].tools)
     assert {s["name"] for s in schemas} == set(SWARM_AGENTS[agent_id].tools)
 
 
 def test_system_prompt_preloads_skill_references():
-    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
     prompt = runner.build_system_prompt(SWARM_AGENTS["light"], "gpt-5.4-nano")
     assert "## Reference: apartment_map" in prompt
     assert "Гостиная" in prompt
 
 
 def test_council_prompt_has_persona_and_group_rules():
-    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
     prompt = runner.build_system_prompt(SWARM_AGENTS["bro"], "gpt-5.4-nano")
     assert "council member" in prompt
     assert "# Persona: Bro" in prompt
@@ -810,7 +810,7 @@ def test_council_prompt_has_persona_and_group_rules():
 
 
 def test_voice_prompt_has_job_rules_and_may_announce():
-    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
     prompt = runner.build_system_prompt(SWARM_AGENTS["voice"], "gpt-5.4-nano")
     assert "voice announcements" in prompt
     assert "announce_tool" in prompt
@@ -820,7 +820,7 @@ def test_voice_prompt_has_job_rules_and_may_announce():
 
 
 def test_display_prompt_has_job_rules_and_may_only_notify():
-    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
     prompt = runner.build_system_prompt(SWARM_AGENTS["display"], "gpt-5.4-nano")
     assert "LED display" in prompt
     assert "awtrix_tool" in prompt
@@ -971,24 +971,23 @@ def test_blocked_call_explains_allowed_arguments():
 
 def test_light_prompt_reads_state_before_relative_change():
     runner = SwarmAgentRunner(
-        tool_factory=ToolFactory(), state_service=MagicMock(), roster=MagicMock()
+        tool_registry=tool_registry, state_service=MagicMock(), roster=MagicMock()
     )
     prompt = runner.build_system_prompt(SWARM_AGENTS["light"], "gpt-5.4-nano")
     assert "first read the current state" in prompt
 
 
 async def test_dry_run_simulates_actions_but_reads_real_state():
-    with patch("app.swarm.runner.settings.swarm_dry_run", True):
-        runner = _runner()
-    assert runner.action_factory.demo_mode is True
-    assert runner.tool_factory.demo_mode is False
-    assert runner.action_factory.tools is runner.tool_factory.tools
+    runner = _runner()
     executed = AsyncMock(
         side_effect=lambda tool_calls, **_: [
             ToolResult(tool_name=c.tool_name, output={}) for c in tool_calls
         ]
     )
-    with patch("app.swarm.runner.execute_tool_calls", executed):
+    with (
+        patch("app.swarm.runner.settings.swarm_dry_run", True),
+        patch("app.swarm.runner.execute_tool_calls", executed),
+    ):
         await runner._execute(
             SWARM_AGENTS["light"],
             [
@@ -1001,12 +1000,13 @@ async def test_dry_run_simulates_actions_but_reads_real_state():
     assert {c.kwargs["context"].user_timezone for c in executed.await_args_list} == {
         "Europe/Berlin"
     }
-    factories = {
-        c.kwargs["tool_calls"][0].tool_name: c.kwargs["tool_factory"]
+    # Dry run (ARCHIE-292): the action runs in demo mode, the read stays real
+    demo = {
+        c.kwargs["tool_calls"][0].tool_name: c.kwargs["context"].demo_mode
         for c in executed.await_args_list
     }
-    assert factories["smarthome_status_tool"] is runner.tool_factory
-    assert factories["smarthome_control_tool"] is runner.action_factory
+    assert demo == {"smarthome_status_tool": False, "smarthome_control_tool": True}
+    assert all(c.kwargs["registry"] is tool_registry for c in executed.await_args_list)
 
 
 def test_search_agent_can_be_delegated_and_only_reads():
@@ -1014,7 +1014,7 @@ def test_search_agent_can_be_delegated_and_only_reads():
     assert profile.role == "state" and not profile.groups
     assert all(tool in READ_ONLY_TOOLS for tool in profile.tools)
     runner = SwarmAgentRunner(
-        tool_factory=ToolFactory(), state_service=MagicMock(), roster=MagicMock()
+        tool_registry=tool_registry, state_service=MagicMock(), roster=MagicMock()
     )
     council_prompt = runner.build_system_prompt(SWARM_AGENTS["bro"], "gpt-5.4-mini")
     assert "@search" in council_prompt
@@ -1209,7 +1209,7 @@ def test_chat_agent_may_open_a_chat_but_not_control_devices():
 
 
 async def test_alert_chat_tool_creates_the_chat_in_django(monkeypatch):
-    from app.tools import alert_chat_tool as module
+    from app.swarm.tools import alert_chat_tool as module
 
     client = AsyncMock()
     client.__aenter__.return_value = client
@@ -1237,7 +1237,7 @@ async def test_alert_chat_tool_creates_the_chat_in_django(monkeypatch):
 
 
 def test_main_chat_does_not_get_the_alert_chat_tool():
-    names = [t["name"] for t in ToolFactory().get_tool_schemas("gpt-5.6-luna", "plain")]
+    names = [t["name"] for t in tool_registry.schemas("gpt-5.6-luna", chat_tool_names("plain"))]
     assert "alert_chat_tool" not in names
 
 
@@ -1268,7 +1268,7 @@ def test_cron_agent_plans_only_swarm_alerts():
 
 
 async def test_swarm_alert_tool_posts_an_alert_of_cron(monkeypatch):
-    from app.tools import swarm_alert_tool as module
+    from app.swarm.tools import swarm_alert_tool as module
 
     service = MagicMock()
     service.memory.get_mode = AsyncMock(return_value="paused")
