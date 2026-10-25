@@ -7,7 +7,6 @@ from typing import Any
 from archie_shared.chat.models import ReasoningEffort
 from ... import config
 from ...agent.prompt_builder import PromptBuilder
-from ...backend.llm.registry import get_client
 from ...models.output_models import (
     AgentResponse,
     Level2Response,
@@ -16,8 +15,9 @@ from ...models.output_models import (
 )
 from ...models.tool_models import ToolResult
 from ...models.ws_models import StreamCallback, StreamEventCallback
-from ...utils.llm_parser import parse_assembled_stream, parse_llm_response
-from ...utils.provider_utils import get_provider_for_model
+from ...platform.llm.catalog import get_provider_for_model
+from ...platform.llm.registry import get_client, parse_llm_response
+from ...utils.llm_parser import parse_assembled_stream
 from ...utils.schema_filter import build_filtered_ui_response
 from ...utils.stream_utils import JsonPathExtractor
 from .postprocess import build_agent_response

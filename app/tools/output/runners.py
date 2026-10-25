@@ -4,7 +4,7 @@ import time
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 from archie_shared.chat.models import ReasoningEffort
-from ...backend.llm.base import LLMClient
+from ...platform.llm.base import LLMClient
 from ...utils.stream_utils import JsonPathExtractor
 
 
