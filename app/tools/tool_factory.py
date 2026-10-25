@@ -7,8 +7,8 @@ from collections.abc import Callable
 from typing import Any
 from ..config import SWARM_ONLY_TOOL_GROUPS, TOOLS_CONFIG
 from ..models.tool_models import ToolContext
-from ..utils.provider_utils import get_provider_for_model
-from ..utils.tools_utils import openai_parse, oss_parse
+from ..platform.llm.catalog import get_provider_for_model
+from ..platform.llm.registry import get_provider
 
 
 logger = logging.getLogger(__name__)
@@ -108,19 +108,11 @@ class ToolFactory:
                     # registration is enough, not two.
                     self.tools[tool_name] = func
 
-        # Determine provider based on model
-        provider = get_provider_for_model(model)
-
-        # Choose parser based on provider
-        if provider == "openai":
-            parser = openai_parse
-            parser_name = "OpenAI"
-        else:
-            parser = oss_parse
-            parser_name = "OSS"
-
+        # The provider adapter builds the schema in its own format (ARCHIE-303)
+        provider = get_provider(get_provider_for_model(model))
+        parser = provider.tool_schema
         logger.info(
-            f"tool_factory_006: Using \033[36m{parser_name}\033[0m parser for \033[33m{len(tool_functions)}\033[0m tools"
+            f"tool_factory_006: Using \033[36m{provider.name}\033[0m schema for \033[33m{len(tool_functions)}\033[0m tools"
         )
 
         # Parse all functions into schemas
