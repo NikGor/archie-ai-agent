@@ -1,24 +1,24 @@
 """Stage 1 (command decision) + Stage 2 (tool execution) iteration loop.
 
-Extracted from AgentFactory.arun()'s while-loop body so the orchestrator
+Extracted from ChatPipeline.arun()'s while-loop body so the orchestrator
 stays a thin readable entry point. `make_command_call` is injected rather
-than owned here so AgentFactory._make_command_call (and the tests that
+than owned here so ChatPipeline._make_command_call (and the tests that
 patch it) keep working unchanged.
 """
 
 import logging
 from collections.abc import Awaitable, Callable
 from archie_shared.chat.models import ImageAttachment, LllmTrace, ReasoningEffort
-from ..models.orchestration_sgr import DecisionResponse
-from ..models.state_models import UserState
-from ..platform.tools.models import ToolContext, ToolResult
-from ..models.ws_models import StatusCallback, StatusNotifier
-from ..platform.llm.context import ConversationContext
-from ..platform.tools.registry import ToolRegistry
-from .tool_access import chat_tool_names
-from ..platform.tools.executor import execute_tool_calls
-from ..utils.trace_utils import StepTimer
-from .pipeline_metrics import PipelineMetrics
+from app.agents.chat.metrics import PipelineMetrics
+from app.agents.chat.tool_access import chat_tool_names
+from app.models.orchestration_sgr import DecisionResponse
+from app.models.state_models import UserState
+from app.models.ws_models import StatusCallback, StatusNotifier
+from app.platform.llm.context import ConversationContext
+from app.platform.tools.executor import execute_tool_calls
+from app.platform.tools.models import ToolContext, ToolResult
+from app.platform.tools.registry import ToolRegistry
+from app.utils.trace_utils import StepTimer
 
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ class CommandLoop:
         while iteration < self.max_iterations:
             iteration += 1
             logger.info(
-                f"agent_factory_003a: Command iteration \033[33m{iteration}\033[0m"
+                f"chat_pipeline_003a: Command iteration \033[33m{iteration}\033[0m"
             )
             await notifier.emit(
                 "command",
@@ -140,10 +140,10 @@ class CommandLoop:
                 detail=detail_msg,
             )
             logger.info(
-                f"agent_factory_004: Action type: \033[36m{decision.sgr.action.type}\033[0m"
+                f"chat_pipeline_004: Action type: \033[36m{decision.sgr.action.type}\033[0m"
             )
             logger.info(
-                f"agent_factory_004a: SGR reasoning: \033[33m{decision.sgr.reasoning}\033[0m"
+                f"chat_pipeline_004a: SGR reasoning: \033[33m{decision.sgr.reasoning}\033[0m"
             )
             command_history.append(
                 {
@@ -154,16 +154,16 @@ class CommandLoop:
             )
             if decision.sgr.action.type != "function_call":
                 logger.info(
-                    f"agent_factory_005a: Exiting command loop - action type: \033[36m{decision.sgr.action.type}\033[0m"
+                    f"chat_pipeline_005a: Exiting command loop - action type: \033[36m{decision.sgr.action.type}\033[0m"
                 )
                 break
             if decision.sgr.tool_calls:
                 for tc in decision.sgr.tool_calls:
                     logger.info(
-                        f"agent_factory_006_reason: Tool \033[36m{tc.tool_name}\033[0m - reason: \033[33m{tc.reason}\033[0m"
+                        f"chat_pipeline_006_reason: Tool \033[36m{tc.tool_name}\033[0m - reason: \033[33m{tc.reason}\033[0m"
                     )
                 logger.info(
-                    f"agent_factory_006: Executing \033[33m{len(decision.sgr.tool_calls)}\033[0m tools"
+                    f"chat_pipeline_006: Executing \033[33m{len(decision.sgr.tool_calls)}\033[0m tools"
                 )
 
                 # STAGE 2: Tool execution
@@ -181,7 +181,7 @@ class CommandLoop:
                 self.metrics.add_stage2(s2_timer.duration_ms)
                 tool_results.extend(new_results)
                 logger.info(
-                    f"agent_factory_006a: Total tool results: \033[33m{len(tool_results)}\033[0m"
+                    f"chat_pipeline_006a: Total tool results: \033[33m{len(tool_results)}\033[0m"
                 )
             else:
                 logger.warning(
