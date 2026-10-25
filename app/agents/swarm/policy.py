@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 READ_ONLY_TOOLS: frozenset[str] = frozenset(
     {
         "smarthome_status_tool",
+        "spawn_agent_tool",
         "google_search_tool",
         "google_places_search_tool",
         "document_search_tool",
