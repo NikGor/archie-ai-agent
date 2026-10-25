@@ -5,6 +5,9 @@ template hash or the rendered prompt. Key: template file stem.
 """
 
 PROMPT_DESCRIPTIONS: dict[str, str] = {
+    "ephemeral_base": "Одноразовый исполнитель: только чтение, факты и предложение следующего шага",
+    "ephemeral_ha_diagnosis": "Диагностика HA по текущему состоянию с явными пробелами в данных",
+    "swarm_agent_home": "Наблюдатель дома: делегирует read-only диагностику при сбое HA",
     "response_format_router": "Auto: JEV выбирает формат после оркестрации и сбора данных",
     "response_format_plain": "Auto: критерии выбора простого текста",
     "response_format_level2_answer": "Auto: критерии выбора форматированного текста",
