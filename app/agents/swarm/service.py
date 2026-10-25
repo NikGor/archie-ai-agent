@@ -1,5 +1,6 @@
 """Wires the swarm components together; started from the FastAPI lifespan."""
 
+from typing import TYPE_CHECKING
 from app.agents.swarm.agents import SwarmRoster
 from app.agents.swarm.bus import SwarmBus, SwarmHub
 from app.agents.swarm.council import SwarmCouncil
@@ -8,6 +9,10 @@ from app.agents.swarm.journal import SwarmJournal
 from app.agents.swarm.memory import SwarmMemory
 from app.agents.swarm.runner import SwarmAgentRunner
 from app.agents.swarm.ticker import SwarmTicker
+
+
+if TYPE_CHECKING:
+    from app.agents.swarm.bridge import SwarmHubBridge
 
 
 class SwarmService:
@@ -38,6 +43,8 @@ class SwarmService:
             dispatcher=self.dispatcher,
         )
         council.on_memory_change = self.ticker.publish_control
+        # Set by the composition root in RUNTIME_MODE api / runtime (ARCHIE-299)
+        self.bridge: "SwarmHubBridge | None" = None
 
     async def start(self) -> None:
         # The journal subscribes first, so it sees every message
