@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator
 from typing import Any, Protocol
+from archie_shared.chat.models import ReasoningEffort
 from pydantic import BaseModel
 
 
@@ -22,6 +23,7 @@ class LLMClient(Protocol):
         previous_response_id: str | None = None,
         tools: Any = None,
         observation_name: str = "llm-call",
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> Any: ...
 
     def create_completion_stream(
@@ -34,4 +36,5 @@ class LLMClient(Protocol):
         max_output_tokens: int | None = None,
         usage_out: dict[str, int] | None = None,
         observation_name: str = "llm-call",
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> AsyncIterator[str]: ...
