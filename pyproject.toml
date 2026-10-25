@@ -36,6 +36,7 @@ pytest = "^9.0.1"
 pytest-asyncio = "^1.3.0"
 tiktoken = "^0.12.0"
 types-pyyaml = "^6.0.12.20260906"
+import-linter = "^2.15"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -130,3 +131,33 @@ lines-after-imports = 2
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+# Import contracts of the platform refactoring (ARCHIE-290). Known violations are
+# listed in ignore_imports with the ticket that removes them; run `lint-imports`.
+[tool.importlinter]
+root_package = "app"
+include_external_packages = false
+
+[[tool.importlinter.contracts]]
+name = "Low layers do not import agents, quality or API"
+type = "forbidden"
+source_modules = ["app.backend", "app.utils", "app.models", "app.tools"]
+forbidden_modules = ["app.agent", "app.swarm", "app.monitoring", "app.evals", "app.api_controller", "app.endpoints"]
+ignore_imports = [
+    "app.tools.agent_task_tool -> app.api_controller",  # ARCHIE-293: chat tool moves to agents/chat
+    "app.tools.output.create_output -> app.agent.prompt_builder",  # ARCHIE-293: Stage 3 moves to agents/chat
+    "app.tools.alert_chat_tool -> app.swarm.agents",  # ARCHIE-292: swarm-only tools register from the swarm
+    "app.tools.swarm_alert_tool -> app.swarm.service",  # ARCHIE-292
+    "app.utils.tracing -> app.monitoring.spec_rules",  # ARCHIE-296: spec_versions moves to platform/prompts
+]
+
+[[tool.importlinter.contracts]]
+name = "Swarm does not import the chat pipeline"
+type = "forbidden"
+source_modules = ["app.swarm"]
+forbidden_modules = ["app.agent", "app.api_controller", "app.endpoints"]
+ignore_imports = [
+    "app.swarm.runner -> app.agent.prompt_builder",  # ARCHIE-295: datetime note from platform/prompts
+    "app.swarm.runner -> app.agent.prompt_compiler",  # ARCHIE-293: compiler moves to platform/prompts
+    "app.utils.tracing -> app.monitoring.spec_rules",  # ARCHIE-296
+]
