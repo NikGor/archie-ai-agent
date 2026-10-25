@@ -11,11 +11,11 @@ from collections.abc import Awaitable, Callable
 from archie_shared.chat.models import ImageAttachment, LllmTrace, ReasoningEffort
 from ..models.orchestration_sgr import DecisionResponse
 from ..models.state_models import UserState
-from ..models.tool_models import ToolContext, ToolResult
+from ..platform.tools.models import ToolContext, ToolResult
 from ..models.ws_models import StatusCallback, StatusNotifier
 from ..platform.llm.context import ConversationContext
-from ..tools.tool_factory import ToolFactory
-from ..utils.tool_executor import execute_tool_calls
+from ..platform.tools.registry import ToolRegistry
+from ..platform.tools.executor import execute_tool_calls
 from ..utils.trace_utils import StepTimer
 from .pipeline_metrics import PipelineMetrics
 
@@ -55,9 +55,14 @@ class CommandLoop:
     action or max_iterations is reached."""
 
     def __init__(
-        self, tool_factory: ToolFactory, metrics: PipelineMetrics, max_iterations: int
+        self,
+        tool_registry: ToolRegistry,
+        metrics: PipelineMetrics,
+        max_iterations: int,
+        demo_mode: bool = False,
     ):
-        self.tool_factory = tool_factory
+        self.tool_registry = tool_registry
+        self.demo_mode = demo_mode
         self.metrics = metrics
         self.max_iterations = max_iterations
 
@@ -163,10 +168,13 @@ class CommandLoop:
                 # STAGE 2: Tool execution
                 with StepTimer() as s2_timer:
                     new_results = await execute_tool_calls(
-                        tool_calls=decision.sgr.tool_calls,
-                        tool_factory=self.tool_factory,
+                        tool_calls=[tc.to_call() for tc in decision.sgr.tool_calls],
+                        registry=self.tool_registry,
                         on_status=on_status,
-                        context=ToolContext(user_timezone=user_state.user_timezone),
+                        context=ToolContext(
+                            user_timezone=user_state.user_timezone,
+                            demo_mode=self.demo_mode,
+                        ),
                     )
                 self.metrics.add_stage2(s2_timer.duration_ms)
                 tool_results.extend(new_results)
