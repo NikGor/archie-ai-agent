@@ -9,7 +9,6 @@ every turn small.
 
 import json
 import logging
-from datetime import timedelta
 from typing import Any
 from archie_shared.chat.models import LllmTrace
 from archie_shared.swarm.models import (
@@ -19,23 +18,13 @@ from archie_shared.swarm.models import (
     SwarmWatchTask,
 )
 from pydantic import BaseModel, Field
-from app.platform.prompts.compiler import PromptCompiler
-from ..backend.state_service import StateService
-from ..config import settings
-from ..models.state_models import UserState
-from ..platform.llm.catalog import get_provider_for_model
-from ..platform.llm.registry import get_client, parse_llm_response
-from ..platform.prompts.context import datetime_note
-from ..platform.tools.executor import execute_tool_calls
-from ..platform.tools.models import ToolCall, ToolContext, ToolResult
-from ..platform.tools.registry import ToolRegistry
-from ..tools.catalog import tool_registry as default_tool_registry
-from ..utils.general_utils import local_now
-from ..utils.skill_utils import load_skill, load_skill_references
-from . import tools as _swarm_tools  # noqa: F401  registers the swarm tool group
-from .agents import SWARM_AGENTS, SWARM_GROUPS, SwarmRoster
-from .memory import DayNote, SwarmMemory
-from .models import (
+from app.agents.swarm import (
+    tools as _swarm_tools,  # noqa: F401  registers the swarm tool group
+)
+from app.agents.swarm.agents import SwarmRoster
+from app.agents.swarm.memory import SwarmMemory
+from app.agents.swarm.messages import SwarmPromptBuilder, format_chat_line
+from app.agents.swarm.models import (
     SwarmAgentProfile,
     SwarmReply,
     SwarmToolCall,
@@ -43,16 +32,19 @@ from .models import (
     SwarmWatchReply,
     SwarmWatchTurn,
 )
-from .policy import block_reason, check_tool_call, is_read_only
+from app.agents.swarm.policy import block_reason, check_tool_call, is_read_only
+from app.backend.state_service import StateService
+from app.config import settings
+from app.models.state_models import UserState
+from app.platform.llm.catalog import get_provider_for_model
+from app.platform.llm.registry import get_client, parse_llm_response
+from app.platform.tools.executor import execute_tool_calls
+from app.platform.tools.models import ToolCall, ToolContext, ToolResult
+from app.platform.tools.registry import ToolRegistry
+from app.tools.catalog import tool_registry as default_tool_registry
 
 
 logger = logging.getLogger(__name__)
-
-# Before this hour, "today" in the user's words means the evening that just ended.
-LATE_NIGHT_END_HOUR = 5
-
-# Day memory lines in a prompt: notes of the own check, or alerts of all checks.
-DAY_NOTES_IN_PROMPT = 10
 
 FINAL_REPLY_TASK = (
     "Write your chat reply now. You must reply: say what you did, "
@@ -62,16 +54,6 @@ WATCH_FINAL_TASK = (
     "Write the outcome of the check now. Write an alert only if something is "
     "new for the user. Else leave the reply empty."
 )
-
-
-def format_chat_line(message: SwarmMessage) -> str:
-    sender = "user" if message.sender == "user" else f"@{message.sender}"
-    reply = f" (reply to [{message.reply_to}])" if message.reply_to else ""
-    # Alerts address agents without "@" in the text (ARCHIE-238).
-    hidden = [m for m in message.mentions if f"@{m}" not in message.text]
-    to = f" (to {', '.join(f'@{m}' for m in hidden)})" if hidden else ""
-    tag = f" [{message.importance} alert]" if message.importance else ""
-    return f"[{message.message_id}] {sender}{reply}{to}{tag}: {message.text}"
 
 
 class SwarmDraft(BaseModel):
@@ -89,12 +71,6 @@ class SwarmWatchDraft(BaseModel):
     usage: SwarmUsage = Field(description="Summed LLM usage of the check")
 
 
-def format_day_note(note: DayNote) -> str:
-    if note.reported:
-        return f"{note.time} {note.task}, reported: {note.reported}"
-    return f"{note.time} {note.task}: {note.note}"
-
-
 class SwarmAgentRunner:
     def __init__(
         self,
@@ -104,129 +80,15 @@ class SwarmAgentRunner:
         memory: SwarmMemory | None = None,
     ) -> None:
         self.tool_registry = tool_registry or default_tool_registry
-        # Current date/time line of the prompt; tests replace it to fix the clock
-        self.datetime_note = datetime_note
         self.state_service = state_service or StateService()
         self.roster = roster or SwarmRoster()
         self.memory = memory or SwarmMemory()
-        # Swarm prompts are rule specs (specs/swarm, rules/swarm.json; ARCHIE-285)
-        self.compiler = PromptCompiler()
+        self.prompts = SwarmPromptBuilder(self.tool_registry, self.memory)
 
     async def get_user_state(self) -> UserState:
         """State of the swarm owner; settings.swarm_user_name wins if set."""
         user_name = settings.swarm_user_name or await self.roster.get_owner()
         return await self.state_service.get_user_state(user_name=user_name)
-
-    def build_system_prompt(self, profile: SwarmAgentProfile, model: str) -> str:
-        """Static, cacheable part: rules, roster, tools and skill of the agent."""
-        tools = self.tool_registry.schemas(model, profile.tools)
-        return self.compiler.compile(
-            "swarm_base",
-            agent=profile,
-            agents=list(SWARM_AGENTS.values()),
-            groups=SWARM_GROUPS,
-            tools=[
-                {
-                    "name": tool["name"],
-                    "description": tool.get("description", ""),
-                    "parameters": json.dumps(
-                        tool.get("parameters", {}), ensure_ascii=False
-                    ),
-                }
-                for tool in tools
-            ],
-            skill=load_skill(profile.skill) if profile.skill else None,
-            references={
-                name: body
-                for skill_name, reference_names in profile.references.items()
-                for name, body in load_skill_references(
-                    skill_name, reference_names
-                ).items()
-            },
-        )
-
-    def build_context(
-        self,
-        state: UserState,
-        history: list[SwarmMessage],
-        trigger_id: str | None,
-        memory_lines: list[str],
-    ) -> str:
-        """Volatile tail: time, compact user context, memory and recent chat lines."""
-        state_dict = state.model_dump()
-        now = local_now(state.user_timezone)
-        late_night = (
-            [
-                'It is after midnight: "today" or "tonight" in the user\'s words '
-                f"usually means {(now - timedelta(days=1)):%d.%m.%Y}, "
-                f'"tomorrow" means {now:%d.%m.%Y}.'
-            ]
-            if now.hour < LATE_NIGHT_END_HOUR
-            else []
-        )
-        lines = [
-            self.datetime_note(state_dict),
-            *late_night,
-            f"User city: {state.default_city}, user language: {state.language}",
-            *memory_lines,
-            "Recent chat:",
-            *(format_chat_line(m) for m in history if m.message_id != trigger_id),
-        ]
-        return "\n".join(lines)
-
-    async def build_memory_lines(
-        self, state: UserState, watch_task: SwarmWatchTask | None
-    ) -> list[str]:
-        """Long-term facts, then today's notes: a check sees its own notes,
-        every other agent sees today's alerts (ARCHIE-238)."""
-        facts = await self.memory.list_facts()
-        today = local_now(state.user_timezone).date()
-        today_facts = await self.memory.get_today_facts(today)
-        notes = await self.memory.get_day_notes(today)
-        if watch_task:
-            notes = [n for n in notes if n.task == watch_task]
-        else:
-            notes = [n for n in notes if n.reported]
-        lines: list[str] = []
-        if facts:
-            lines += ["Long-term memory:", *(f"- {f.text}" for f in facts)]
-        if today_facts:
-            lines += ["Today's memory:", *(f"- {fact}" for fact in today_facts)]
-        if notes:
-            title = "Your notes today:" if watch_task else "Alerts today:"
-            lines += [
-                title,
-                *(f"- {format_day_note(n)}" for n in notes[-DAY_NOTES_IN_PROMPT:]),
-            ]
-        return lines
-
-    async def build_messages(
-        self,
-        state: UserState,
-        profile: SwarmAgentProfile,
-        model: str,
-        trigger_id: str | None,
-        history: list[SwarmMessage],
-        task: str,
-        watch_task: SwarmWatchTask | None = None,
-    ) -> list[dict[str, Any]]:
-        memory_lines = await self.build_memory_lines(state, watch_task)
-        return [
-            {
-                "role": "system",
-                "content": self.build_system_prompt(profile, model),
-                "cacheable": True,
-            },
-            {
-                "role": "system",
-                "content": self.build_context(state, history, trigger_id, memory_lines),
-            },
-            {"role": "user", "content": task},
-        ]
-
-    def render_task(self, spec: str, **context: Any) -> str:
-        """Task prompt of a turn from a swarm spec (swarm_watch, swarm_consul, ...)."""
-        return self.compiler.compile(spec, **context)
 
     async def ask(
         self,
@@ -239,7 +101,7 @@ class SwarmAgentRunner:
         """One structured call without tools, for council steps."""
         model = await self.roster.get_model(profile)
         provider = get_provider_for_model(model)
-        messages = await self.build_messages(
+        messages = await self.prompts.build_messages(
             await self.get_user_state(),
             profile,
             model,
@@ -261,7 +123,7 @@ class SwarmAgentRunner:
     ) -> SwarmDraft | None:
         model = await self.roster.get_model(profile)
         state = await self.get_user_state()
-        messages = await self.build_messages(
+        messages = await self.prompts.build_messages(
             state,
             profile,
             model,
@@ -300,7 +162,7 @@ class SwarmAgentRunner:
         return an alert or an empty reply (ARCHIE-238)."""
         model = await self.roster.get_model(profile)
         state = await self.get_user_state()
-        messages = await self.build_messages(
+        messages = await self.prompts.build_messages(
             state, profile, model, None, history, task, watch_task
         )
         turn, _, traces = await self._loop(
