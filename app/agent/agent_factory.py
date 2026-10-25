@@ -1,6 +1,6 @@
 import logging
 import time
-from archie_shared.chat.models import ImageAttachment, LllmTrace
+from archie_shared.chat.models import ImageAttachment, LllmTrace, ReasoningEffort
 from ..backend.llm.registry import get_client
 from ..backend.state_service import StateService
 from ..backend.tool_result_store import ToolResultStore
@@ -58,6 +58,7 @@ class AgentFactory:
         ctx: ConversationContext,
         previous_results: list[ToolResult] | None = None,
         images: list[ImageAttachment] | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> tuple[DecisionResponse, LllmTrace | None]:
         """
         Stage 1: Analyze request and decide action using cmd_prompt.
@@ -86,6 +87,7 @@ class AgentFactory:
             response_format=DecisionResponse,
             previous_response_id=ctx.previous_response_id,
             observation_name=COMMAND_TRACE_NAME,
+            reasoning_effort=reasoning_effort,
         )
         parsed = parse_llm_response(
             raw_response=raw_response,
@@ -109,6 +111,7 @@ class AgentFactory:
         no_image: bool = False,
         on_stream: StreamCallback = None,
         on_stream_event: StreamEventCallback = None,
+        final_output_effort: ReasoningEffort | None = None,
     ) -> AgentResponse:
         """Dashboard/Widget flow: skip command loop, go directly to Stage 3.
 
@@ -130,6 +133,7 @@ class AgentFactory:
                 no_image=no_image,
                 on_stream=on_stream,
                 on_stream_event=on_stream_event,
+                reasoning_effort=final_output_effort,
             )
         total_ms = int((time.monotonic() - arun_start) * 1000)
         final_response.pipeline_trace = PipelineMetrics().build_trace(
@@ -151,6 +155,8 @@ class AgentFactory:
         messages: list[dict[str, str]],
         command_model: str = DEFAULT_MODEL,
         final_output_model: str = DEFAULT_MODEL,
+        command_effort: ReasoningEffort | None = None,
+        final_output_effort: ReasoningEffort | None = None,
         response_format: str = "plain",
         previous_response_id: str | None = None,
         chat_history: str | None = None,
@@ -179,7 +185,8 @@ class AgentFactory:
         )
         logger.info(
             f"agent_factory_001b: Command: \033[34m{cmd_provider}\033[0m/\033[36m{command_model}\033[0m | "
-            f"Output: \033[34m{output_provider}\033[0m/\033[36m{final_output_model}\033[0m"
+            f"Output: \033[34m{output_provider}\033[0m/\033[36m{final_output_model}\033[0m | "
+            f"Effort: \033[35m{command_effort or 'default'}/{final_output_effort or 'default'}\033[0m"
         )
         if user_name:
             logger.info(
@@ -211,6 +218,7 @@ class AgentFactory:
                 no_image=no_image,
                 on_stream=on_stream,
                 on_stream_event=on_stream_event,
+                final_output_effort=final_output_effort,
             )
 
         # Seed with results persisted from earlier requests in this conversation
@@ -236,6 +244,7 @@ class AgentFactory:
             images=images,
             notifier=notifier,
             on_status=on_status,
+            reasoning_effort=command_effort,
         )
         await self.tool_result_store.save(
             conversation_id, user_name, loop_result.tool_results
@@ -286,6 +295,7 @@ class AgentFactory:
                 no_image=no_image,
                 on_stream=on_stream,
                 on_stream_event=on_stream_event,
+                reasoning_effort=final_output_effort,
             )
         final_response.response_format = response_format
         await notifier.emit(
