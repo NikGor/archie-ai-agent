@@ -136,22 +136,3 @@ class WidgetResponse(BaseModel):
 
     sgr: SGROutput = Field(description="Output reasoning trace")
     widget: WidgetType = Field(description="Standalone widget content")
-
-
-# Mapping from response_format to LLM response model
-FORMAT_TO_MODEL: dict[str, type[BaseModel]] = {
-    "plain": PlainResponse,
-    "voice": PlainResponse,
-    "gemini_tts": PlainResponse,
-    "formatted_text": PlainResponse,
-    "level2_answer": Level2Response,
-    "level3_answer": Level3Response,
-    "ui_answer": UIResponse,
-    "dashboard": DashboardResponse,
-    "widget": WidgetResponse,
-}
-
-
-def get_response_model_for_format(response_format: str) -> type[BaseModel]:
-    """Get the appropriate LLM response model for the given format."""
-    return FORMAT_TO_MODEL.get(response_format, PlainResponse)
