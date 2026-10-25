@@ -7,12 +7,12 @@ import logging
 from typing import Any
 from archie_shared.chat.models import LllmTrace
 from pydantic import ValidationError
+from app.agents.chat.output.content import build_content_from_parsed
 from app.agents.chat.output.ui_repair import (
     clear_card_image_prompts,
     sanitize_chart_items,
 )
 from app.models.output_models import AgentResponse, UIResponse
-from app.utils.llm_parser import build_content_from_parsed
 from app.utils.url_validator import validate_and_fix_urls
 
 
