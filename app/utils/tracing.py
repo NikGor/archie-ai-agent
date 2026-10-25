@@ -46,7 +46,12 @@ SwarmTraceName = Literal["swarm-check", "swarm-council", "swarm-agent-turn"]
 SWARM_TRACE_NAMES: frozenset[str] = frozenset(
     {"swarm-check", "swarm-council", "swarm-agent-turn"}
 )
-TRACED_ROOT_NAMES = SWARM_TRACE_NAMES | {CHAT_TRACE_NAME}
+TRACED_ROOT_NAMES = SWARM_TRACE_NAMES | {
+    CHAT_TRACE_NAME,
+    "ephemeral-run",
+    "temporal-run",
+    "cognitive-tick",
+}
 SWARM_SESSION_PREFIX = "swarm-"
 
 _SECRET_PATTERN = re.compile(
