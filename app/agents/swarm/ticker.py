@@ -303,6 +303,7 @@ class SwarmTicker:
                         teams=swarm_settings.football_teams,
                         language=language,
                     ),
+                    run_id=run_id,
                 )
                 root.update(output=draft.outcome.model_dump(mode="json"))
         finally:
