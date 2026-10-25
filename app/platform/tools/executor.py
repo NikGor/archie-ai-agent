@@ -165,7 +165,7 @@ async def execute_tool_calls(
     context: ToolContext | None = None,
 ) -> list[ToolResult]:
     """Run calls in parallel. Only tools in `allowed` (the tools this agent kind
-    shows to its LLM) run; the LLM may still name another tool from ToolName."""
+    shows to its LLM) run; the LLM may still name a tool it was not shown."""
     calls: list[ToolCall] = []
     rejected: list[ToolResult] = []
     for tool_call in tool_calls:
