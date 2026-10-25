@@ -1,6 +1,6 @@
 """Which tools the chat pipeline shows to Stage 1 (ARCHIE-292)."""
 
-from ..tools.catalog import tool_registry
+from app.tools.catalog import tool_registry
 
 
 # Dashboard tiles and widgets only read and change the smart home
