@@ -3,7 +3,7 @@ import logging
 from typing import Any
 from archie_shared.chat.models import Content, LllmTrace
 from pydantic import BaseModel
-from ..config import MODEL_TOKEN_PRICES
+from ..platform.llm.catalog import MODEL_TOKEN_PRICES
 from .trace_utils import build_llm_trace
 
 
@@ -233,33 +233,6 @@ def parse_openrouter_response(
         function_name=None,
         function_arguments=None,
     )
-
-
-def parse_llm_response(
-    raw_response: Any,
-    provider: str,
-    expected_type: type[BaseModel],
-) -> ParsedLLMResponse:
-    """
-    Unified parser for any LLM provider response.
-
-    Args:
-        raw_response: Raw response from LLM provider
-        provider: Provider name ("openai" or "openrouter")
-        expected_type: Expected Pydantic model type
-
-    Returns:
-        ParsedLLMResponse: Unified parsed response
-    """
-    if provider == "openai":
-        return parse_openai_response(raw_response, expected_type)
-    elif provider == "openrouter":
-        return parse_openrouter_response(raw_response, expected_type)
-    else:
-        logger.error(
-            f"llm_parser_error_001: Unknown provider: \033[31m{provider}\033[0m"
-        )
-        raise ValueError(f"Unsupported provider: {provider}")
 
 
 def build_stream_trace(model: str, usage: dict[str, int]) -> LllmTrace:
