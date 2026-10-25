@@ -1,0 +1,4 @@
+sections:
+  - title: Task limits
+    style: numbered
+    rules: [ephemeral_read_only, ephemeral_evidence, ephemeral_report]
