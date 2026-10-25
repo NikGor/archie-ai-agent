@@ -21,7 +21,8 @@ from app.models.ws_models import StatusUpdate
 from app.monitoring.judge import judge_rules
 from app.platform.llm.catalog import get_provider_for_model
 from app.platform.llm.context import ConversationContext
-from app.utils.tool_executor import execute_tool_calls
+from app.platform.tools.executor import execute_tool_calls
+from app.platform.tools.models import ToolContext
 from .assertions import check_decision, check_response, check_rules, find_ui_answer
 from .judge import judge_response
 
@@ -52,7 +53,7 @@ async def _judge_case_rules(
 
 
 if TYPE_CHECKING:
-    from app.models.tool_models import ToolResult
+    from app.platform.tools.models import ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +156,11 @@ class EvalAttemptRunner:
             await on_step("skill_loader")
             earlier_tools += [call.tool_name for call in decision.sgr.tool_calls]
             skill_results += await execute_tool_calls(
-                decision.sgr.tool_calls, self.agent_factory.tool_factory
+                [call.to_call() for call in decision.sgr.tool_calls],
+                self.agent_factory.tool_registry,
+                context=ToolContext(
+                    user_timezone=user_state.user_timezone, demo_mode=True
+                ),
             )
         elapsed = int((time.monotonic() - started) * 1000)
         failures = check_decision(case, decision, earlier_tools)
