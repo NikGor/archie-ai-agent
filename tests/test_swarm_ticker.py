@@ -6,15 +6,16 @@ from unittest.mock import AsyncMock, MagicMock
 from zoneinfo import ZoneInfo
 import pytest
 from archie_shared.swarm.models import SwarmMessage, SwarmSettings, SwarmUsage
-from app.models.orchestration_sgr import Parameter
+import app.agents.swarm.tools  # noqa: F401
+from app.agents.chat.tool_access import chat_tool_names
 from app.agents.swarm.agents import SWARM_AGENTS
 from app.agents.swarm.bus import SwarmHub
 from app.agents.swarm.council import SwarmCouncil
 from app.agents.swarm.dispatcher import SwarmDispatcher
 from app.agents.swarm.memory import DayNote
+from app.agents.swarm.messages import format_chat_line
 from app.agents.swarm.models import ConsulDecision, SwarmToolCall, SwarmWatchReply
 from app.agents.swarm.policy import check_tool_call
-from app.agents.swarm.messages import format_chat_line
 from app.agents.swarm.runner import SwarmAgentRunner, SwarmWatchDraft
 from app.agents.swarm.schedule import (
     due_tasks,
@@ -28,8 +29,7 @@ from app.agents.swarm.schedule import (
     voice_allowed,
 )
 from app.agents.swarm.ticker import SwarmTicker, select_outputs
-import app.agents.swarm.tools  # noqa: F401
-from app.agents.chat.tool_access import chat_tool_names
+from app.models.orchestration_sgr import Parameter
 from app.tools.catalog import tool_registry
 from tests.conftest import make_user_state
 
@@ -111,7 +111,9 @@ def test_due_tasks_skip_quiet_tasks():
 
 def test_football_check_uses_skill_teams_by_default():
     runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
-    text = runner.prompts.render_task("swarm_watch", task="football", teams=[], language="ru")
+    text = runner.prompts.render_task(
+        "swarm_watch", task="football", teams=[], language="ru"
+    )
     assert "from your skill" in text
     text = runner.prompts.render_task(
         "swarm_watch", task="football", teams=["Bayern"], language="ru"
@@ -160,7 +162,9 @@ def test_mail_agent_reads_mail():
 @pytest.mark.parametrize("task", ["home", "mail", "calendar", "football"])
 def test_watch_prompt_has_task_section(task):
     runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
-    text = runner.prompts.render_task("swarm_watch", task=task, teams=["Bayern"], language="ru")
+    text = runner.prompts.render_task(
+        "swarm_watch", task=task, teams=["Bayern"], language="ru"
+    )
     assert "in this language: ru" in text
     assert "## What to check" in text
     assert "today_note" in text
@@ -567,7 +571,10 @@ def test_weather_agent_reads_weather_only():
 
 
 def test_main_chat_does_not_get_the_weather_tool():
-    names = {t["name"] for t in tool_registry.schemas("gpt-5.6-luna", chat_tool_names("plain"))}
+    names = {
+        t["name"]
+        for t in tool_registry.schemas("gpt-5.6-luna", chat_tool_names("plain"))
+    }
     assert "weather_tool" not in names
     swarm = tool_registry.schemas("gpt-5.6-luna", ["weather_tool"])
     assert [t["name"] for t in swarm] == ["weather_tool"]
@@ -734,7 +741,8 @@ async def test_live_match_is_checked_every_few_minutes(monkeypatch):
     ticker = _ticker(_outcome(""))
     ticker.memory = memory
 
-    async def watch(_profile, task, _history, _prompt):
+    async def watch(_profile, task, _history, _prompt, run_id=None):
+        assert run_id
         live = task == "football" and kickoff <= memory.clock < final
         quiet = "18:00" if task == "football" and memory.clock < kickoff else ""
         return SwarmWatchDraft(
