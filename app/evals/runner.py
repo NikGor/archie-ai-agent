@@ -14,6 +14,7 @@ from archie_shared.evals.models import (
 )
 from archie_shared.monitoring.models import MonitorMessage, MonitorRuleScore
 from app.agent.agent_factory import AgentFactory
+from app.agent.tool_access import chat_tool_names
 from app.config import MAX_COMMAND_ITERATIONS, settings
 from app.models.orchestration_sgr import DecisionResponse
 from app.models.output_models import AgentResponse
@@ -158,6 +159,7 @@ class EvalAttemptRunner:
             skill_results += await execute_tool_calls(
                 [call.to_call() for call in decision.sgr.tool_calls],
                 self.agent_factory.tool_registry,
+                allowed=chat_tool_names(case.response_format),
                 context=ToolContext(
                     user_timezone=user_state.user_timezone, demo_mode=True
                 ),
