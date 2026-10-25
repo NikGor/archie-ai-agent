@@ -20,6 +20,7 @@ ToolName = Literal[
     "announce_tool",
     "awtrix_tool",
     "weather_tool",
+    "spawn_agent_tool",
     "alert_chat_tool",
     "swarm_alert_tool",
     "agent_task_tool",
@@ -43,7 +44,6 @@ class ToolCall(BaseModel):
     tool_name: ToolName = Field(description="Name of the tool to call")
     arguments: list[Parameter] = Field(description="Arguments with their values")
     reason: str = Field(default="", description="Why the tool is called")
-
 
 
 class ToolResult(BaseModel):
