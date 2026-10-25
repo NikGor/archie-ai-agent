@@ -8,7 +8,7 @@ patch it) keep working unchanged.
 
 import logging
 from collections.abc import Awaitable, Callable
-from archie_shared.chat.models import ImageAttachment, LllmTrace
+from archie_shared.chat.models import ImageAttachment, LllmTrace, ReasoningEffort
 from ..models.orchestration_sgr import DecisionResponse
 from ..models.state_models import UserState
 from ..models.tool_models import ToolContext, ToolResult
@@ -74,6 +74,7 @@ class CommandLoop:
         notifier: StatusNotifier,
         on_status: StatusCallback,
         images: list[ImageAttachment] | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> CommandLoopResult:
         tool_results = list(seed_results)
         image_description = ""
@@ -110,6 +111,7 @@ class CommandLoop:
                     ctx=ctx,
                     previous_results=tool_results if tool_results else None,
                     images=images,
+                    reasoning_effort=reasoning_effort,
                 )
             for intent in decision.sgr.intents:
                 if str(intent) not in ui_intents:
