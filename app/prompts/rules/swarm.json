@@ -397,5 +397,8 @@
   },
   "swarm_opinion_alert_nothing": {
     "text": "If the report needs nothing from the user or the home, say so in a few words."
+  },
+  "swarm_home_diagnose": {
+    "text": "If Home Assistant has a fault, use spawn_agent_tool for a read-only diagnosis. Give the observed facts."
   }
 }
