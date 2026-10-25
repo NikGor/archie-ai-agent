@@ -19,7 +19,9 @@ from app.agents.swarm.control import apply_command  # noqa: E402
 from app.agents.swarm.service import swarm_service  # noqa: E402
 from app.backend.cron_scheduler import cron_scheduler  # noqa: E402
 from app.config import settings  # noqa: E402
+from app.platform.runtime.budget import daily_spend  # noqa: E402
 from app.platform.runtime.supervisor import Supervisor  # noqa: E402
+from app.runtime_endpoints import RuntimeStatus, publish_status  # noqa: E402
 from app.utils.tracing import init_tracing, shutdown_tracing  # noqa: E402
 
 
@@ -27,6 +29,21 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(message)s", datefmt="%H:%M:%S"
 )
 logger = logging.getLogger(__name__)
+
+
+async def _report(supervisor: Supervisor, stopping: asyncio.Event) -> None:
+    """Status of this process for GET /runtime/status of the API process."""
+    while not stopping.is_set():
+        try:
+            await publish_status(
+                RuntimeStatus(
+                    services=supervisor.status(),
+                    daily_spend_usd={k: round(v, 4) for k, v in daily_spend.by_kind.items()},
+                )
+            )
+        except Exception as exc:
+            logger.error(f"runtime_main_error_001: Status not published: {exc}")
+        await asyncio.sleep(30)
 
 
 async def main() -> None:
@@ -49,7 +66,9 @@ async def main() -> None:
         loop.add_signal_handler(sig, stopping.set)
     await supervisor.start()
     logger.info("runtime_main_001: Runtime process ready")
+    reporter = asyncio.create_task(_report(supervisor, stopping))
     await stopping.wait()
+    reporter.cancel()
     await supervisor.stop()
     await swarm_service.close()
     await cron_scheduler.close()
