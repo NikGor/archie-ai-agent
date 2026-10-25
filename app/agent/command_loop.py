@@ -13,10 +13,10 @@ from ..models.orchestration_sgr import DecisionResponse
 from ..models.state_models import UserState
 from ..models.tool_models import ToolContext, ToolResult
 from ..models.ws_models import StatusCallback, StatusNotifier
+from ..platform.llm.context import ConversationContext
 from ..tools.tool_factory import ToolFactory
 from ..utils.tool_executor import execute_tool_calls
 from ..utils.trace_utils import StepTimer
-from .context import ConversationContext
 from .pipeline_metrics import PipelineMetrics
 
 
