@@ -19,6 +19,31 @@ services:
       - PYTHONPATH=/app
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      # Chat, evals, monitoring and /ws_swarm; swarm and cron run in archie-runtime (ARCHIE-299).
+      # Roll back to one process: RUNTIME_MODE=embedded here and stop archie-runtime.
+      - RUNTIME_MODE=api
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app/app
+      - ./token_gmail.json:/app/token_gmail.json:ro
+      - ${HOME}/.config/archie-tv-remote:/root/.config/archie-tv-remote:ro
+    restart: unless-stopped
+
+  archie-runtime:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: host
+    container_name: archie-runtime
+    command: ["python", "-m", "app.runtime_main"]
+    networks:
+      - shared_network
+    environment:
+      - PYTHONPATH=/app
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RUNTIME_MODE=runtime
     env_file:
       - .env
     volumes:
