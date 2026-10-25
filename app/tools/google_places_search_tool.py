@@ -25,7 +25,105 @@ PLACES_FIELD_MASK = (
 )
 
 
-async def google_places_search_tool(  # noqa: PLR0912
+def _build_payload(
+    query: str,
+    max_results: int,
+    min_rating: float | None,
+    price_levels: list[str] | None,
+    open_now: bool | None,
+    location_lat: float | None,
+    location_lng: float | None,
+    radius_meters: float | None,
+    sort_by: str | None,
+) -> dict[str, Any]:
+    """Places API searchText request from the tool arguments."""
+    payload: dict[str, Any] = {
+        "textQuery": query,
+        "pageSize": min(max(1, max_results), 20),
+    }
+    if min_rating is not None:
+        payload["minRating"] = min(max(0.0, min_rating), 5.0)
+    if price_levels:
+        payload["priceLevels"] = price_levels
+    if open_now is not None:
+        payload["openNow"] = open_now
+    if location_lat is not None and location_lng is not None:
+        payload["locationBias"] = {
+            "circle": {
+                "center": {"latitude": location_lat, "longitude": location_lng},
+                "radius": radius_meters,
+            }
+        }
+    if sort_by == "distance" and location_lat is not None and location_lng is not None:
+        payload["rankPreference"] = "DISTANCE"
+    elif sort_by == "relevance":
+        payload["rankPreference"] = "RELEVANCE"
+    return payload
+
+
+# Places API field -> result key, copied as is when present
+_PLAIN_FIELDS = {
+    "rating": "rating",
+    "userRatingCount": "reviews_count",
+    "websiteUri": "website",
+    "googleMapsUri": "google_maps_url",
+    "internationalPhoneNumber": "phone",
+    "priceLevel": "price_level",
+    "parkingOptions": "parking",
+}
+
+
+def _place_data(place: dict[str, Any]) -> dict[str, Any]:
+    """One place of the API response in the shape the LLM reads."""
+    place_data: dict[str, Any] = {
+        "name": place.get("displayName", {}).get("text", "Unknown"),
+        "address": place.get("formattedAddress", ""),
+    }
+    if "location" in place:
+        place_data["location"] = {
+            "latitude": place["location"].get("latitude"),
+            "longitude": place["location"].get("longitude"),
+        }
+    for field, key in _PLAIN_FIELDS.items():
+        if field in place and field not in ("priceLevel", "parkingOptions"):
+            place_data[key] = place[field]
+    if "editorialSummary" in place:
+        place_data["description"] = place["editorialSummary"].get("text", "")
+    if "regularOpeningHours" in place:
+        hours = place["regularOpeningHours"]
+        place_data["opening_hours"] = {
+            "open_now": hours.get("openNow"),
+            "weekday_text": hours.get("weekdayDescriptions", []),
+        }
+    for field in ("priceLevel", "parkingOptions"):
+        if field in place:
+            place_data[_PLAIN_FIELDS[field]] = place[field]
+    if "reviews" in place:
+        place_data["reviews"] = [
+            {
+                "author": r.get("authorAttribution", {}).get("displayName", ""),
+                "rating": r.get("rating"),
+                "text": r.get("text", {}).get("text", ""),
+                "time": r.get("relativePublishTimeDescription", ""),
+            }
+            for r in place["reviews"][:3]
+        ]
+    return place_data
+
+
+async def _post_search(api_key: str, payload: dict[str, Any]) -> httpx.Response:
+    url = "https://places.googleapis.com/v1/places:searchText"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": api_key,
+        "X-Goog-FieldMask": PLACES_FIELD_MASK,
+    }
+    logger.info("google_places_002: Calling Google Places API")
+    async with httpx.AsyncClient() as client:
+        return await client.post(url, json=payload, headers=headers, timeout=30.0)
+
+
+async def google_places_search_tool(
     query: str,
     max_results: int | str = 10,
     min_rating: float | str | None = None,
@@ -89,43 +187,19 @@ async def google_places_search_tool(  # noqa: PLR0912
                 "query": query,
             }
 
-        url = "https://places.googleapis.com/v1/places:searchText"
-        headers = {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": api_key,
-            "X-Goog-FieldMask": PLACES_FIELD_MASK,
-        }
-        payload = {"textQuery": query, "pageSize": min(max(1, max_results), 20)}
-        if min_rating is not None:
-            payload["minRating"] = min(max(0.0, min_rating), 5.0)
-        if price_levels:
-            payload["priceLevels"] = price_levels
-        if open_now is not None:
-            payload["openNow"] = open_now
-        if location_lat is not None and location_lng is not None:
-            payload["locationBias"] = {
-                "circle": {
-                    "center": {"latitude": location_lat, "longitude": location_lng},
-                    "radius": radius_meters,
-                }
-            }
-        if (
-            sort_by == "distance"
-            and location_lat is not None
-            and location_lng is not None
-        ):
-            payload["rankPreference"] = "DISTANCE"
-        elif sort_by == "relevance":
-            payload["rankPreference"] = "RELEVANCE"
+        payload = _build_payload(
+            query,
+            max_results,
+            min_rating,
+            price_levels,
+            open_now,
+            location_lat,
+            location_lng,
+            radius_meters,
+            sort_by,
+        )
 
-        logger.info("google_places_002: Calling Google Places API")
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                url,
-                json=payload,
-                headers=headers,
-                timeout=30.0,
-            )
+        response = await _post_search(api_key, payload)
 
         if response.status_code != 200:
             logger.error(
@@ -143,50 +217,7 @@ async def google_places_search_tool(  # noqa: PLR0912
 
         logger.info(f"google_places_003: Found \033[33m{len(places)}\033[0m places")
 
-        results = []
-        for place in places:
-            place_data = {
-                "name": place.get("displayName", {}).get("text", "Unknown"),
-                "address": place.get("formattedAddress", ""),
-            }
-            if "location" in place:
-                place_data["location"] = {
-                    "latitude": place["location"].get("latitude"),
-                    "longitude": place["location"].get("longitude"),
-                }
-            if "rating" in place:
-                place_data["rating"] = place["rating"]
-            if "userRatingCount" in place:
-                place_data["reviews_count"] = place["userRatingCount"]
-            if "websiteUri" in place:
-                place_data["website"] = place["websiteUri"]
-            if "googleMapsUri" in place:
-                place_data["google_maps_url"] = place["googleMapsUri"]
-            if "internationalPhoneNumber" in place:
-                place_data["phone"] = place["internationalPhoneNumber"]
-            if "editorialSummary" in place:
-                place_data["description"] = place["editorialSummary"].get("text", "")
-            if "regularOpeningHours" in place:
-                hours = place["regularOpeningHours"]
-                place_data["opening_hours"] = {
-                    "open_now": hours.get("openNow"),
-                    "weekday_text": hours.get("weekdayDescriptions", []),
-                }
-            if "priceLevel" in place:
-                place_data["price_level"] = place["priceLevel"]
-            if "parkingOptions" in place:
-                place_data["parking"] = place["parkingOptions"]
-            if "reviews" in place:
-                place_data["reviews"] = [
-                    {
-                        "author": r.get("authorAttribution", {}).get("displayName", ""),
-                        "rating": r.get("rating"),
-                        "text": r.get("text", {}).get("text", ""),
-                        "time": r.get("relativePublishTimeDescription", ""),
-                    }
-                    for r in place["reviews"][:3]
-                ]
-            results.append(place_data)
+        results = [_place_data(place) for place in places]
 
         return {
             "success": True,
