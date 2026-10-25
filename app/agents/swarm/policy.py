@@ -2,7 +2,7 @@
 
 import logging
 from typing import Literal
-from .models import SwarmAgentProfile, SwarmToolCall
+from app.agents.swarm.models import SwarmAgentProfile, SwarmToolCall
 
 
 logger = logging.getLogger(__name__)
