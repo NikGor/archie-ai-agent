@@ -18,6 +18,7 @@ from archie_shared.evals.models import (
 )
 from archie_shared.ui.models import AdvancedAnswerItem
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from app.agents.chat.formats import resolve_format
 from app.agents.chat.messages import ChatPromptBuilder
 from app.agents.chat.quality.rules import ASSISTANT_SPEC, COMMAND_SPEC, rules_for_turn
 from app.agents.swarm.agents import SWARM_AGENTS
@@ -32,7 +33,6 @@ logger = logging.getLogger(__name__)
 CASE_ID_PATTERN = r"^[a-z0-9_]+(\.[a-z0-9_]+)+$"
 
 # Formats that skip Stage 1 (see ChatPipeline.arun)
-_DIRECT_OUTPUT_FORMATS = {"dashboard", "widget"}
 
 
 class CatalogError(ValueError):
@@ -61,7 +61,9 @@ class EvalCaseDraft(BaseModel):
     )
     input: str = Field(min_length=1, description="User message")
     response_format: str = Field(default="plain", description="Response format")
-    stage: EvalStage = Field(default="full", description="stage1, full, swarm_turn, swarm_watch")
+    stage: EvalStage = Field(
+        default="full", description="stage1, full, swarm_turn, swarm_watch"
+    )
     agent_kind: EvalAgentKind = Field(default="chat", description="chat or swarm")
     swarm: SwarmEvalInput | None = Field(default=None, description="Swarm case context")
     judge: bool = Field(default=False, description="Score with the LLM judge")
@@ -139,7 +141,7 @@ def infer_prompts(stage: EvalStage, response_format: str) -> list[str]:
     format_prompt = ChatPromptBuilder.format_spec_name(response_format)
     if stage == "stage1":
         return ["cmd_prompt"]
-    if response_format in _DIRECT_OUTPUT_FORMATS:
+    if resolve_format(response_format).skips_command_loop:
         return [format_prompt]
     return ["cmd_prompt", format_prompt]
 
@@ -149,13 +151,17 @@ def _swarm_errors(draft: EvalCaseDraft) -> list[str]:
     only judged rules of its specs (ARCHIE-297)."""
     swarm = draft.swarm
     if not draft.stage.startswith("swarm_"):
-        return [f"agent_kind swarm needs stage swarm_turn or swarm_watch, not {draft.stage}"]
+        return [
+            f"agent_kind swarm needs stage swarm_turn or swarm_watch, not {draft.stage}"
+        ]
     if swarm is None or swarm.agent_id not in SWARM_AGENTS:
         return ["swarm.agent_id must name a swarm agent"]
     errors = []
     if draft.stage == "swarm_watch" and swarm.watch_task is None:
         errors.append("swarm_watch needs swarm.watch_task")
-    known = {rule.key for rule in case_rules(swarm.agent_id, draft.stage, swarm.watch_task)}
+    known = {
+        rule.key for rule in case_rules(swarm.agent_id, draft.stage, swarm.watch_task)
+    }
     errors += [
         f"rule {key!r} is not a judged rule of this swarm case"
         for key in draft.rules
