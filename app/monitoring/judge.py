@@ -20,7 +20,8 @@ from app.agent.prompt_builder import PromptBuilder
 from app.evals.prompt_descriptions import PROMPT_DESCRIPTIONS
 from app.platform.llm.decisions import DecisionsError as JudgeError
 from app.platform.llm.decisions import decide as _decide
-from app.tools.tool_factory import ToolFactory
+from app.agent.tool_access import chat_tool_names
+from app.tools.catalog import tool_registry
 from app.utils.skill_utils import list_skills
 from .outcome import GOAL_KEY as OUTCOME_GOAL_KEY
 from .outcome import TITLE_KEY, build_outcome_questions, parse_outcome, parse_title
@@ -86,7 +87,7 @@ def grade_from_probabilities(probabilities: dict[str, float]) -> MonitorGrade | 
 
 @functools.cache
 def _tool_lines() -> str:
-    schemas = ToolFactory().get_tool_schemas(_CATALOG_MODEL, "ui_answer")
+    schemas = tool_registry.schemas(_CATALOG_MODEL, chat_tool_names("ui_answer"))
     return "\n".join(
         f"- {schema['name']}: {schema['description'].strip().splitlines()[0]}"
         for schema in schemas
