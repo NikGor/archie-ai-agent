@@ -14,7 +14,7 @@ from archie_shared.ui.models import (
     UIAnswer,
     Widget,
 )
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FactCheck(BaseModel):
@@ -29,18 +29,23 @@ class FactCheck(BaseModel):
 
 
 class SGROutput(BaseModel):
-    """SGR trace for final response generation phase"""
+    """Notes of the final response stage"""
 
-    # reasoning is first so the LLM generates it before the main content,
-    # enabling streaming of the reasoning to the frontend.
+    # Schema names "rationale" / "ui_rationale": Claude 5.5 refuses "reasoning"
+    # fields as output extraction (content_filter); Python keeps the old names
+    model_config = ConfigDict(populate_by_name=True)
+
+    # rationale is first so the LLM generates it before the main content,
+    # enabling streaming of it to the frontend.
     reasoning: str = Field(
-        description="Step-by-step reasoning for constructing this final response"
+        alias="rationale", description="Why the final response is built this way"
     )
     fact_checks: list[FactCheck] = Field(
         description="List of factual statements verified during response generation"
     )
     ui_reasoning: str = Field(
-        description="Reasoning behind chosen UI format and components (cards, buttons, tables, etc.)"
+        alias="ui_rationale",
+        description="Why this UI format and these components (cards, buttons, tables, etc.)",
     )
     orchestration_summary: str | None = Field(
         default=None,

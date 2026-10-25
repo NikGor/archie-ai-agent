@@ -265,7 +265,7 @@ async def create_output(request: OutputRequest) -> AgentResponse:
             previous_response_id=previous_response_id,
             observation_name=_OBSERVATION_NAME,
             reasoning_effort=reasoning_effort,
-            extractor=JsonPathExtractor(["sgr", "reasoning"]),
+            extractor=JsonPathExtractor(["sgr", "rationale"]),
             on_chunk=_on_chunk_ui,
             response_id_out=response_id_out_ui,
             max_output_tokens=config.UI_STREAM_MAX_OUTPUT_TOKENS,
