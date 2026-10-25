@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from archie_shared.chat.models import ImageAttachment
-from ..models.tool_models import ToolResult
+from ..platform.tools.models import ToolResult
 from ..platform.llm.registry import get_provider
 from ..utils.skill_utils import list_skills
 from .prompt_compiler import PromptCompiler

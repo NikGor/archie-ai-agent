@@ -13,7 +13,7 @@ from ...models.output_models import (
     PlainResponse,
     get_response_model_for_format,
 )
-from ...models.tool_models import ToolResult
+from ...platform.tools.models import ToolResult
 from ...models.ws_models import StreamCallback, StreamEventCallback
 from ...platform.llm.catalog import get_provider_for_model
 from ...platform.llm.registry import get_client, parse_llm_response

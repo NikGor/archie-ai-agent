@@ -8,7 +8,7 @@ import json
 import logging
 import redis
 from ..config import settings
-from ..models.tool_models import ToolResult
+from ..platform.tools.models import ToolResult
 from .redis_factory import get_async_redis
 
 

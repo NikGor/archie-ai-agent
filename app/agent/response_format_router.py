@@ -5,7 +5,7 @@ import logging
 from typing import Literal
 from pydantic import BaseModel, Field
 from app.config import settings
-from app.models.tool_models import ToolResult
+from app.platform.tools.models import ToolResult
 from app.platform.llm.decisions import DecisionsError, decide
 from .prompt_compiler import PromptCompiler
 
