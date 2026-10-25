@@ -46,8 +46,10 @@ SWARM_RULE_POLICY = RulePolicy(
             "swarm_consul_more_rounds",
             "swarm_consul_next_round_true",
             "swarm_consul_next_round_false",
-            # reads and memory writes: the journal keeps only side-effect actions
+            # reads and memory writes: the journal keeps only side-effect actions,
+            # so "facts come from tools" cannot be checked without the reads
             "swarm_tools_then_reply",
+            "swarm_no_invented_facts",
             "swarm_watch_fresh_data",
             "swarm_watch_today_note",
             "swarm_watch_follow_memory",
