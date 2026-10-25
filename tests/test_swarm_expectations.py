@@ -3,7 +3,7 @@
 import pytest
 from app.platform.prompts.compiler import load_library
 from app.config import settings
-from app.swarm.audit.models import load_catalog
+from app.agents.swarm.audit.models import load_catalog
 
 
 def test_catalog_loads_with_unique_ids():

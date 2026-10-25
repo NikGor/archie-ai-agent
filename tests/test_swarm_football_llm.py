@@ -11,10 +11,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
 import pytest
 from app.platform.tools.models import ToolResult
-from app.swarm.agents import SWARM_AGENTS
-from app.swarm.memory import DayNote
-from app.swarm.runner import SwarmAgentRunner
-import app.swarm.tools  # noqa: F401
+from app.agents.swarm.agents import SWARM_AGENTS
+from app.agents.swarm.memory import DayNote
+from app.agents.swarm.runner import SwarmAgentRunner
+import app.agents.swarm.tools  # noqa: F401
 from app.tools.catalog import tool_registry
 from tests.conftest import make_user_state
 
@@ -110,7 +110,7 @@ def _runner(scenario: dict) -> SwarmAgentRunner:
         memory=memory,
     )
     now = scenario["now"]
-    runner.datetime_note = MagicMock(
+    runner.prompts.datetime_note = MagicMock(
         return_value=f"Current date/time: {now:%A, %d.%m.%Y, %H:%M} (Europe/Berlin)"
     )
     return runner
@@ -146,9 +146,9 @@ async def test_football_live_check_reports_goal_and_follows_up(name):
     queries: list[str] = []
     execute, rounds = _fake_search(scenario["answers"], queries)
     with (
-        patch("app.swarm.runner.local_now", return_value=scenario["now"]),
+        patch("app.agents.swarm.messages.local_now", return_value=scenario["now"]),
         patch(
-            "app.swarm.runner.execute_tool_calls",
+            "app.agents.swarm.runner.execute_tool_calls",
             side_effect=execute,
         ),
     ):
@@ -156,7 +156,7 @@ async def test_football_live_check_reports_goal_and_follows_up(name):
             SWARM_AGENTS["football"],
             "football",
             [],
-            runner.render_task("swarm_watch", task="football", teams=[], language="ru"),
+            runner.prompts.render_task("swarm_watch", task="football", teams=[], language="ru"),
         )
     outcome = draft.outcome
     print(

@@ -8,8 +8,8 @@ from archie_shared.swarm.models import (
     SwarmMessage,
     SwarmMessageEvent,
 )
-from app.swarm.bus import SwarmHub
-from app.swarm.journal import SwarmJournal
+from app.agents.swarm.bus import SwarmHub
+from app.agents.swarm.journal import SwarmJournal
 
 
 def _message(message_id: str) -> SwarmMessage:
@@ -24,8 +24,8 @@ def _message(message_id: str) -> SwarmMessage:
 
 
 def _journal(monkeypatch, token: str | None = "t") -> SwarmJournal:
-    monkeypatch.setattr("app.swarm.journal.settings.eval_api_token", token)
-    monkeypatch.setattr("app.swarm.journal.settings.swarm_journal_buffer_size", 3)
+    monkeypatch.setattr("app.agents.swarm.journal.settings.eval_api_token", token)
+    monkeypatch.setattr("app.agents.swarm.journal.settings.swarm_journal_buffer_size", 3)
     return SwarmJournal(SwarmHub())
 
 
@@ -64,7 +64,7 @@ async def test_journal_without_token_does_not_listen(monkeypatch):
 
 async def test_send_posts_the_batch_with_the_service_token(monkeypatch):
     journal = _journal(monkeypatch)
-    monkeypatch.setattr("app.swarm.journal.settings.web_django_url", "http://web:8000/")
+    monkeypatch.setattr("app.agents.swarm.journal.settings.web_django_url", "http://web:8000/")
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -74,7 +74,7 @@ async def test_send_posts_the_batch_with_the_service_token(monkeypatch):
     transport = httpx.MockTransport(handler)
     real_client = httpx.AsyncClient
     with patch(
-        "app.swarm.journal.httpx.AsyncClient",
+        "app.agents.swarm.journal.httpx.AsyncClient",
         lambda **kwargs: real_client(transport=transport, **kwargs),
     ):
         await journal._send([_message("1-0")])
@@ -87,7 +87,7 @@ async def test_send_posts_the_batch_with_the_service_token(monkeypatch):
 
 async def test_started_journal_buffers_posted_messages(monkeypatch):
     journal = _journal(monkeypatch)
-    monkeypatch.setattr("app.swarm.journal.settings.swarm_journal_flush_seconds", 60)
+    monkeypatch.setattr("app.agents.swarm.journal.settings.swarm_journal_flush_seconds", 60)
     await journal.start()
     journal.hub.publish(SwarmMessageEvent(message=_message("1-0")))
     await asyncio.sleep(0)
