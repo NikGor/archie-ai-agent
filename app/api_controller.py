@@ -1,9 +1,10 @@
 """API controller for handling chat requests."""
 
+import functools
 import logging
 from collections.abc import Awaitable, Callable
 from archie_shared.chat.models import ChatMessage, ChatRequest
-from .agent.agent_factory import AgentFactory
+from .agents.chat.pipeline import ChatPipeline
 from .config import DEFAULT_MODEL
 from .models.ws_models import StatusUpdate, StreamCallback, StreamEventCallback
 from .platform.llm.catalog import supports_vision
@@ -16,6 +17,12 @@ logger = logging.getLogger(__name__)
 
 StatusCallback = Callable[[StatusUpdate], Awaitable[None]] | None
 
+
+
+@functools.cache
+def get_chat_pipeline() -> ChatPipeline:
+    """The chat pipeline of this process, built on first use (ARCHIE-171)."""
+    return ChatPipeline()
 
 @trace_chat_turn
 async def handle_chat(
@@ -45,8 +52,7 @@ async def handle_chat(
             f"dropping \033[33m{len(images)}\033[0m image(s)"
         )
         images = None
-    agent_factory = AgentFactory(demo_mode=user_request.demo_mode)
-    agent_response = await agent_factory.arun(
+    agent_response = await get_chat_pipeline().arun(
         messages=current_messages,
         command_model=command_model,
         final_output_model=final_output_model,
@@ -63,6 +69,7 @@ async def handle_chat(
         on_status=on_status,
         on_stream=on_stream,
         on_stream_event=on_stream_event,
+        demo_mode=bool(user_request.demo_mode),
     )
 
     # Create response message
