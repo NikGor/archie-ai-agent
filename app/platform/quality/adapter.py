@@ -16,12 +16,13 @@ StepCallback = Callable[[str], Awaitable[None]]
 class QualityAdapter(Protocol):
     kind: str
 
-    def rules_for(self, response_format: str) -> list[SpecRule]:
-        """Every judged rule of the kind's specs for a response format."""
+    def rules_for(self, target: str) -> list[SpecRule]:
+        """Every judged rule of the kind's specs for a target: a response
+        format for the chat, an agent id for the swarm."""
         ...
 
-    def spec_versions(self, response_format: str) -> dict[str, str]:
-        """Spec -> fingerprint of the specs that produce a record."""
+    def spec_versions(self, target: str) -> dict[str, str]:
+        """Spec -> fingerprint of the specs that produce a record of `target`."""
         ...
 
     async def run_case(
