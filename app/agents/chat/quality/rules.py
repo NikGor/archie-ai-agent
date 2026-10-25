@@ -1,4 +1,4 @@
-"""Prompt spec rules a stored turn is judged against (ARCHIE-213).
+"""Chat spec rules a stored turn is judged against (ARCHIE-213, ARCHIE-296).
 
 A turn is judged by the rules of the prompts that produced it: cmd_prompt
 (Stage 1), assistant_prompt and the response format spec (Stage 3). A rule is
@@ -20,9 +20,14 @@ so the turn grade stays meaningful with 30+ rules per turn.
 
 import functools
 import re
-from dataclasses import dataclass
 from app.agents.chat.messages import ChatPromptBuilder
-from app.platform.prompts.compiler import PromptCompiler, PromptLibrary, load_library
+from app.platform.quality.rules import (
+    RulePolicy,
+    SpecRule,
+    library,
+    select_spec_rules,
+    spec_fingerprints,
+)
 
 
 COMMAND_SPEC = "cmd_prompt"
@@ -183,36 +188,10 @@ def is_acknowledgement(text: str) -> bool:
     )
 
 
-@dataclass(frozen=True)
-class SpecRule:
-    """One rule the judge checks."""
-
-    spec: str
-    rule_id: str
-    text: str
-    guidance: bool = False
-
-    @property
-    def condition(self) -> str | None:
-        return RULE_CONDITIONS.get(self.rule_id)
-
-    @property
-    def key(self) -> str:
-        return f"{self.spec}:{self.rule_id}"
-
-
-@functools.cache
-def _compiler() -> PromptCompiler:
-    return PromptCompiler(load_library())
-
-
-def _library() -> PromptLibrary:
-    return _compiler().library
-
-
-def _is_templated(rule_id: str) -> bool:
-    rule = _library().rules[rule_id]
-    return any("{{" in part or "{%" in part for part in [rule.text, *rule.items])
+# How the chat judges its spec rules (platform/quality/rules.py does the selection)
+CHAT_RULE_POLICY = RulePolicy(
+    excluded=EXCLUDED_RULES, guidance=GUIDANCE_RULES, conditions=RULE_CONDITIONS
+)
 
 
 def specs_for_turn(content_format: str, trace_found: bool) -> list[str]:
@@ -223,47 +202,17 @@ def specs_for_turn(content_format: str, trace_found: bool) -> list[str]:
         specs.append(COMMAND_SPEC)
     specs.append(ASSISTANT_SPEC)
     format_spec = ChatPromptBuilder.format_spec_name(content_format)
-    if format_spec in _library().specs:
+    if format_spec in library().specs:
         specs.append(format_spec)
     return specs
 
 
-def _applies(expression: str | None, content_format: str) -> bool:
-    """A `when` condition for this format; conditions on the user state are unknown."""
-    if expression is None:
-        return True
-    if "state" in expression:
-        return False
-    return _compiler().check(expression, response_format=content_format)
-
-
 @functools.cache
 def spec_rules(spec: str, content_format: str) -> tuple[SpecRule, ...]:
-    """Judged rules of one spec for a format, in spec order, each rule once."""
-    rules: list[SpecRule] = []
-    seen: set[str] = set()
-    for section in _library().specs[spec].sections:
-        if not _applies(section.when, content_format):
-            continue
-        for ref in section.rules + section.fallback:
-            rule_id = ref.rule
-            if (
-                rule_id in seen
-                or rule_id in EXCLUDED_RULES
-                or _is_templated(rule_id)
-                or not _applies(ref.when, content_format)
-            ):
-                continue
-            seen.add(rule_id)
-            rules.append(
-                SpecRule(
-                    spec=spec,
-                    rule_id=rule_id,
-                    text=_compiler().render_rule(rule_id),
-                    guidance=rule_id in GUIDANCE_RULES,
-                )
-            )
-    return tuple(rules)
+    """Judged rules of one chat spec for a response format."""
+    return select_spec_rules(
+        spec, {"response_format": content_format}, CHAT_RULE_POLICY
+    )
 
 
 def rules_for_turn(
@@ -281,7 +230,4 @@ def rules_for_turn(
 
 def spec_versions(content_format: str, trace_found: bool) -> dict[str, str]:
     """Spec name -> fingerprint of the spec version the turn was judged against."""
-    return {
-        spec: _compiler().fingerprint(spec)
-        for spec in specs_for_turn(content_format, trace_found)
-    }
+    return spec_fingerprints(specs_for_turn(content_format, trace_found))
