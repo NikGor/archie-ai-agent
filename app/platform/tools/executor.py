@@ -2,11 +2,10 @@ import asyncio
 import logging
 from typing import Any
 from langfuse import get_client
-from ..models.orchestration_sgr import Parameter, ToolCallRequest
-from ..models.tool_models import ToolContext, ToolResult
-from ..models.ws_models import StatusCallback, StatusNotifier
-from ..tools.tool_factory import ToolFactory
-from .status_messages import get_tool_detail
+from ...models.ws_models import StatusCallback, StatusNotifier
+from ...utils.status_messages import get_tool_detail
+from .models import Parameter, ToolCall, ToolContext, ToolResult
+from .registry import ToolRegistry
 
 
 logger = logging.getLogger(__name__)
@@ -31,7 +30,7 @@ class RepeatedArgumentsError(ValueError):
     """Repeated parameters of one tool call have different counts (ARCHIE-255)."""
 
 
-def expand_repeated_arguments(tool_call: ToolCallRequest) -> list[ToolCallRequest]:
+def expand_repeated_arguments(tool_call: ToolCall) -> list[ToolCall]:
     """Split a call that repeats a parameter into one call per value (ARCHIE-255).
 
     Stage 1 sometimes puts several values of one parameter into one call, e.g.
@@ -66,8 +65,8 @@ def expand_repeated_arguments(tool_call: ToolCallRequest) -> list[ToolCallReques
 
 
 async def execute_tool_call(
-    tool_call: ToolCallRequest,
-    tool_factory: ToolFactory | None = None,
+    tool_call: ToolCall,
+    registry: ToolRegistry,
     on_status: StatusCallback = None,
     context: ToolContext | None = None,
 ) -> ToolResult:
@@ -78,7 +77,7 @@ async def execute_tool_call(
         input=convert_parameters_to_dict(tool_call.arguments),
         metadata={"reason": tool_call.reason},
     ) as observation:
-        result = await _run_tool_call(tool_call, tool_factory, on_status, context)
+        result = await _run_tool_call(tool_call, registry, on_status, context)
         observation.update(
             output=result.output,
             level="ERROR" if result.error else "DEFAULT",
@@ -88,16 +87,14 @@ async def execute_tool_call(
 
 
 async def _run_tool_call(
-    tool_call: ToolCallRequest,
-    tool_factory: ToolFactory | None,
+    tool_call: ToolCall,
+    registry: ToolRegistry,
     on_status: StatusCallback,
     context: ToolContext | None,
 ) -> ToolResult:
     logger.info(
         f"tool_executor_001: Executing tool: \033[36m{tool_call.tool_name}\033[0m"
     )
-    if tool_factory is None:
-        tool_factory = ToolFactory()
     notifier = StatusNotifier(on_status)
     arguments_dict = convert_parameters_to_dict(tool_call.arguments)
     detail = get_tool_detail(tool_call.tool_name, arguments_dict)
@@ -109,11 +106,7 @@ async def _run_tool_call(
     )
     logger.info(f"tool_executor_002: Arguments: \033[33m{arguments_dict}\033[0m")
     try:
-        result = await tool_factory.execute_tool(
-            tool_name=tool_call.tool_name,
-            tool_arguments=arguments_dict,
-            context=context,
-        )
+        result = await registry.execute(tool_call.tool_name, arguments_dict, context)
         result_error = _result_error(result)
         if result_error:
             logger.error(
@@ -164,12 +157,12 @@ async def _run_tool_call(
 
 
 async def execute_tool_calls(
-    tool_calls: list[ToolCallRequest],
-    tool_factory: ToolFactory | None = None,
+    tool_calls: list[ToolCall],
+    registry: ToolRegistry,
     on_status: StatusCallback = None,
     context: ToolContext | None = None,
 ) -> list[ToolResult]:
-    calls: list[ToolCallRequest] = []
+    calls: list[ToolCall] = []
     rejected: list[ToolResult] = []
     for tool_call in tool_calls:
         try:
@@ -189,11 +182,7 @@ async def execute_tool_calls(
             f"tool_executor_006: Repeated arguments expanded into \033[33m{len(calls)}\033[0m calls"
         )
     logger.info(f"tool_executor_004: Executing \033[33m{len(calls)}\033[0m tools")
-    if tool_factory is None:
-        tool_factory = ToolFactory()
-    tasks = [
-        execute_tool_call(call, tool_factory, on_status, context) for call in calls
-    ]
+    tasks = [execute_tool_call(call, registry, on_status, context) for call in calls]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     successful = sum(1 for r in results if isinstance(r, ToolResult) and r.success)
     logger.info(
