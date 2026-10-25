@@ -8,6 +8,7 @@ SWARM_TOOL_GROUP = ToolGroup(
     name="swarm",
     exclusive=True,
     tools={
+        "spawn_agent_tool": "app.agents.swarm.tools.spawn_agent_tool",
         "weather_tool": "app.tools.weather_tool",
         "alert_chat_tool": "app.agents.swarm.tools.alert_chat_tool",
         "swarm_alert_tool": "app.agents.swarm.tools.swarm_alert_tool",
