@@ -1,6 +1,6 @@
 # Makefile for Archie AI Agent
 
-.PHONY: help install run dev chat voice test clean docker-build docker-run docker-stop lint format check black mypy ruff
+.PHONY: help install run dev chat voice test clean docker-build docker-run docker-stop lint format check black mypy ruff imports snapshot
 
 # Default target
 help:
@@ -137,7 +137,13 @@ clean-lines:
 	poetry run ruff check --select E303,E304,E305,E301,E302,I --fix .
 	@echo "✅ Blank lines and imports cleaned up!"
 
-lint: ruff mypy
+imports:
+	poetry run lint-imports
+
+snapshot:
+	poetry run python scripts/platform_snapshot.py
+
+lint: ruff mypy imports
 	@echo "✅ All linting checks completed!"
 
 check: black-check lint
