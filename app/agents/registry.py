@@ -5,7 +5,11 @@ import functools
 import importlib
 
 
-AGENT_KIND_PACKAGES = ("app.agents.chat.quality", "app.agents.swarm.quality")
+AGENT_KIND_PACKAGES = (
+    "app.agents.chat.quality",
+    "app.agents.swarm.quality",
+    "app.agents.ephemeral.quality",
+)
 
 
 @functools.cache
