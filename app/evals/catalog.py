@@ -9,15 +9,19 @@ from typing import Literal, get_args, get_origin
 import httpx
 from archie_shared.chat.models import ChatRequest
 from archie_shared.evals.models import (
+    EvalAgentKind,
     EvalCaseInfo,
     EvalExpect,
     EvalRunRequest,
     EvalStage,
+    SwarmEvalInput,
 )
 from archie_shared.ui.models import AdvancedAnswerItem
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from app.agents.chat.messages import ChatPromptBuilder
 from app.agents.chat.quality.rules import ASSISTANT_SPEC, COMMAND_SPEC, rules_for_turn
+from app.agents.swarm.agents import SWARM_AGENTS
+from app.agents.swarm.quality.rules import case_rules, case_specs
 from app.config import settings
 from app.platform.prompts.compiler import PromptCompiler
 from app.platform.tools.models import ToolName
@@ -57,7 +61,9 @@ class EvalCaseDraft(BaseModel):
     )
     input: str = Field(min_length=1, description="User message")
     response_format: str = Field(default="plain", description="Response format")
-    stage: EvalStage = Field(default="full", description="stage1 or full")
+    stage: EvalStage = Field(default="full", description="stage1, full, swarm_turn, swarm_watch")
+    agent_kind: EvalAgentKind = Field(default="chat", description="chat or swarm")
+    swarm: SwarmEvalInput | None = Field(default=None, description="Swarm case context")
     judge: bool = Field(default=False, description="Score with the LLM judge")
     expect: EvalExpect = Field(description="Assertions")
 
@@ -73,6 +79,10 @@ class EvalSchema(BaseModel):
     action_types: list[str] = Field(description="Stage 1 action types")
     rules: dict[str, list[str]] = Field(
         description="Response format -> judged rules ('spec:rule_id') a case can protect"
+    )
+    swarm_rules: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Swarm agent -> judged rules of its turn a swarm case can protect",
     )
 
 
@@ -117,6 +127,10 @@ def get_schema() -> EvalSchema:
                 ChatRequest.model_fields["response_format"].annotation
             )
         },
+        swarm_rules={
+            agent_id: [rule.key for rule in case_rules(agent_id, "swarm_turn", None)]
+            for agent_id in SWARM_AGENTS
+        },
     )
 
 
@@ -130,8 +144,45 @@ def infer_prompts(stage: EvalStage, response_format: str) -> list[str]:
     return ["cmd_prompt", format_prompt]
 
 
+def _swarm_errors(draft: EvalCaseDraft) -> list[str]:
+    """A swarm case names a known agent, a check for swarm_watch, and protects
+    only judged rules of its specs (ARCHIE-297)."""
+    swarm = draft.swarm
+    if not draft.stage.startswith("swarm_"):
+        return [f"agent_kind swarm needs stage swarm_turn or swarm_watch, not {draft.stage}"]
+    if swarm is None or swarm.agent_id not in SWARM_AGENTS:
+        return ["swarm.agent_id must name a swarm agent"]
+    errors = []
+    if draft.stage == "swarm_watch" and swarm.watch_task is None:
+        errors.append("swarm_watch needs swarm.watch_task")
+    known = {rule.key for rule in case_rules(swarm.agent_id, draft.stage, swarm.watch_task)}
+    errors += [
+        f"rule {key!r} is not a judged rule of this swarm case"
+        for key in draft.rules
+        if key not in known
+    ]
+    if draft.expect.rules_followed and not draft.rules:
+        errors.append("rules_followed needs at least one rule")
+    return errors
+
+
 def build_case(draft: EvalCaseDraft) -> EvalCaseInfo:
     """Check a draft against the agent's tools, item types and prompts; add inferred prompts."""
+    if draft.agent_kind == "swarm":
+        errors = _swarm_errors(draft)
+        unknown_tools = set(draft.expect.tools_called or []) - set(get_schema().tools)
+        if unknown_tools:
+            errors.append(f"unknown tools {sorted(unknown_tools)}")
+        if errors:
+            raise CatalogError(f"{draft.id}: " + "; ".join(errors))
+        assert draft.swarm is not None
+        inferred = case_specs(draft.swarm.agent_id, draft.stage)
+        return EvalCaseInfo(
+            prompts=inferred + [p for p in draft.extra_prompts if p not in inferred],
+            **draft.model_dump(exclude={"extra_prompts"}),
+        )
+    if draft.stage.startswith("swarm_"):
+        raise CatalogError(f"{draft.id}: stage {draft.stage} needs agent_kind swarm")
     schema = get_schema()
     errors = []
     unknown_tools = set(draft.expect.tools_called or []) - set(schema.tools)
