@@ -4,6 +4,7 @@ import functools
 import logging
 from collections.abc import Awaitable, Callable
 from archie_shared.chat.models import ChatMessage, ChatRequest
+from app.agents.chat.requests import ChatRunRequest
 from .agents.chat.pipeline import ChatPipeline
 from .agents.chat.quality.rules import spec_versions
 from .config import DEFAULT_MODEL
@@ -19,11 +20,11 @@ logger = logging.getLogger(__name__)
 StatusCallback = Callable[[StatusUpdate], Awaitable[None]] | None
 
 
-
 @functools.cache
 def get_chat_pipeline() -> ChatPipeline:
     """The chat pipeline of this process, built on first use (ARCHIE-171)."""
     return ChatPipeline()
+
 
 async def handle_chat(
     user_request: ChatRequest,
@@ -53,23 +54,25 @@ async def handle_chat(
         )
         images = None
     agent_response = await get_chat_pipeline().arun(
-        messages=current_messages,
-        command_model=command_model,
-        final_output_model=final_output_model,
-        command_effort=user_request.command_effort,
-        final_output_effort=user_request.final_output_effort,
-        response_format=user_request.response_format,
-        previous_response_id=user_request.previous_message_id,
-        chat_history=user_request.chat_history,
-        user_name=user_request.user_name,
-        conversation_id=user_request.conversation_id,
-        no_image=no_image,
-        images=images,
-        max_command_iterations=max_command_iterations,
-        on_status=on_status,
-        on_stream=on_stream,
-        on_stream_event=on_stream_event,
-        demo_mode=bool(user_request.demo_mode),
+        ChatRunRequest(
+            messages=current_messages,
+            command_model=command_model,
+            final_output_model=final_output_model,
+            command_effort=user_request.command_effort,
+            final_output_effort=user_request.final_output_effort,
+            response_format=user_request.response_format,
+            previous_response_id=user_request.previous_message_id,
+            chat_history=user_request.chat_history,
+            user_name=user_request.user_name,
+            conversation_id=user_request.conversation_id,
+            no_image=no_image,
+            images=images,
+            max_command_iterations=max_command_iterations,
+            on_status=on_status,
+            on_stream=on_stream,
+            on_stream_event=on_stream_event,
+            demo_mode=bool(user_request.demo_mode),
+        )
     )
 
     # Create response message
