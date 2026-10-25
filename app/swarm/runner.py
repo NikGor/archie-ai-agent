@@ -451,6 +451,7 @@ class SwarmAgentRunner:
                 for call in calls
             ],
             registry=self.tool_registry,
+            allowed=profile.tools,
             context=context,
         )
 
