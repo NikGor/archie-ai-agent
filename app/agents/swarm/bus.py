@@ -10,6 +10,7 @@ import json
 import logging
 import re
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
 from archie_shared.swarm.models import (
     SWARM_TEXT_MAX_LENGTH,
@@ -57,10 +58,12 @@ def clip_text(text: str) -> str:
 
 
 class SwarmHub:
-    """In-process pub/sub of swarm server events."""
+    """In-process pub/sub of swarm server events; relays (the Redis bridge,
+    ARCHIE-299) also get every event published here."""
 
     def __init__(self) -> None:
         self._queues: set[asyncio.Queue[SwarmServerEvent]] = set()
+        self.relays: list[Callable[[SwarmServerEvent], None]] = []
 
     def subscribe(self) -> asyncio.Queue[SwarmServerEvent]:
         queue: asyncio.Queue[SwarmServerEvent] = asyncio.Queue()
@@ -71,6 +74,12 @@ class SwarmHub:
         self._queues.discard(queue)
 
     def publish(self, event: SwarmServerEvent) -> None:
+        self.deliver(event)
+        for relay in self.relays:
+            relay(event)
+
+    def deliver(self, event: SwarmServerEvent) -> None:
+        """Local listeners only (events that came from another process)."""
         for queue in self._queues:
             queue.put_nowait(event)
 
