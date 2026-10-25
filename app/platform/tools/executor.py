@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections.abc import Collection
 from typing import Any
 from langfuse import get_client
 from ...models.ws_models import StatusCallback, StatusNotifier
@@ -159,12 +160,28 @@ async def _run_tool_call(
 async def execute_tool_calls(
     tool_calls: list[ToolCall],
     registry: ToolRegistry,
+    allowed: Collection[str],
     on_status: StatusCallback = None,
     context: ToolContext | None = None,
 ) -> list[ToolResult]:
+    """Run calls in parallel. Only tools in `allowed` (the tools this agent kind
+    shows to its LLM) run; the LLM may still name another tool from ToolName."""
     calls: list[ToolCall] = []
     rejected: list[ToolResult] = []
     for tool_call in tool_calls:
+        if tool_call.tool_name not in allowed:
+            logger.warning(
+                f"tool_executor_warning_002: \033[33m{tool_call.tool_name}\033[0m is not available here"
+            )
+            rejected.append(
+                ToolResult(
+                    tool_name=tool_call.tool_name,
+                    success=False,
+                    output={},
+                    error=f"Unknown tool: {tool_call.tool_name}",
+                )
+            )
+            continue
         try:
             calls += expand_repeated_arguments(tool_call)
         except RepeatedArgumentsError as e:
