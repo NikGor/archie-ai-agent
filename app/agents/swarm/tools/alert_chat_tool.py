@@ -10,8 +10,8 @@ import logging
 import uuid
 from typing import Any
 import httpx
+from app.agents.swarm.agents import SwarmRoster
 from app.config import settings
-from app.swarm.agents import SwarmRoster
 
 
 logger = logging.getLogger(__name__)
