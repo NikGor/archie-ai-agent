@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from app.agent.prompt_builder import PromptBuilder
 from app.agent.prompt_compiler import PromptCompiler
 from app.config import settings
-from app.models.orchestration_sgr import ToolName
+from app.platform.tools.models import ToolName
 from app.monitoring.spec_rules import ASSISTANT_SPEC, COMMAND_SPEC, rules_for_turn
 
 
