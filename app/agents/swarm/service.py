@@ -1,13 +1,13 @@
 """Wires the swarm components together; started from the FastAPI lifespan."""
 
-from .agents import SwarmRoster
-from .bus import SwarmBus, SwarmHub
-from .council import SwarmCouncil
-from .dispatcher import SwarmDispatcher
-from .journal import SwarmJournal
-from .memory import SwarmMemory
-from .runner import SwarmAgentRunner
-from .ticker import SwarmTicker
+from app.agents.swarm.agents import SwarmRoster
+from app.agents.swarm.bus import SwarmBus, SwarmHub
+from app.agents.swarm.council import SwarmCouncil
+from app.agents.swarm.dispatcher import SwarmDispatcher
+from app.agents.swarm.journal import SwarmJournal
+from app.agents.swarm.memory import SwarmMemory
+from app.agents.swarm.runner import SwarmAgentRunner
+from app.agents.swarm.ticker import SwarmTicker
 
 
 class SwarmService:
