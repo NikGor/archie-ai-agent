@@ -8,20 +8,21 @@ load_dotenv()
 
 import uvicorn  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
+from app.agents.background import configure_ephemeral
+from app.agents.chat.service import ChatService  # noqa: E402
+from app.agents.registry import load_agent_kinds  # noqa: E402
+from app.agents.swarm.bridge import SwarmHubBridge  # noqa: E402
+from app.agents.swarm.endpoints import router as swarm_router  # noqa: E402
+from app.agents.swarm.service import swarm_service  # noqa: E402
 from app.backend.cron_scheduler import cron_scheduler  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.endpoints import router  # noqa: E402
 from app.evals.endpoints import router as evals_router  # noqa: E402
 from app.evals.endpoints import ws_router as evals_ws_router  # noqa: E402
 from app.monitoring.endpoints import router as monitoring_router  # noqa: E402
-from app.agents.swarm.endpoints import router as swarm_router  # noqa: E402
-from app.agents.swarm.service import swarm_service  # noqa: E402
-from app.utils.tracing import init_tracing, shutdown_tracing  # noqa: E402
-from app.agents.chat.service import ChatService  # noqa: E402
-from app.agents.swarm.bridge import SwarmHubBridge  # noqa: E402
-from app.agents.registry import load_agent_kinds  # noqa: E402
 from app.runtime_endpoints import router as runtime_router  # noqa: E402
 from app.runtime_endpoints import supervisor  # noqa: E402
+from app.utils.tracing import init_tracing, shutdown_tracing  # noqa: E402
 from app.ws_docs import router as ws_docs_router  # noqa: E402
 
 
@@ -44,6 +45,7 @@ if settings.runtime_mode == "api":
     swarm_service.bridge = SwarmHubBridge(swarm_service.hub, role="api")
     supervisor.register(swarm_service.bridge)
 else:
+    configure_ephemeral()
     supervisor.register(cron_scheduler)
     if settings.swarm_enabled:
         supervisor.register(swarm_service)
