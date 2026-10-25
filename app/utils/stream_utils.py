@@ -32,8 +32,8 @@ class JsonPathExtractor:
     State machine that extracts the string value at ``path`` from a streaming
     JSON response, emitting its characters as they arrive.
 
-    ``path`` is a sequence of object keys, e.g. ``["sgr", "reasoning"]`` for
-    ``{"sgr": {"reasoning": "..."}}``, or ``["text"]`` for a top-level
+    ``path`` is a sequence of object keys, e.g. ``["sgr", "rationale"]`` for
+    ``{"sgr": {"rationale": "..."}}``, or ``["text"]`` for a top-level
     ``{"text": "..."}``. Field ordering inside each object does not matter —
     the extractor scans depth-by-depth for the next key in the path,
     ignoring unrelated sibling fields (including same-named keys nested at
@@ -48,7 +48,7 @@ class JsonPathExtractor:
 
     Usage::
 
-        extractor = JsonPathExtractor(["sgr", "reasoning"])
+        extractor = JsonPathExtractor(["sgr", "rationale"])
         async for token in stream:
             chunk = extractor.feed(token)
             if chunk:
