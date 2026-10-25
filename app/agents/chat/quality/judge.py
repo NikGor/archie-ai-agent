@@ -1,7 +1,7 @@
-"""Judge for stored chat turns on TypeSafe Jev (ARCHIE-213).
+"""Judge for stored chat turns on TypeSafe Jev (ARCHIE-213, ARCHIE-296).
 
 Each turn is judged against the rules of the prompt specs that produced it
-(see spec_rules.py): one Jev question per rule — followed / partly / violated /
+(see rules.py; questions and grades: platform/quality/judge.py): one Jev question per rule — followed / partly / violated /
 not applicable. Jev is a decision model (OpenRouter Decisions API): it returns
 typed answers with probabilities, no free text. All questions of a turn go in
 one request and are answered in parallel.
@@ -10,41 +10,29 @@ one request and are answered in parallel.
 import functools
 import json
 import logging
-from archie_shared.monitoring.models import (
-    MonitorGrade,
-    MonitorMessage,
-    MonitorRuleScore,
-)
-from pydantic import BaseModel, Field
+from archie_shared.monitoring.models import MonitorMessage, MonitorRuleScore
 from app.agents.chat.messages import ChatPromptBuilder
 from app.agents.chat.tool_access import chat_tool_names
-from app.evals.prompt_descriptions import PROMPT_DESCRIPTIONS
-from app.platform.llm.decisions import DecisionsError as JudgeError
 from app.platform.llm.decisions import decide as _decide
+from app.platform.prompts.descriptions import PROMPT_DESCRIPTIONS
+from app.platform.quality.judge import (
+    ANSWERS,
+    JudgeError,
+    JudgeResult,
+    build_questions,
+    grade_from_probabilities,
+    parse_answers,
+)
 from app.tools.catalog import tool_registry
 from app.utils.skill_utils import list_skills
 from .outcome import GOAL_KEY as OUTCOME_GOAL_KEY
 from .outcome import TITLE_KEY, build_outcome_questions, parse_outcome, parse_title
-from .spec_rules import SpecRule, rules_for_turn, spec_versions
+from .rules import rules_for_turn, spec_versions
 from .traces import TraceTurn
 
 
 logger = logging.getLogger(__name__)
 
-GRADE_ORDER: tuple[MonitorGrade, ...] = ("red", "orange", "green")
-FOLLOWED = "followed"
-PARTLY = "partly"
-VIOLATED = "violated"
-NOT_APPLICABLE = "not_applicable"
-ANSWERS = {
-    FOLLOWED: "The response follows the rule",
-    PARTLY: "The response follows the rule only in part",
-    VIOLATED: "The response breaks the rule",
-    NOT_APPLICABLE: "The rule does not concern this request or response",
-}
-# Probability -> grade, calibrated on 58 real turns (ARCHIE-213)
-_RED_FROM = 0.7  # P(violated)
-_ORANGE_FROM = 0.6  # P(violated) + P(partly)
 _HISTORY_MESSAGES = 6
 _HISTORY_TEXT_CHARS = 400
 _RESPONSE_CHARS = 10000
@@ -56,33 +44,6 @@ _TOOL_ARGUMENT_CHARS = 300
 _SKIPPED_KEYS = {"image_prompt", "image_url", "icon", "color", "palette"}
 # Catalog tool schemas are built for this model's parser; any OpenAI model works
 _CATALOG_MODEL = "gpt-4.1"
-
-
-class JudgeResult(BaseModel):
-    rules: list[MonitorRuleScore] = Field(description="Score per judged rule")
-    spec_versions: dict[str, str] = Field(
-        description="Spec -> fingerprint of the version that produced the turn "
-        "(from its trace), else of the judged version"
-    )
-    model: str = Field(description="Jev version that answered")
-    cost: float | None = Field(default=None, description="Cost in USD")
-
-
-def worst_grade(scores: list[MonitorRuleScore]) -> MonitorGrade:
-    """Overall grade of a turn: its worst graded rule."""
-    grades = {score.grade for score in scores if score.grade}
-    return next((grade for grade in GRADE_ORDER if grade in grades), "green")
-
-
-def grade_from_probabilities(probabilities: dict[str, float]) -> MonitorGrade | None:
-    if max(probabilities, key=probabilities.get) == NOT_APPLICABLE:
-        return None
-    violated = probabilities.get(VIOLATED, 0.0)
-    if violated >= _RED_FROM:
-        return "red"
-    if violated + probabilities.get(PARTLY, 0.0) >= _ORANGE_FROM:
-        return "orange"
-    return "green"
 
 
 @functools.cache
@@ -230,56 +191,6 @@ def _next_user_message(
     """The user's reply to messages[index], if the conversation has one."""
     following = messages[index + 1 : index + 2]
     return following[0] if following and following[0].role == "user" else None
-
-
-def _question_key(index: int) -> str:
-    # Positional keys: rule ids may repeat across specs and contain any characters
-    return f"rule_{index}"
-
-
-def _condition_note(rule: SpecRule) -> str:
-    if rule.condition is None:
-        return ""
-    return (
-        f"The rule applies only if {rule.condition}. "
-        f"If this is not the case, answer: {NOT_APPLICABLE}.\n"
-    )
-
-
-def build_questions(rules: list[SpecRule]) -> dict[str, dict]:
-    return {
-        _question_key(index): {
-            "type": "choice",
-            "instructions": (
-                f"Rule from the {rule.spec} prompt that the assistant had to follow:\n"
-                f"{rule.text}\n{_condition_note(rule)}"
-                "Did the assistant response follow this rule?"
-            ),
-            "criteria": ANSWERS,
-        }
-        for index, rule in enumerate(rules)
-    }
-
-
-def _cap_guidance(grade: MonitorGrade | None, rule: SpecRule) -> MonitorGrade | None:
-    """Style advice can make a turn orange, never red."""
-    return "orange" if rule.guidance and grade == "red" else grade
-
-
-def parse_answers(rules: list[SpecRule], answers: dict) -> list[MonitorRuleScore]:
-    scores = []
-    for index, rule in enumerate(rules):
-        probabilities = answers[_question_key(index)]["probabilities"]
-        scores.append(
-            MonitorRuleScore(
-                spec=rule.spec,
-                rule_id=rule.rule_id,
-                text=rule.text,
-                grade=_cap_guidance(grade_from_probabilities(probabilities), rule),
-                probability=round(max(probabilities.values()), 3),
-            )
-        )
-    return scores
 
 
 def _is_first_assistant_turn(messages: list[MonitorMessage], index: int) -> bool:
