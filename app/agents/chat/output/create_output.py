@@ -4,18 +4,17 @@ decisions and tool results.
 
 import logging
 from typing import Any
-from archie_shared.chat.models import ReasoningEffort
 from app import config
+from app.agents.chat.formats import resolve_format
 from app.agents.chat.messages import ChatPromptBuilder
 from app.agents.chat.output.postprocess import build_agent_response
 from app.agents.chat.output.runners import stream_and_collect
+from app.agents.chat.requests import OutputRequest
 from app.models.output_models import (
     AgentResponse,
     Level2Response,
     PlainResponse,
-    get_response_model_for_format,
 )
-from app.models.ws_models import StreamCallback, StreamEventCallback
 from app.platform.llm.catalog import get_provider_for_model
 from app.platform.llm.registry import get_client, parse_llm_response
 from app.platform.prompts.context import datetime_note
@@ -25,11 +24,6 @@ from app.utils.schema_filter import build_filtered_ui_response
 from app.utils.stream_utils import JsonPathExtractor
 
 
-_STREAMABLE_FORMATS = frozenset({"plain", "voice", "formatted_text"})
-_LEVEL2_STREAMABLE_FORMATS = frozenset({"level2_answer"})
-_UI_STREAMABLE_FORMATS = frozenset(
-    {"ui_answer", "dashboard", "widget", "level3_answer"}
-)
 # Langfuse generation name for Stage 3 on every path (ARCHIE-211)
 _OBSERVATION_NAME = "generate-response"
 
@@ -80,21 +74,7 @@ def _build_volatile_prompt(
 Create a complete, well-formatted response in the specified format."""
 
 
-async def create_output(
-    user_input: str,
-    command_summary: str,
-    tool_results: list[ToolResult] | None = None,
-    response_format: str = "plain",
-    model: str = config.DEFAULT_MODEL,
-    state: dict | None = None,
-    previous_response_id: str | None = None,
-    chat_history: str | None = None,
-    intents: list[str] | None = None,
-    no_image: bool = False,
-    on_stream: StreamCallback = None,
-    on_stream_event: StreamEventCallback = None,
-    reasoning_effort: ReasoningEffort | None = None,
-) -> AgentResponse:
+async def create_output(request: OutputRequest) -> AgentResponse:
     """
     Create final formatted output response.
 
@@ -117,6 +97,19 @@ async def create_output(
     Returns:
         AgentResponse: Final formatted response with SGROutput trace
     """
+    user_input = request.user_input
+    command_summary = request.command_summary
+    tool_results = request.tool_results
+    response_format = request.response_format
+    model = request.model
+    state = request.state
+    previous_response_id = request.previous_response_id
+    chat_history = request.chat_history
+    intents = request.intents
+    no_image = request.no_image
+    on_stream = request.on_stream
+    on_stream_event = request.on_stream_event
+    reasoning_effort = request.reasoning_effort
     logger.info("create_output_001: Creating final output response")
     logger.info(f"create_output_002: Format: \033[36m{response_format}\033[0m")
 
@@ -166,7 +159,7 @@ async def create_output(
             f"create_output_004b: Using filtered UIResponse for intents: \033[35m{intents}\033[0m, no_image: \033[35m{no_image}\033[0m"
         )
     else:
-        response_model = get_response_model_for_format(response_format)
+        response_model = resolve_format(response_format).output_model
         logger.info(
             f"create_output_004b: Using response model: \033[36m{response_model.__name__}\033[0m"
         )
@@ -174,7 +167,7 @@ async def create_output(
     # ── Streaming path: plain/voice + on_stream callback ──────────────────────
     if (
         hasattr(client, "create_completion_stream")
-        and response_format in _STREAMABLE_FORMATS
+        and resolve_format(response_format).stream_mode == "text"
         and on_stream
     ):
         response_id_out: list[str] = []
@@ -207,7 +200,7 @@ async def create_output(
     # ── Streaming path: level2_answer text tokens ──────────────────────────────
     if (
         hasattr(client, "create_completion_stream")
-        and response_format in _LEVEL2_STREAMABLE_FORMATS
+        and resolve_format(response_format).stream_mode == "level2"
         and on_stream_event
     ):
 
@@ -245,7 +238,7 @@ async def create_output(
     # ── Streaming path: UI formats + on_stream_event callback ─────────────────
     if (
         hasattr(client, "create_completion_stream")
-        and response_format in _UI_STREAMABLE_FORMATS
+        and resolve_format(response_format).stream_mode == "ui"
         and on_stream_event
     ):
         await on_stream_event("stream_placeholder", None)
