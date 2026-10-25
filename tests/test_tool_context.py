@@ -11,7 +11,6 @@ from typing import Literal
 from unittest.mock import AsyncMock, patch
 import app.tools.google_search_tool as google_search_tool_module
 from app.agent.command_loop import CommandLoop
-from app.agent.context import ConversationContext
 from app.agent.pipeline_metrics import PipelineMetrics
 from app.models.orchestration_sgr import (
     ActionType,
@@ -22,6 +21,7 @@ from app.models.orchestration_sgr import (
 )
 from app.models.tool_models import ToolContext, ToolResult
 from app.models.ws_models import StatusNotifier
+from app.platform.llm.context import ConversationContext
 from app.tools.google_search_tool import build_search_instruction, google_search_tool
 from app.tools.tool_factory import ToolFactory
 from app.utils.tool_executor import execute_tool_calls
