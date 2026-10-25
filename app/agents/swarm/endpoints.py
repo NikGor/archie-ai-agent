@@ -25,8 +25,8 @@ from archie_shared.swarm.models import (
 )
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import TypeAdapter, ValidationError
-from .agents import SELECTABLE_MODELS
-from .service import swarm_service
+from app.agents.swarm.agents import SELECTABLE_MODELS
+from app.agents.swarm.service import swarm_service
 
 
 logger = logging.getLogger(__name__)
