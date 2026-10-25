@@ -21,7 +21,7 @@ from archie_shared.swarm.models import (
     SwarmWatchTask,
 )
 from pydantic import BaseModel, Field
-from ..backend.redis_factory import get_async_redis
+from app.backend.redis_factory import get_async_redis
 
 
 logger = logging.getLogger(__name__)
