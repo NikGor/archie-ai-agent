@@ -143,23 +143,14 @@ name = "Low layers do not import agents, quality or API"
 type = "forbidden"
 source_modules = ["app.platform", "app.backend", "app.utils", "app.models", "app.tools"]
 forbidden_modules = ["app.agents", "app.monitoring", "app.evals", "app.api_controller", "app.endpoints"]
-ignore_imports = [
-    "app.utils.tracing -> app.monitoring.spec_rules",  # ARCHIE-296: spec_versions moves to platform/prompts
-]
 
 [[tool.importlinter.contracts]]
 name = "Swarm does not import the chat agent"
 type = "forbidden"
 source_modules = ["app.agents.swarm"]
 forbidden_modules = ["app.agents.chat", "app.api_controller", "app.endpoints"]
-ignore_imports = [
-    "app.utils.tracing -> app.monitoring.spec_rules",  # ARCHIE-296
-]
 
 [[tool.importlinter.contracts]]
 name = "Agent kinds are independent of each other"
 type = "independence"
 modules = ["app.agents.chat", "app.agents.swarm"]
-ignore_imports = [
-    "app.utils.tracing -> app.monitoring.spec_rules",  # ARCHIE-296
-]
