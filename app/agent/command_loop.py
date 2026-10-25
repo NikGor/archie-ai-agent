@@ -15,6 +15,7 @@ from ..platform.tools.models import ToolContext, ToolResult
 from ..models.ws_models import StatusCallback, StatusNotifier
 from ..platform.llm.context import ConversationContext
 from ..platform.tools.registry import ToolRegistry
+from .tool_access import chat_tool_names
 from ..platform.tools.executor import execute_tool_calls
 from ..utils.trace_utils import StepTimer
 from .pipeline_metrics import PipelineMetrics
@@ -170,6 +171,7 @@ class CommandLoop:
                     new_results = await execute_tool_calls(
                         tool_calls=[tc.to_call() for tc in decision.sgr.tool_calls],
                         registry=self.tool_registry,
+                        allowed=chat_tool_names(response_format),
                         on_status=on_status,
                         context=ToolContext(
                             user_timezone=user_state.user_timezone,
