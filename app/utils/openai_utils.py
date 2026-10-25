@@ -1,6 +1,7 @@
 import logging
 from collections.abc import Callable
 from typing import Any
+from archie_shared.chat.models import ReasoningEffort
 from pydantic import BaseModel
 from app.utils.cache_utils import apply_cache_breakpoints
 from app.utils.tools_utils import openai_responses_parse
@@ -16,6 +17,7 @@ def build_openai_args(
     previous_response_id: str | None = None,
     tools: list[Callable[..., Any]] | None = None,
     max_output_tokens: int | None = None,
+    reasoning_effort: ReasoningEffort | None = None,
 ) -> dict[str, Any]:
     """Build arguments for OpenAI client.responses.parse()."""
     args: dict[str, Any] = {
@@ -35,8 +37,18 @@ def build_openai_args(
     if tools:
         args["tools"] = [openai_responses_parse(func) for func in tools]
 
+    # ARCHIE-289: the user-chosen effort wins; "none" turns reasoning off, so no summary
+    if reasoning_effort:
+        args["reasoning"] = (
+            {"effort": reasoning_effort}
+            if reasoning_effort == "none"
+            else {"effort": reasoning_effort, "summary": "auto"}
+        )
+        logger.info(
+            f"openai_utils_002: Reasoning effort \033[35m{reasoning_effort}\033[0m for \033[36m{model}\033[0m"
+        )
     # Add reasoning parameters for thinking models
-    if model.startswith(("o1", "o3", "gpt-5")):
+    elif model.startswith(("o1", "o3", "gpt-5")):
         args["reasoning"] = {"effort": "medium", "summary": "auto"}
         logger.info(
             f"openai_utils_001: Added reasoning params for model \033[36m{model}\033[0m"
