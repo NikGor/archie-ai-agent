@@ -146,8 +146,6 @@ forbidden_modules = ["app.agent", "app.swarm", "app.monitoring", "app.evals", "a
 ignore_imports = [
     "app.tools.agent_task_tool -> app.api_controller",  # ARCHIE-293: chat tool moves to agents/chat
     "app.tools.output.create_output -> app.agent.prompt_builder",  # ARCHIE-293: Stage 3 moves to agents/chat
-    "app.tools.alert_chat_tool -> app.swarm.agents",  # ARCHIE-292: swarm-only tools register from the swarm
-    "app.tools.swarm_alert_tool -> app.swarm.service",  # ARCHIE-292
     "app.utils.tracing -> app.monitoring.spec_rules",  # ARCHIE-296: spec_versions moves to platform/prompts
 ]
 
