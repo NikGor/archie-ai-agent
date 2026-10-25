@@ -7,7 +7,7 @@ then decides if the swarm acts or opens an alert chat.
 
 import logging
 from typing import Any, Literal
-from app.swarm.service import swarm_service
+from app.agents.swarm.service import swarm_service
 
 
 logger = logging.getLogger(__name__)
