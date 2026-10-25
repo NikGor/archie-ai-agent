@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     swarm_stream_max_length: int = 500
     swarm_tool_result_max_chars: int = 1000
     swarm_max_tool_rounds: int = 3
+    # Budget of one swarm agent turn and the daily LLM spend of the swarm (ARCHIE-298)
+    swarm_turn_max_cost_usd: float = 0.10
+    swarm_turn_max_seconds: float = 180
+    swarm_daily_cost_usd: float | None = 3.0
     # A check that follows a live event (a match) runs again after this pause (ARCHIE-286)
     swarm_follow_up_minutes: int = 5
     swarm_user_name: str | None = None
