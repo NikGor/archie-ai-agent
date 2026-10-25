@@ -16,11 +16,15 @@ from archie_shared.monitoring.models import (
     MonitorRunInfo,
     MonitorRunRequest,
     MonitorTurnEvaluation,
+    SwarmMonitorPendingBatch,
+    SwarmMonitorRecord,
+    SwarmTurnEvaluation,
 )
 from langfuse import get_client
 from tenacity import AsyncRetrying, stop_after_attempt, wait_exponential
 from app.agents.chat.quality.judge import judge_turn
 from app.agents.chat.quality.traces import TraceTurn, fetch_session_turns, match_turn
+from app.agents.swarm.quality.judge import judge_record
 from app.config import settings
 from app.platform.quality.judge import worst_grade
 
@@ -75,8 +79,24 @@ class DjangoMonitorApi:
             raise MonitorConfigError(f"Pending turns are not available: {exc}") from exc
         return MonitorPendingBatch.model_validate_json(response.content)
 
+    async def get_swarm_pending(self, limit: int) -> SwarmMonitorPendingBatch:
+        try:
+            response = await self.client.get(
+                f"{self.base}/swarm/pending/",
+                params={"limit": limit},
+                headers=self.headers,
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise MonitorConfigError(
+                f"Pending swarm messages are not available: {exc}"
+            ) from exc
+        return SwarmMonitorPendingBatch.model_validate_json(response.content)
+
     async def post(
-        self, path: str, update: MonitorRunInfo | MonitorTurnEvaluation
+        self,
+        path: str,
+        update: MonitorRunInfo | MonitorTurnEvaluation | SwarmTurnEvaluation,
     ) -> None:
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(_HTTP_ATTEMPTS),
@@ -260,6 +280,47 @@ class MonitorRun:
             logger.error(f"monitor_service_error_003: Run state not stored: {exc}")
 
 
+class SwarmMonitorRun(MonitorRun):
+    """A run over swarm agent messages, judged by the swarm specs (ARCHIE-297)."""
+
+    def __init__(self, info: MonitorRunInfo, batch: SwarmMonitorPendingBatch) -> None:
+        super().__init__(info, MonitorPendingBatch(conversations=[]))
+        self.swarm_batch = batch
+
+    async def execute(self, api: DjangoMonitorApi) -> None:
+        try:
+            await asyncio.gather(
+                *(self._judge_record(api, record) for record in self.swarm_batch.records)
+            )
+            self.info.status = "completed"
+        except Exception as exc:
+            logger.error(f"monitor_service_error_004: Run {self.info.run_id} failed: {exc}")
+            self.info.status = "failed"
+            self.info.error = str(exc)
+        self.info.finished_at = _now()
+        await self.publish_state(api)
+        logger.info(
+            f"monitor_service_003: Swarm run \033[36m{self.info.run_id}\033[0m {self.info.status}: "
+            f"red {self.info.red}, orange {self.info.orange}, green {self.info.green}, "
+            f"errors {self.info.errors}, cost ${self.info.total_cost:.4f}"
+        )
+
+    async def _judge_record(self, api: DjangoMonitorApi, record: SwarmMonitorRecord) -> None:
+        try:
+            async with self.semaphore:
+                evaluation = await judge_record(
+                    record, self.info.run_id, self.info.judge_model
+                )
+            await api.post("swarm-evaluations", evaluation)
+        except Exception as exc:
+            logger.exception(
+                f"monitor_service_error_005: {record.message.message_id}: {exc}"
+            )
+            await self._count(None, None, api)
+            return
+        await self._count(evaluation.grade, evaluation.judge_cost, api)
+
+
 class MonitorService:
     """Starts runs in the background and keeps the last ones in memory."""
 
@@ -277,7 +338,10 @@ class MonitorService:
         client = httpx.AsyncClient(timeout=30)
         try:
             api = DjangoMonitorApi(client)
-            batch = await api.get_pending(request)
+            if request.agent_kind == "swarm":
+                swarm_batch = await api.get_swarm_pending(request.max_conversations)
+            else:
+                batch = await api.get_pending(request)
         except MonitorConfigError:
             await client.aclose()
             raise
@@ -286,11 +350,16 @@ class MonitorService:
             status="running",
             request=request,
             judge_model=request.judge_model or settings.monitor_judge_model,
-            conversations=len(batch.conversations),
-            total_turns=sum(len(c.pending_message_ids) for c in batch.conversations),
             created_at=_now(),
         )
-        run = MonitorRun(info, batch)
+        run: MonitorRun
+        if request.agent_kind == "swarm":
+            info.total_turns = len(swarm_batch.records)
+            run = SwarmMonitorRun(info, swarm_batch)
+        else:
+            info.conversations = len(batch.conversations)
+            info.total_turns = sum(len(c.pending_message_ids) for c in batch.conversations)
+            run = MonitorRun(info, batch)
         await run.publish_state(api)
         run.task = asyncio.create_task(self._execute(run, api, client))
         self.runs[info.run_id] = run
