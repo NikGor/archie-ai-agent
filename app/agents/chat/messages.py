@@ -2,14 +2,13 @@
 
 import json
 import logging
-from datetime import datetime
 from typing import Any
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from archie_shared.chat.models import ImageAttachment
-from ..platform.tools.models import ToolResult
-from ..platform.llm.registry import get_provider
-from ..utils.skill_utils import list_skills
-from .prompt_compiler import PromptCompiler
+from app.platform.llm.registry import get_provider
+from app.platform.prompts.compiler import PromptCompiler
+from app.platform.prompts.context import datetime_note
+from app.platform.tools.models import ToolResult
+from app.utils.skill_utils import list_skills
 
 
 # Header of the skill list in the Stage 1 prompt; chat monitoring finds it in traces
@@ -22,43 +21,11 @@ SKILLS_HEADER = (
 logger = logging.getLogger(__name__)
 
 
-class PromptBuilder:
+class ChatPromptBuilder:
     """Builds the message lists of each stage from compiled prompt specs (ARCHIE-212)."""
 
     def __init__(self, compiler: PromptCompiler | None = None):
         self.compiler = compiler or PromptCompiler()
-
-    def _with_current_datetime(self, state: dict) -> dict:
-        """Add the current date/time/weekday to a copy of `state`, computed fresh
-        in the user's timezone at render time.
-
-        Never source these from persisted state: a Redis-cached UserState snapshot
-        goes stale the moment it's written, silently freezing the agent's clock.
-        """
-        try:
-            tz = ZoneInfo(state.get("user_timezone") or "UTC")
-        except ZoneInfoNotFoundError:
-            tz = ZoneInfo("UTC")
-        now = datetime.now(tz)
-        return {
-            **state,
-            "current_date": now.strftime("%d.%m.%Y"),
-            "current_time": now.strftime("%H:%M"),
-            "current_weekday": now.strftime("%A"),
-        }
-
-    def build_datetime_note(self, state: dict) -> str:
-        """Return the current date/time line for the volatile prompt tail.
-
-        Kept out of the cacheable prefix so minute-level changes don't break the
-        prompt cache (ARCHIE-180).
-        """
-        dt = self._with_current_datetime(state)
-        return (
-            f"Current date/time: {dt['current_weekday']}, "
-            f"{dt['current_date']}, {dt['current_time']} "
-            f"({state.get('user_timezone') or 'UTC'})"
-        )
 
     def build_command_messages(
         self,
@@ -107,7 +74,7 @@ class PromptBuilder:
             logger.info(
                 f"prompt_builder_010: Added chat_history to context (len: \033[33m{len(chat_history)}\033[0m)"
             )
-        volatile = self.build_datetime_note(state)
+        volatile = datetime_note(state)
         if previous_results:
             volatile += "\n\nPrevious Tool Results:\n"
             for result in previous_results:
