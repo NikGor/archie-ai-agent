@@ -17,6 +17,10 @@ from app.monitoring.endpoints import router as monitoring_router  # noqa: E402
 from app.agents.swarm.endpoints import router as swarm_router  # noqa: E402
 from app.agents.swarm.service import swarm_service  # noqa: E402
 from app.utils.tracing import init_tracing, shutdown_tracing  # noqa: E402
+from app.agents.chat.service import ChatService  # noqa: E402
+from app.agents.registry import load_agent_kinds  # noqa: E402
+from app.runtime_endpoints import router as runtime_router  # noqa: E402
+from app.runtime_endpoints import supervisor  # noqa: E402
 from app.ws_docs import router as ws_docs_router  # noqa: E402
 
 
@@ -30,17 +34,25 @@ logger.info("=== STEP 1: App Init ===")
 init_tracing()
 
 
+# Composition root (ARCHIE-298): the supervisor starts, watches and stops the
+# long-lived services of this process
+supervisor.register(ChatService())
+supervisor.register(cron_scheduler)
+if settings.swarm_enabled:
+    supervisor.register(swarm_service)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    await cron_scheduler.start()
-    if settings.swarm_enabled:
-        await swarm_service.start()
+    load_agent_kinds()
+    await supervisor.start()
     try:
         yield
     finally:
+        await supervisor.stop()
         if settings.swarm_enabled:
-            await swarm_service.stop()
-        await cron_scheduler.stop()
+            await swarm_service.close()
+        await cron_scheduler.close()
         shutdown_tracing()
 
 
@@ -51,6 +63,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(router)
+app.include_router(runtime_router)
 app.include_router(ws_docs_router)
 app.include_router(swarm_router)
 app.include_router(evals_router)
