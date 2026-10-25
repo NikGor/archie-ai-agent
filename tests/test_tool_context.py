@@ -106,6 +106,7 @@ async def test_execute_tool_calls_passes_context_to_every_call():
     results = await execute_tool_calls(
         [_search_call("a").to_call(), _search_call("b").to_call()],
         _factory(),
+        allowed={"google_search_tool"},
         context=BERLIN,
     )
     assert [r.output["user_timezone"] for r in results] == ["Europe/Berlin"] * 2
