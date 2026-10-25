@@ -88,7 +88,7 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
             display_name="Home",
             role="state",
             description="Watches the whole home: windows, air, temperature, devices left on; does not control devices",
-            tools=["smarthome_status_tool"],
+            tools=["smarthome_status_tool", "spawn_agent_tool"],
             references={"homeassistant-mcp": ["apartment_map"]},
             # The whole home state is about 11k characters (ARCHIE-238)
             tool_result_max_chars=WHOLE_HOME_MAX_CHARS,
