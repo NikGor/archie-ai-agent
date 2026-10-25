@@ -1,7 +1,7 @@
 """Tools only swarm agents get; the chat does not see them (ARCHIE-246, ARCHIE-292)."""
 
-from ...platform.tools.registry import ToolGroup
-from ...tools.catalog import tool_registry
+from app.platform.tools.registry import ToolGroup
+from app.tools.catalog import tool_registry
 
 
 SWARM_TOOL_GROUP = ToolGroup(
@@ -9,8 +9,8 @@ SWARM_TOOL_GROUP = ToolGroup(
     exclusive=True,
     tools={
         "weather_tool": "app.tools.weather_tool",
-        "alert_chat_tool": "app.swarm.tools.alert_chat_tool",
-        "swarm_alert_tool": "app.swarm.tools.swarm_alert_tool",
+        "alert_chat_tool": "app.agents.swarm.tools.alert_chat_tool",
+        "swarm_alert_tool": "app.agents.swarm.tools.swarm_alert_tool",
     },
 )
 
