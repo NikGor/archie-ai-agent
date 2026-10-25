@@ -4,6 +4,7 @@ decisions and tool results.
 
 import logging
 from typing import Any
+from archie_shared.chat.models import ReasoningEffort
 from ... import config
 from ...agent.prompt_builder import PromptBuilder
 from ...backend.llm.registry import get_client
@@ -91,6 +92,7 @@ async def create_output(
     no_image: bool = False,
     on_stream: StreamCallback = None,
     on_stream_event: StreamEventCallback = None,
+    reasoning_effort: ReasoningEffort | None = None,
 ) -> AgentResponse:
     """
     Create final formatted output response.
@@ -109,6 +111,7 @@ async def create_output(
         chat_history: Chat history text for non-OpenAI providers
         on_stream: Callback for streaming text tokens (plain/voice + OpenRouter only)
         on_stream_event: Callback for stream_placeholder/stream_reasoning events (UI + OpenRouter)
+        reasoning_effort: Reasoning effort of the model; None keeps the provider default
 
     Returns:
         AgentResponse: Final formatted response with SGROutput trace
@@ -182,6 +185,7 @@ async def create_output(
             response_model=response_model,
             previous_response_id=previous_response_id,
             observation_name=_OBSERVATION_NAME,
+            reasoning_effort=reasoning_effort,
             extractor=JsonPathExtractor(["text"]),
             on_chunk=on_stream,
             response_id_out=response_id_out,
@@ -218,6 +222,7 @@ async def create_output(
             response_model=response_model,
             previous_response_id=previous_response_id,
             observation_name=_OBSERVATION_NAME,
+            reasoning_effort=reasoning_effort,
             extractor=JsonPathExtractor(["level2_answer", "text", "text"]),
             on_chunk=_on_chunk_l2,
             response_id_out=response_id_out_l2,
@@ -265,6 +270,7 @@ async def create_output(
             response_model=response_model,
             previous_response_id=previous_response_id,
             observation_name=_OBSERVATION_NAME,
+            reasoning_effort=reasoning_effort,
             extractor=JsonPathExtractor(["sgr", "reasoning"]),
             on_chunk=_on_chunk_ui,
             response_id_out=response_id_out_ui,
@@ -293,6 +299,7 @@ async def create_output(
         response_format=response_model,
         previous_response_id=previous_response_id,
         observation_name=_OBSERVATION_NAME,
+        reasoning_effort=reasoning_effort,
     )
     parsed = parse_llm_response(
         raw_response=raw_response,
