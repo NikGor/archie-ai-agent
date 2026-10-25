@@ -18,8 +18,8 @@ from archie_shared.swarm.models import (
     SwarmMessage,
     SwarmMessageEvent,
 )
-from ..config import settings
-from .bus import SwarmHub
+from app.agents.swarm.bus import SwarmHub
+from app.config import settings
 
 
 logger = logging.getLogger(__name__)
