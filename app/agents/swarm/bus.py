@@ -21,9 +21,9 @@ from archie_shared.swarm.models import (
     SwarmServerEvent,
     SwarmUsage,
 )
-from ..backend.redis_factory import get_async_redis
-from ..config import settings
-from .agents import SWARM_AGENTS, SWARM_GROUPS, add_paired_outputs
+from app.agents.swarm.agents import SWARM_AGENTS, SWARM_GROUPS, add_paired_outputs
+from app.backend.redis_factory import get_async_redis
+from app.config import settings
 
 
 logger = logging.getLogger(__name__)
