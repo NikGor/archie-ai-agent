@@ -48,6 +48,7 @@ from app.agents.swarm.schedule import (
     voice_allowed,
 )
 from app.config import settings as app_settings
+from app.platform.runtime.budget import daily_spend
 from app.utils.general_utils import local_now
 from app.utils.tracing import trace_swarm_run
 
@@ -225,6 +226,13 @@ class SwarmTicker:
             if task is None:
                 if not is_active(now, swarm_settings):
                     logger.info("swarm_ticker_003: Outside the active hours")
+                    return
+                # Spontaneous checks stop for the day at the budget; chat replies go on
+                if daily_spend.exceeded("swarm", app_settings.swarm_daily_cost_usd):
+                    logger.warning(
+                        f"swarm_ticker_warning_002: Daily swarm budget "
+                        f"${app_settings.swarm_daily_cost_usd} is spent, check skipped"
+                    )
                     return
                 enabled = await self.roster.get_enabled_ids()
                 tasks = [
