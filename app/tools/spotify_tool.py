@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 from openai import OpenAI
 from pydantic import BaseModel, Field
@@ -217,98 +218,330 @@ async def build_thematic_playlist(
     }
 
 
-def _demo_response(  # noqa: PLR0911
+_DEMO_TRACK = {
+    "track_id": "demo_track_001",
+    "uri": "spotify:track:demo_track_001",
+    "title": "Demo Song",
+    "artist": "Demo Artist",
+    "album": "Demo Album",
+    "duration_seconds": 210,
+    "cover_url": None,
+    "is_favorite": False,
+}
+_DEMO_ARTIST = {
+    "artist_id": "demo_artist_001",
+    "name": "Demo Artist",
+    "genres": ["demo"],
+    "popularity": 80,
+    "image_url": None,
+}
+# Actions whose demo answer only says that they would run
+_DEMO_EXECUTED = {
+    "save_track",
+    "remove_saved_track",
+    "queue_add",
+    "set_volume",
+    "set_shuffle",
+    "set_repeat",
+    "seek",
+}
+
+
+def _demo_response(
     action: str, query: str | None, theme: str | None, playlist_name: str | None = None
 ) -> dict[str, Any]:
     """Returns canned demo data without calling the Spotify API."""
-    demo_track = {
-        "track_id": "demo_track_001",
-        "uri": "spotify:track:demo_track_001",
-        "title": "Demo Song",
-        "artist": "Demo Artist",
-        "album": "Demo Album",
-        "duration_seconds": 210,
-        "cover_url": None,
-        "is_favorite": False,
-    }
-    if action == "search":
+    track = dict(_DEMO_TRACK)
+    if action in _DEMO_EXECUTED:
         return {
             "success": True,
-            "action": "search",
-            "query": query,
-            "tracks": [demo_track],
-        }
-    if action == "get_current":
-        return {
-            "success": True,
-            "action": "get_current",
-            "is_playing": True,
-            "current_track": demo_track,
-            "progress_seconds": 42,
-            "volume": 50,
-            "shuffle": False,
-            "repeat": "off",
-        }
-    if action == "build_playlist":
-        return {
-            "success": True,
-            "action": "build_playlist",
-            "playlist_id": "demo_playlist_001",
-            "playlist_name": playlist_name if playlist_name else f"Archie DJ: {theme}",
-            "playlist_url": None,
-            "tracks": [demo_track],
-            "track_count": 1,
-            "queued": True,
+            "action": action,
+            "message": f"[DEMO] {action} would be executed",
         }
     if action in ("play", "pause", "next", "previous"):
         return {
             "success": True,
             "action": action,
             "message": f"[DEMO] Playback {action} would be executed",
-            "current_track": demo_track,
+            "current_track": track,
             "dj_comment": _FALLBACK_COMMENTS.get(action, "Enjoy the music."),
         }
-    if action in ("save_track", "remove_saved_track", "queue_add"):
-        return {
-            "success": True,
-            "action": action,
-            "message": f"[DEMO] {action} would be executed",
-        }
-    if action == "get_saved_tracks":
-        return {"success": True, "action": action, "tracks": [demo_track]}
-    if action in ("get_top_tracks",):
-        return {"success": True, "action": action, "tracks": [demo_track]}
-    if action == "get_top_artists":
-        return {
-            "success": True,
-            "action": action,
-            "artists": [
-                {
-                    "artist_id": "demo_artist_001",
-                    "name": "Demo Artist",
-                    "genres": ["demo"],
-                    "popularity": 80,
-                    "image_url": None,
-                }
-            ],
-        }
-    if action == "get_queue":
-        return {
-            "success": True,
-            "action": action,
-            "current_track": demo_track,
-            "queue": [demo_track],
-        }
-    if action in ("set_volume", "set_shuffle", "set_repeat", "seek"):
-        return {
-            "success": True,
-            "action": action,
-            "message": f"[DEMO] {action} would be executed",
-        }
-    return {"success": False, "message": f"Unknown action: {action}"}
+    answers: dict[str, dict[str, Any]] = {
+        "search": {"query": query, "tracks": [track]},
+        "get_current": {
+            "is_playing": True,
+            "current_track": track,
+            "progress_seconds": 42,
+            "volume": 50,
+            "shuffle": False,
+            "repeat": "off",
+        },
+        "build_playlist": {
+            "playlist_id": "demo_playlist_001",
+            "playlist_name": playlist_name if playlist_name else f"Archie DJ: {theme}",
+            "playlist_url": None,
+            "tracks": [track],
+            "track_count": 1,
+            "queued": True,
+        },
+        "get_saved_tracks": {"tracks": [track]},
+        "get_top_tracks": {"tracks": [track]},
+        "get_top_artists": {"artists": [dict(_DEMO_ARTIST)]},
+        "get_queue": {"current_track": track, "queue": [track]},
+    }
+    if action not in answers:
+        return {"success": False, "message": f"Unknown action: {action}"}
+    return {"success": True, "action": action, **answers[action]}
 
 
-async def spotify_tool(  # noqa: PLR0911, PLR0912
+class SpotifyRequest(BaseModel):
+    """Arguments of one spotify_tool call after coercion (ARCHIE-304)."""
+
+    query: str | None = Field(default=None, description="Search or play request")
+    track_uri: str | None = Field(default=None, description="Spotify URI")
+    theme: str | None = Field(default=None, description="Playlist theme")
+    playlist_name: str | None = Field(
+        default=None, description="Explicit playlist name"
+    )
+    duration_minutes: int | None = Field(default=30, description="Playlist length")
+    volume_percent: int | None = Field(default=None, description="Volume 0-100")
+    shuffle: bool | None = Field(default=None, description="Shuffle on/off")
+    repeat_mode: str | None = Field(default=None, description="track | context | off")
+    position_ms: int | None = Field(default=None, description="Seek position")
+    time_range: str = Field(default="medium_term", description="Top items range")
+
+
+SpotifyHandler = Callable[[Any, str, SpotifyRequest], Awaitable[dict[str, Any]]]
+
+
+async def _resolve_track_uri(
+    client: Any, action: str, request: SpotifyRequest
+) -> str | dict[str, Any]:
+    """track_uri, or the first search hit for query; an error dict if neither works."""
+    if request.track_uri:
+        return request.track_uri
+    if request.query:
+        found = await client.search_tracks(request.query, limit=1)
+        if not found:
+            return {
+                "success": False,
+                "message": f"No tracks found for: {request.query}",
+            }
+        return found[0]["uri"]
+    return {
+        "success": False,
+        "message": f"track_uri or query is required for '{action}'",
+    }
+
+
+async def _search(client: Any, _action: str, request: SpotifyRequest) -> dict[str, Any]:
+    if not request.query:
+        return {"success": False, "message": "query is required for 'search'"}
+    tracks = await client.search_tracks(request.query)
+    return {
+        "success": True,
+        "action": "search",
+        "query": request.query,
+        "tracks": tracks,
+    }
+
+
+async def _play(client: Any, _action: str, request: SpotifyRequest) -> dict[str, Any]:
+    played_track = None
+    if request.track_uri:
+        await client.play(track_uris=[request.track_uri])
+    elif request.query:
+        classification = classify_playback_request(request.query)
+        if classification.kind == "theme":
+            playlist_result = await build_thematic_playlist(
+                classification.normalized_query, request.duration_minutes, client
+            )
+            return {**playlist_result, "action": "play", "fallback": "theme"}
+        found = await client.search_tracks(classification.normalized_query, limit=1)
+        if not found:
+            # Looked like a specific track but nothing matched — build a themed
+            # playlist from the same request instead of just failing outright.
+            playlist_result = await build_thematic_playlist(
+                request.query, request.duration_minutes, client
+            )
+            return {**playlist_result, "action": "play", "fallback": "no_track_match"}
+        played_track = found[0]
+        await client.play(track_uris=[played_track["uri"]])
+    else:
+        await client.play()
+    state = await client.get_playback_state() or {}
+    if played_track:
+        # Spotify's playback state endpoint is eventually consistent and can
+        # still report the previous track right after a play command, so use
+        # the track we just told it to play instead of trusting a stale read.
+        state["current_track"] = played_track
+        state["is_playing"] = True
+    return {
+        "success": True,
+        "action": "play",
+        **state,
+        "dj_comment": generate_dj_comment("play", state),
+    }
+
+
+async def _transport(
+    client: Any, action: str, _request: SpotifyRequest
+) -> dict[str, Any]:
+    method = {
+        "pause": client.pause,
+        "next": client.next_track,
+        "previous": client.previous_track,
+    }[action]
+    await method()
+    await asyncio.sleep(PLAYBACK_STATE_SETTLE_SECONDS)
+    state = await client.get_playback_state()
+    return {
+        "success": True,
+        "action": action,
+        **(state or {}),
+        "dj_comment": generate_dj_comment(action, state or {}),
+    }
+
+
+async def _get_current(
+    client: Any, _action: str, _request: SpotifyRequest
+) -> dict[str, Any]:
+    playback = await client.get_playback_state()
+    if playback is None:
+        return {"success": True, "action": "get_current", "is_playing": False}
+    return {"success": True, "action": "get_current", **playback}
+
+
+async def _build_playlist(
+    client: Any, _action: str, request: SpotifyRequest
+) -> dict[str, Any]:
+    if not request.theme:
+        return {"success": False, "message": "theme is required for 'build_playlist'"}
+    return await build_thematic_playlist(
+        request.theme,
+        request.duration_minutes,
+        client,
+        playlist_name=request.playlist_name,
+    )
+
+
+async def _saved_track(
+    client: Any, action: str, request: SpotifyRequest
+) -> dict[str, Any]:
+    resolved = await _resolve_track_uri(client, action, request)
+    if isinstance(resolved, dict):
+        return resolved
+    track_id = _track_id_from_uri(resolved)
+    if action == "save_track":
+        await client.save_tracks([track_id])
+    else:
+        await client.remove_saved_tracks([track_id])
+    return {"success": True, "action": action, "track_uri": resolved}
+
+
+async def _get_saved_tracks(
+    client: Any, action: str, _request: SpotifyRequest
+) -> dict[str, Any]:
+    return {
+        "success": True,
+        "action": action,
+        "tracks": await client.get_saved_tracks(),
+    }
+
+
+async def _top_items(
+    client: Any, action: str, request: SpotifyRequest
+) -> dict[str, Any]:
+    if action == "get_top_tracks":
+        items = await client.get_top_tracks(time_range=request.time_range)
+        return {"success": True, "action": action, "tracks": items}
+    artists = await client.get_top_artists(time_range=request.time_range)
+    return {"success": True, "action": action, "artists": artists}
+
+
+async def _queue_add(
+    client: Any, action: str, request: SpotifyRequest
+) -> dict[str, Any]:
+    resolved = await _resolve_track_uri(client, action, request)
+    if isinstance(resolved, dict):
+        return resolved
+    await client.add_to_queue(resolved)
+    return {"success": True, "action": action, "track_uri": resolved}
+
+
+async def _get_queue(
+    client: Any, action: str, _request: SpotifyRequest
+) -> dict[str, Any]:
+    return {"success": True, "action": action, **(await client.get_queue())}
+
+
+async def _set_volume(
+    client: Any, action: str, request: SpotifyRequest
+) -> dict[str, Any]:
+    if request.volume_percent is None:
+        return {
+            "success": False,
+            "message": "volume_percent is required for 'set_volume'",
+        }
+    await client.set_volume(request.volume_percent)
+    return {"success": True, "action": action, "volume": request.volume_percent}
+
+
+async def _set_shuffle(
+    client: Any, action: str, request: SpotifyRequest
+) -> dict[str, Any]:
+    if request.shuffle is None:
+        return {"success": False, "message": "shuffle is required for 'set_shuffle'"}
+    await client.set_shuffle(request.shuffle)
+    return {"success": True, "action": action, "shuffle": request.shuffle}
+
+
+async def _set_repeat(
+    client: Any, action: str, request: SpotifyRequest
+) -> dict[str, Any]:
+    if request.repeat_mode not in ("track", "context", "off"):
+        return {
+            "success": False,
+            "message": "repeat_mode must be one of 'track', 'context', 'off'",
+        }
+    await client.set_repeat(request.repeat_mode)
+    return {"success": True, "action": action, "repeat": request.repeat_mode}
+
+
+async def _seek(client: Any, action: str, request: SpotifyRequest) -> dict[str, Any]:
+    if request.position_ms is None:
+        return {"success": False, "message": "position_ms is required for 'seek'"}
+    await client.seek(request.position_ms)
+    return {
+        "success": True,
+        "action": action,
+        "progress_seconds": request.position_ms // 1000,
+    }
+
+
+_ACTIONS: dict[str, SpotifyHandler] = {
+    "search": _search,
+    "play": _play,
+    "pause": _transport,
+    "next": _transport,
+    "previous": _transport,
+    "get_current": _get_current,
+    "build_playlist": _build_playlist,
+    "save_track": _saved_track,
+    "remove_saved_track": _saved_track,
+    "get_saved_tracks": _get_saved_tracks,
+    "get_top_tracks": _top_items,
+    "get_top_artists": _top_items,
+    "queue_add": _queue_add,
+    "get_queue": _get_queue,
+    "set_volume": _set_volume,
+    "set_shuffle": _set_shuffle,
+    "set_repeat": _set_repeat,
+    "seek": _seek,
+}
+
+
+async def spotify_tool(
     action: str,
     query: str | None = None,
     track_uri: str | None = None,
@@ -365,195 +598,23 @@ async def spotify_tool(  # noqa: PLR0911, PLR0912
     if demo_mode:
         return _demo_response(action, query, theme, playlist_name)
 
+    request = SpotifyRequest(
+        query=query,
+        track_uri=track_uri,
+        theme=theme,
+        playlist_name=playlist_name,
+        duration_minutes=duration_minutes,
+        volume_percent=volume_percent,
+        shuffle=shuffle,
+        repeat_mode=repeat_mode,
+        position_ms=position_ms,
+        time_range=time_range,
+    )
     try:
-        client = _get_spotify_client()
-
-        if action == "search":
-            if not query:
-                return {"success": False, "message": "query is required for 'search'"}
-            tracks = await client.search_tracks(query)
-            return {
-                "success": True,
-                "action": "search",
-                "query": query,
-                "tracks": tracks,
-            }
-
-        if action == "play":
-            played_track = None
-            if track_uri:
-                await client.play(track_uris=[track_uri])
-            elif query:
-                classification = classify_playback_request(query)
-                if classification.kind == "theme":
-                    playlist_result = await build_thematic_playlist(
-                        classification.normalized_query, duration_minutes, client
-                    )
-                    return {**playlist_result, "action": "play", "fallback": "theme"}
-                found = await client.search_tracks(
-                    classification.normalized_query, limit=1
-                )
-                if not found:
-                    # Looked like a specific track but nothing matched — build a themed
-                    # playlist from the same request instead of just failing outright.
-                    playlist_result = await build_thematic_playlist(
-                        query, duration_minutes, client
-                    )
-                    return {
-                        **playlist_result,
-                        "action": "play",
-                        "fallback": "no_track_match",
-                    }
-                played_track = found[0]
-                await client.play(track_uris=[played_track["uri"]])
-            else:
-                await client.play()
-            state = await client.get_playback_state() or {}
-            if played_track:
-                # Spotify's playback state endpoint is eventually consistent and can
-                # still report the previous track right after a play command, so use
-                # the track we just told it to play instead of trusting a stale read.
-                state["current_track"] = played_track
-                state["is_playing"] = True
-            return {
-                "success": True,
-                "action": "play",
-                **state,
-                "dj_comment": generate_dj_comment("play", state),
-            }
-
-        if action in ("pause", "next", "previous"):
-            method = {
-                "pause": client.pause,
-                "next": client.next_track,
-                "previous": client.previous_track,
-            }[action]
-            await method()
-            await asyncio.sleep(PLAYBACK_STATE_SETTLE_SECONDS)
-            state = await client.get_playback_state()
-            return {
-                "success": True,
-                "action": action,
-                **(state or {}),
-                "dj_comment": generate_dj_comment(action, state or {}),
-            }
-
-        if action == "get_current":
-            playback = await client.get_playback_state()
-            if playback is None:
-                return {"success": True, "action": "get_current", "is_playing": False}
-            return {"success": True, "action": "get_current", **playback}
-
-        if action == "build_playlist":
-            if not theme:
-                return {
-                    "success": False,
-                    "message": "theme is required for 'build_playlist'",
-                }
-            return await build_thematic_playlist(
-                theme, duration_minutes, client, playlist_name=playlist_name
-            )
-
-        if action in ("save_track", "remove_saved_track"):
-            resolved_uri: str
-            if track_uri:
-                resolved_uri = track_uri
-            elif query:
-                found = await client.search_tracks(query, limit=1)
-                if not found:
-                    return {
-                        "success": False,
-                        "message": f"No tracks found for: {query}",
-                    }
-                resolved_uri = found[0]["uri"]
-            else:
-                return {
-                    "success": False,
-                    "message": f"track_uri or query is required for '{action}'",
-                }
-            track_id = _track_id_from_uri(resolved_uri)
-            if action == "save_track":
-                await client.save_tracks([track_id])
-            else:
-                await client.remove_saved_tracks([track_id])
-            return {"success": True, "action": action, "track_uri": resolved_uri}
-
-        if action == "get_saved_tracks":
-            tracks = await client.get_saved_tracks()
-            return {"success": True, "action": action, "tracks": tracks}
-
-        if action in ("get_top_tracks", "get_top_artists"):
-            if action == "get_top_tracks":
-                items = await client.get_top_tracks(time_range=time_range)
-                return {"success": True, "action": action, "tracks": items}
-            artists = await client.get_top_artists(time_range=time_range)
-            return {"success": True, "action": action, "artists": artists}
-
-        if action == "queue_add":
-            queue_uri: str
-            if track_uri:
-                queue_uri = track_uri
-            elif query:
-                found = await client.search_tracks(query, limit=1)
-                if not found:
-                    return {
-                        "success": False,
-                        "message": f"No tracks found for: {query}",
-                    }
-                queue_uri = found[0]["uri"]
-            else:
-                return {
-                    "success": False,
-                    "message": "track_uri or query is required for 'queue_add'",
-                }
-            await client.add_to_queue(queue_uri)
-            return {"success": True, "action": action, "track_uri": queue_uri}
-
-        if action == "get_queue":
-            queue_state = await client.get_queue()
-            return {"success": True, "action": action, **queue_state}
-
-        if action == "set_volume":
-            if volume_percent is None:
-                return {
-                    "success": False,
-                    "message": "volume_percent is required for 'set_volume'",
-                }
-            await client.set_volume(volume_percent)
-            return {"success": True, "action": action, "volume": volume_percent}
-
-        if action == "set_shuffle":
-            if shuffle is None:
-                return {
-                    "success": False,
-                    "message": "shuffle is required for 'set_shuffle'",
-                }
-            await client.set_shuffle(shuffle)
-            return {"success": True, "action": action, "shuffle": shuffle}
-
-        if action == "set_repeat":
-            if repeat_mode not in ("track", "context", "off"):
-                return {
-                    "success": False,
-                    "message": "repeat_mode must be one of 'track', 'context', 'off'",
-                }
-            await client.set_repeat(repeat_mode)
-            return {"success": True, "action": action, "repeat": repeat_mode}
-
-        if action == "seek":
-            if position_ms is None:
-                return {
-                    "success": False,
-                    "message": "position_ms is required for 'seek'",
-                }
-            await client.seek(position_ms)
-            return {
-                "success": True,
-                "action": action,
-                "progress_seconds": position_ms // 1000,
-            }
-
-        return {"success": False, "message": f"Unknown action: {action}"}
+        handler = _ACTIONS.get(action)
+        if handler is None:
+            return {"success": False, "message": f"Unknown action: {action}"}
+        return await handler(_get_spotify_client(), action, request)
 
     except SpotifyNoActiveDeviceError:
         logger.warning("spotify_tool_warn_003: \033[33mNo active Spotify device\033[0m")
