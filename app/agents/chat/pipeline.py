@@ -3,18 +3,19 @@ import time
 from archie_shared.chat.models import ImageAttachment, LllmTrace, ReasoningEffort
 from app.agents.chat.command_loop import CommandLoop
 from app.agents.chat.format_router import select_response_format
+from app.agents.chat.formats import resolve_format
 from app.agents.chat.messages import ChatPromptBuilder
 from app.agents.chat.metrics import PipelineMetrics
 from app.agents.chat.output import create_output
+from app.agents.chat.requests import ChatRunRequest, OutputRequest
 from app.agents.chat.tool_access import chat_tool_names
 from app.backend.state_service import StateService
 from app.backend.tool_result_store import ToolResultStore
-from app.config import DEFAULT_MODEL, MAX_COMMAND_ITERATIONS
+from app.config import MAX_COMMAND_ITERATIONS
 from app.models.orchestration_sgr import DecisionResponse
 from app.models.output_models import AgentResponse
 from app.models.state_models import UserState
 from app.models.ws_models import (
-    StatusCallback,
     StatusNotifier,
     StreamCallback,
     StreamEventCallback,
@@ -120,18 +121,20 @@ class ChatPipeline:
         )
         with StepTimer() as stage3_timer:
             final_response = await create_output(
-                user_input=user_input,
-                command_summary="Dashboard request - direct output",
-                tool_results=None,
-                response_format=response_format,
-                model=final_output_model,
-                state=user_state.model_dump(),
-                previous_response_id=ctx.previous_response_id,
-                chat_history=ctx.chat_history,
-                no_image=no_image,
-                on_stream=on_stream,
-                on_stream_event=on_stream_event,
-                reasoning_effort=final_output_effort,
+                OutputRequest(
+                    user_input=user_input,
+                    command_summary="Dashboard request - direct output",
+                    tool_results=None,
+                    response_format=response_format,
+                    model=final_output_model,
+                    state=user_state.model_dump(),
+                    previous_response_id=ctx.previous_response_id,
+                    chat_history=ctx.chat_history,
+                    no_image=no_image,
+                    on_stream=on_stream,
+                    on_stream_event=on_stream_event,
+                    reasoning_effort=final_output_effort,
+                )
             )
         total_ms = int((time.monotonic() - arun_start) * 1000)
         final_response.pipeline_trace = PipelineMetrics().build_trace(
@@ -148,26 +151,7 @@ class ChatPipeline:
         logger.info("=== ChatPipeline: Response Created ===")
         return final_response
 
-    async def arun(
-        self,
-        messages: list[dict[str, str]],
-        command_model: str = DEFAULT_MODEL,
-        final_output_model: str = DEFAULT_MODEL,
-        command_effort: ReasoningEffort | None = None,
-        final_output_effort: ReasoningEffort | None = None,
-        response_format: str = "plain",
-        previous_response_id: str | None = None,
-        chat_history: str | None = None,
-        user_name: str | None = None,
-        conversation_id: str | None = None,
-        no_image: bool = False,
-        images: list[ImageAttachment] | None = None,
-        max_command_iterations: int | None = None,
-        on_status: StatusCallback = None,
-        on_stream: StreamCallback = None,
-        on_stream_event: StreamEventCallback = None,
-        demo_mode: bool = False,
-    ) -> AgentResponse:
+    async def arun(self, request: ChatRunRequest) -> AgentResponse:
         """
         Main entry point: Create an agent response through 3-stage flow.
 
@@ -175,6 +159,23 @@ class ChatPipeline:
         Stage 2: Tool execution (if needed)
         Stage 3: Final response generation (uses final_output_model)
         """
+        messages = request.messages
+        command_model = request.command_model
+        final_output_model = request.final_output_model
+        command_effort = request.command_effort
+        final_output_effort = request.final_output_effort
+        response_format = request.response_format
+        previous_response_id = request.previous_response_id
+        chat_history = request.chat_history
+        user_name = request.user_name
+        conversation_id = request.conversation_id
+        no_image = request.no_image
+        images = request.images
+        max_command_iterations = request.max_command_iterations
+        on_status = request.on_status
+        on_stream = request.on_stream
+        on_stream_event = request.on_stream_event
+        demo_mode = request.demo_mode
         logger.info("=== ChatPipeline: Creating Agent Response ===")
         arun_start = time.monotonic()
         cmd_provider = get_provider_for_model(command_model)
@@ -206,7 +207,7 @@ class ChatPipeline:
         user_input = messages[-1]["content"] if messages else ""
 
         # Dashboard/Widget formats: skip command loop, go directly to final output
-        if response_format in ["dashboard", "widget"]:
+        if resolve_format(response_format).skips_command_loop:
             return await self._run_direct_output(
                 user_input=user_input,
                 response_format=response_format,
@@ -283,21 +284,23 @@ class ChatPipeline:
         # STAGE 3: Final output generation
         with StepTimer() as stage3_timer:
             final_response = await create_output(
-                user_input=user_input,
-                command_summary=loop_result.command_summary,
-                tool_results=(
-                    loop_result.tool_results if loop_result.tool_results else None
-                ),
-                response_format=response_format,
-                model=final_output_model,
-                state=user_state.model_dump(),
-                previous_response_id=output_ctx.previous_response_id,
-                chat_history=output_ctx.chat_history,
-                intents=loop_result.ui_intents,
-                no_image=no_image,
-                on_stream=on_stream,
-                on_stream_event=on_stream_event,
-                reasoning_effort=final_output_effort,
+                OutputRequest(
+                    user_input=user_input,
+                    command_summary=loop_result.command_summary,
+                    tool_results=(
+                        loop_result.tool_results if loop_result.tool_results else None
+                    ),
+                    response_format=response_format,
+                    model=final_output_model,
+                    state=user_state.model_dump(),
+                    previous_response_id=output_ctx.previous_response_id,
+                    chat_history=output_ctx.chat_history,
+                    intents=loop_result.ui_intents,
+                    no_image=no_image,
+                    on_stream=on_stream,
+                    on_stream_event=on_stream_event,
+                    reasoning_effort=final_output_effort,
+                )
             )
         final_response.response_format = response_format
         await notifier.emit(
