@@ -3,6 +3,7 @@
 import logging
 from collections.abc import AsyncIterator, Callable
 from typing import Any
+from archie_shared.chat.models import ReasoningEffort
 from langfuse.openai import AsyncOpenAI, OpenAI
 from openai import APIConnectionError, InternalServerError, RateLimitError
 from openai.lib._parsing._responses import type_to_text_format_param
@@ -65,6 +66,7 @@ class OpenAIClient:
         previous_response_id: str | None = None,
         tools: list[Callable[..., Any]] | None = None,
         observation_name: str = "llm-call",
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> Any:
         """Create a completion using OpenAI API with structured outputs.
 
@@ -85,6 +87,7 @@ class OpenAIClient:
                 response_format=response_format,
                 previous_response_id=previous_response_id,
                 tools=tools,
+                reasoning_effort=reasoning_effort,
             )
 
             if previous_response_id:
@@ -119,6 +122,7 @@ class OpenAIClient:
         max_output_tokens: int | None = None,
         usage_out: dict[str, int] | None = None,
         observation_name: str = "llm-call",
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> AsyncIterator[str]:
         """
         Stream completion tokens using OpenAI Responses API (responses.create(stream=True)).
@@ -142,6 +146,7 @@ class OpenAIClient:
             response_format=response_format,
             previous_response_id=previous_response_id,
             max_output_tokens=max_output_tokens,
+            reasoning_effort=reasoning_effort,
         )
         text_format = args.pop("text_format", None)
         if text_format:
