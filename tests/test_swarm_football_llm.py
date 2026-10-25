@@ -110,7 +110,7 @@ def _runner(scenario: dict) -> SwarmAgentRunner:
         memory=memory,
     )
     now = scenario["now"]
-    runner.prompt_builder.build_datetime_note = MagicMock(
+    runner.datetime_note = MagicMock(
         return_value=f"Current date/time: {now:%A, %d.%m.%Y, %H:%M} (Europe/Berlin)"
     )
     return runner

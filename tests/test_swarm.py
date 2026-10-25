@@ -33,7 +33,7 @@ from app.swarm.models import (
 from app.swarm.policy import READ_ONLY_TOOLS, check_tool_call
 from app.swarm.runner import SwarmAgentRunner, SwarmDraft, format_chat_line
 import app.swarm.tools  # noqa: F401
-from app.agent.tool_access import chat_tool_names
+from app.agents.chat.tool_access import chat_tool_names
 from app.tools.catalog import tool_registry
 from tests.conftest import make_user_state
 

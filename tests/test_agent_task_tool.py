@@ -2,8 +2,8 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 from app.config import settings
-from app.tools import agent_task_tool as module
-from app.tools.agent_task_tool import agent_task_tool
+from app.agents.chat.tools import agent_task_tool as module
+from app.agents.chat.tools.agent_task_tool import agent_task_tool
 
 
 def _message(text: str | None) -> MagicMock:

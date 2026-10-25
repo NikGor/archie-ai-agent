@@ -223,10 +223,8 @@ async def test_weather_check_reports_only_a_real_change(case: str):
     time, notes, facts, weather = CASES[case]
     now = datetime(2026, 10, 24, *map(int, time.split(":")), tzinfo=ZONE)
     runner = _runner(notes, facts)
-    runner.prompt_builder = MagicMock(
-        build_datetime_note=MagicMock(
-            return_value=f"Current date/time: Saturday, 24.10.2026, {time} (Europe/Berlin)"
-        )
+    runner.datetime_note = MagicMock(
+        return_value=f"Current date/time: Saturday, 24.10.2026, {time} (Europe/Berlin)"
     )
     tools = AsyncMock(
         side_effect=lambda tool_calls, **_: [

@@ -1,7 +1,7 @@
 """The swarm expectation catalog loads and points to real prompt rules (ARCHIE-282)."""
 
 import pytest
-from app.agent.prompt_compiler import load_library
+from app.platform.prompts.compiler import load_library
 from app.config import settings
 from app.swarm.audit.models import load_catalog
 

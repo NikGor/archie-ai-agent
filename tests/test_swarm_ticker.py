@@ -28,7 +28,7 @@ from app.swarm.schedule import (
 )
 from app.swarm.ticker import SwarmTicker, select_outputs
 import app.swarm.tools  # noqa: F401
-from app.agent.tool_access import chat_tool_names
+from app.agents.chat.tool_access import chat_tool_names
 from app.tools.catalog import tool_registry
 from tests.conftest import make_user_state
 

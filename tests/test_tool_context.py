@@ -10,8 +10,8 @@ from types import SimpleNamespace
 from typing import Literal
 from unittest.mock import AsyncMock, patch
 import app.tools.google_search_tool as google_search_tool_module
-from app.agent.command_loop import CommandLoop
-from app.agent.pipeline_metrics import PipelineMetrics
+from app.agents.chat.command_loop import CommandLoop
+from app.agents.chat.metrics import PipelineMetrics
 from app.models.orchestration_sgr import (
     ActionType,
     DecisionResponse,
@@ -122,7 +122,7 @@ async def test_command_loop_passes_the_user_timezone_to_tools():
             (_decision("final_response", []), None),
         ]
     )
-    with patch("app.agent.command_loop.execute_tool_calls", executed):
+    with patch("app.agents.chat.command_loop.execute_tool_calls", executed):
         await CommandLoop(_factory(), PipelineMetrics(), max_iterations=3).run(
             make_command_call=make_command_call,
             user_input="Футбол завтра",
