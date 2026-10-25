@@ -20,6 +20,7 @@ so the turn grade stays meaningful with 30+ rules per turn.
 
 import functools
 import re
+from app.agents.chat.formats import resolve_format
 from app.agents.chat.messages import ChatPromptBuilder
 from app.platform.quality.rules import (
     RulePolicy,
@@ -33,7 +34,6 @@ from app.platform.quality.rules import (
 COMMAND_SPEC = "cmd_prompt"
 ASSISTANT_SPEC = "assistant_prompt"
 # Formats that skip Stage 1, so cmd_prompt did not take part
-DIRECT_FORMATS = frozenset({"dashboard", "widget"})
 
 EXCLUDED_RULES = frozenset(
     {
@@ -198,7 +198,7 @@ def specs_for_turn(content_format: str, trace_found: bool) -> list[str]:
     """Specs whose rules apply to a turn of this format."""
     specs = []
     # cmd_prompt rules are about tool and skill calls: judged only with the trace
-    if content_format not in DIRECT_FORMATS and trace_found:
+    if not resolve_format(content_format).skips_command_loop and trace_found:
         specs.append(COMMAND_SPEC)
     specs.append(ASSISTANT_SPEC)
     format_spec = ChatPromptBuilder.format_spec_name(content_format)
