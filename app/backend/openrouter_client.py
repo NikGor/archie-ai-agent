@@ -3,6 +3,7 @@
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
+from archie_shared.chat.models import ReasoningEffort
 from langfuse.openai import AsyncOpenAI, OpenAI
 from openai import APIConnectionError, InternalServerError, RateLimitError
 from openai.lib._pydantic import to_strict_json_schema
@@ -76,6 +77,7 @@ class OpenRouterClient:
         model: str,
         response_format: type[BaseModel] | None = None,
         tools: list[dict[str, Any]] | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> dict[str, Any]:
         """Build kwargs dict for chat.completions.create calls."""
         create_kwargs: dict[str, Any] = {
@@ -106,6 +108,12 @@ class OpenRouterClient:
             create_kwargs["tools"] = [
                 {"type": "function", "function": tool} for tool in tools
             ]
+        if reasoning_effort:
+            # ARCHIE-289: OpenRouter unified reasoning parameter, not in the OpenAI SDK schema
+            create_kwargs["extra_body"] = {"reasoning": {"effort": reasoning_effort}}
+            logger.info(
+                f"openrouter_client_007: Reasoning effort \033[35m{reasoning_effort}\033[0m for \033[36m{model}\033[0m"
+            )
         return create_kwargs
 
     async def create_completion(
@@ -116,6 +124,7 @@ class OpenRouterClient:
         previous_response_id: str | None = None,
         tools: list[dict[str, Any]] | None = None,
         observation_name: str = "llm-call",
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> Any:
         """
         Create a completion using OpenRouter API with structured outputs.
@@ -138,7 +147,7 @@ class OpenRouterClient:
             )
         try:
             create_kwargs = self._build_create_kwargs(
-                messages, model, response_format, tools
+                messages, model, response_format, tools, reasoning_effort
             )
             response = await call_with_retry(
                 lambda: self.client.chat.completions.create(
@@ -167,6 +176,7 @@ class OpenRouterClient:
         max_output_tokens: int | None = None,
         usage_out: dict[str, int] | None = None,
         observation_name: str = "llm-call",
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> AsyncIterator[str]:
         """
         Stream completion tokens from OpenRouter API.
@@ -176,7 +186,9 @@ class OpenRouterClient:
         `usage_out` is provided, token usage from the final chunk is written
         into it (ARCHIE-180).
         """
-        create_kwargs = self._build_create_kwargs(messages, model, response_format)
+        create_kwargs = self._build_create_kwargs(
+            messages, model, response_format, reasoning_effort=reasoning_effort
+        )
         create_kwargs["stream"] = True
         create_kwargs["stream_options"] = {"include_usage": True}
         if max_output_tokens is not None:
