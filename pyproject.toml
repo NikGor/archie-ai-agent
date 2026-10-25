@@ -141,7 +141,7 @@ include_external_packages = false
 [[tool.importlinter.contracts]]
 name = "Low layers do not import agents, quality or API"
 type = "forbidden"
-source_modules = ["app.backend", "app.utils", "app.models", "app.tools"]
+source_modules = ["app.platform", "app.backend", "app.utils", "app.models", "app.tools"]
 forbidden_modules = ["app.agent", "app.swarm", "app.monitoring", "app.evals", "app.api_controller", "app.endpoints"]
 ignore_imports = [
     "app.tools.agent_task_tool -> app.api_controller",  # ARCHIE-293: chat tool moves to agents/chat
