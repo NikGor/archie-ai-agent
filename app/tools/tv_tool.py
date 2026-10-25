@@ -2,11 +2,13 @@
 
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
+from pydantic import BaseModel, Field
 from app.backend.android_tv_client import AndroidTVClient, AndroidTVError
 from app.config import settings
 
@@ -186,7 +188,131 @@ def _get_client() -> AndroidTVClient:
     )
 
 
-async def tv_tool(  # noqa: PLR0911, PLR0912
+class TvRequest(BaseModel):
+    """Arguments of one tv_tool call after normalization (ARCHIE-304)."""
+
+    action: str = Field(description="Normalized action")
+    query: str | None = Field(default=None, description="Channel name, URL or video")
+    url: str | None = Field(default=None, description="Direct media URL")
+    player: str = Field(description="auto | vlc | youtube")
+    limit: int = Field(description="Channels to list")
+
+
+async def _remote_key(request: TvRequest) -> dict[str, Any]:
+    await _get_client().send_key(_REMOTE_KEYS[request.action])
+    return {
+        "status": "success",
+        "action": request.action,
+        "message": f"TV remote command sent: {request.action}",
+    }
+
+
+async def _list_channels(request: TvRequest) -> dict[str, Any]:
+    channels = _load_channels(settings.tv_playlist_path, settings.sharavoz_token)
+    limit = max(1, min(request.limit, 100))
+    if request.query:
+        matches = _channel_matches(channels, request.query)
+        selected = [channel for score, channel in matches if score >= 0.35][:limit]
+    else:
+        selected = channels[:limit]
+    return {
+        "status": "success",
+        "action": request.action,
+        "channels": [
+            {"title": channel.title, "group": channel.group} for channel in selected
+        ],
+        "count": len(selected),
+    }
+
+
+async def _play_channel(request: TvRequest) -> dict[str, Any]:
+    channels = _load_channels(settings.tv_playlist_path, settings.sharavoz_token)
+    if not request.query:
+        return {"status": "error", "message": "query is required for play_channel"}
+    if request.player == "youtube":
+        return {
+            "status": "error",
+            "message": "IPTV channels can only be played with VLC",
+        }
+    channel, suggestions = _find_channel(channels, request.query)
+    if channel is None:
+        return {
+            "status": "not_found",
+            "message": f"Channel not found: {request.query}",
+            "suggestions": suggestions,
+        }
+    await _get_client().launch_link(_vlc_link(channel.url))
+    return {
+        "status": "success",
+        "action": request.action,
+        "channel": channel.title,
+        "group": channel.group,
+        "player": "vlc" if request.player == "auto" else request.player,
+        "message": f"Playing {channel.title} on Android TV",
+    }
+
+
+async def _play_url(request: TvRequest) -> dict[str, Any]:
+    media_url = request.url or request.query
+    if not media_url:
+        return {"status": "error", "message": "url is required for play_url"}
+    is_youtube = bool(_extract_youtube_id(media_url)) or _is_youtube_url(media_url)
+    if request.player == "youtube" or (request.player == "auto" and is_youtube):
+        launch_link, direct = _youtube_link(media_url)
+        resolved_player = "youtube"
+    else:
+        if is_youtube:
+            return {
+                "status": "error",
+                "message": (
+                    "This TV can route YouTube links only to the YouTube app; "
+                    "use player=youtube"
+                ),
+            }
+        launch_link, direct = _vlc_link(media_url), True
+        resolved_player = "vlc"
+    await _get_client().launch_link(launch_link)
+    return {
+        "status": "success",
+        "action": request.action,
+        "player": resolved_player,
+        "direct_play": direct,
+        "message": f"Media opened with {resolved_player} on Android TV",
+    }
+
+
+async def _play_youtube(request: TvRequest) -> dict[str, Any]:
+    youtube_value = request.query or request.url
+    if not youtube_value:
+        return {"status": "error", "message": "query is required for play_youtube"}
+    if request.player == "vlc":
+        return {
+            "status": "error",
+            "message": (
+                "This TV can route YouTube links only to the YouTube app; "
+                "VLC is supported for direct media streams"
+            ),
+        }
+    launch_link, direct = _youtube_link(youtube_value)
+    await _get_client().launch_link(launch_link)
+    return {
+        "status": "success",
+        "action": request.action,
+        "player": "youtube",
+        "direct_play": direct,
+        "message": "YouTube video opened on Android TV",
+    }
+
+
+_TV_ACTIONS: dict[str, Callable[[TvRequest], Awaitable[dict[str, Any]]]] = {
+    "list_channels": _list_channels,
+    "play_channel": _play_channel,
+    "play_url": _play_url,
+    "play_youtube": _play_youtube,
+}
+
+
+async def tv_tool(
     action: str,
     query: str | None = None,
     url: str | None = None,
@@ -232,118 +358,11 @@ async def tv_tool(  # noqa: PLR0911, PLR0912
             "message": f"[DEMO] TV action {action} would be executed",
         }
 
+    request = TvRequest(action=action, query=query, url=url, player=player, limit=limit)
     try:
         if action in _REMOTE_KEYS:
-            await _get_client().send_key(_REMOTE_KEYS[action])
-            return {
-                "status": "success",
-                "action": action,
-                "message": f"TV remote command sent: {action}",
-            }
-
-        if action in {"list_channels", "play_channel"}:
-            channels = _load_channels(
-                settings.tv_playlist_path, settings.sharavoz_token
-            )
-            if action == "list_channels":
-                limit = max(1, min(limit, 100))
-                if query:
-                    matches = _channel_matches(channels, query)
-                    selected = [channel for score, channel in matches if score >= 0.35][
-                        :limit
-                    ]
-                else:
-                    selected = channels[:limit]
-                return {
-                    "status": "success",
-                    "action": action,
-                    "channels": [
-                        {"title": channel.title, "group": channel.group}
-                        for channel in selected
-                    ],
-                    "count": len(selected),
-                }
-
-            if not query:
-                return {
-                    "status": "error",
-                    "message": "query is required for play_channel",
-                }
-            if player == "youtube":
-                return {
-                    "status": "error",
-                    "message": "IPTV channels can only be played with VLC",
-                }
-            channel, suggestions = _find_channel(channels, query)
-            if channel is None:
-                return {
-                    "status": "not_found",
-                    "message": f"Channel not found: {query}",
-                    "suggestions": suggestions,
-                }
-            launch_link = _vlc_link(channel.url)
-            await _get_client().launch_link(launch_link)
-            return {
-                "status": "success",
-                "action": action,
-                "channel": channel.title,
-                "group": channel.group,
-                "player": "vlc" if player == "auto" else player,
-                "message": f"Playing {channel.title} on Android TV",
-            }
-
-        if action == "play_url":
-            media_url = url or query
-            if not media_url:
-                return {"status": "error", "message": "url is required for play_url"}
-            is_youtube = bool(_extract_youtube_id(media_url)) or _is_youtube_url(
-                media_url
-            )
-            if player == "youtube" or (player == "auto" and is_youtube):
-                launch_link, direct = _youtube_link(media_url)
-                resolved_player = "youtube"
-            elif player in {"auto", "vlc"}:
-                if is_youtube:
-                    return {
-                        "status": "error",
-                        "message": (
-                            "This TV can route YouTube links only to the YouTube app; "
-                            "use player=youtube"
-                        ),
-                    }
-                launch_link = _vlc_link(media_url)
-                direct = True
-                resolved_player = "vlc"
-            await _get_client().launch_link(launch_link)
-            return {
-                "status": "success",
-                "action": action,
-                "player": resolved_player,
-                "direct_play": direct,
-                "message": f"Media opened with {resolved_player} on Android TV",
-            }
-
-        youtube_value = query or url
-        if not youtube_value:
-            return {"status": "error", "message": "query is required for play_youtube"}
-        if player == "vlc":
-            return {
-                "status": "error",
-                "message": (
-                    "This TV can route YouTube links only to the YouTube app; "
-                    "VLC is supported for direct media streams"
-                ),
-            }
-        launch_link, direct = _youtube_link(youtube_value)
-        resolved_player = "youtube"
-        await _get_client().launch_link(launch_link)
-        return {
-            "status": "success",
-            "action": action,
-            "player": resolved_player,
-            "direct_play": direct,
-            "message": "YouTube video opened on Android TV",
-        }
+            return await _remote_key(request)
+        return await _TV_ACTIONS[action](request)
     except (ValueError, AndroidTVError) as exc:
         logger.warning("tv_tool_error: %s", exc)
         return {"status": "error", "message": str(exc)}
