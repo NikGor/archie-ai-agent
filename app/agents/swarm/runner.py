@@ -38,6 +38,8 @@ from app.config import settings
 from app.models.state_models import UserState
 from app.platform.llm.catalog import get_provider_for_model
 from app.platform.llm.registry import get_client, parse_llm_response
+from app.platform.runtime.budget import Budget, BudgetMeter, daily_spend
+from app.platform.runtime.tool_loop import run_tool_loop
 from app.platform.tools.executor import execute_tool_calls
 from app.platform.tools.models import ToolCall, ToolContext, ToolResult
 from app.platform.tools.registry import ToolRegistry
@@ -45,6 +47,9 @@ from app.tools.catalog import tool_registry as default_tool_registry
 
 
 logger = logging.getLogger(__name__)
+
+# Daily LLM spend of every swarm turn and check counts under this kind
+DAILY_SPEND_KIND = "swarm"
 
 FINAL_REPLY_TASK = (
     "Write your chat reply now. You must reply: say what you did, "
@@ -179,6 +184,13 @@ class SwarmAgentRunner:
             usage=self._sum_usage(model, traces),
         )
 
+    def _budget(self) -> Budget:
+        return Budget(
+            max_tool_rounds=settings.swarm_max_tool_rounds,
+            max_cost_usd=settings.swarm_turn_max_cost_usd,
+            max_seconds=settings.swarm_turn_max_seconds,
+        )
+
     async def _loop(
         self,
         profile: SwarmAgentProfile,
@@ -189,61 +201,49 @@ class SwarmAgentRunner:
         reply_schema: type[SwarmReply],
         final_task: str = FINAL_REPLY_TASK,
     ) -> tuple[SwarmTurn | SwarmReply, list[SwarmActionInfo], list[LllmTrace]]:
-        """Tool rounds until the agent replies. Several rounds let an agent read
-        the state, then change it."""
+        """Tool rounds until the agent replies, inside the turn budget (ARCHIE-298).
+        Several rounds let an agent read the state, then change it."""
         provider = get_provider_for_model(model)
         client = get_client(provider)
         traces: list[LllmTrace] = []
         actions: list[SwarmActionInfo] = []
-        turn: SwarmTurn | SwarmReply = await self._call(
-            client, provider, model, messages, turn_schema, traces
-        )
-        rounds = 0
-        while isinstance(turn, SwarmTurn) and turn.tool_calls:
-            rounds += 1
+        meter = BudgetMeter(self._budget())
+
+        async def call(schema: type[BaseModel]) -> BaseModel:
+            content = await self._call(client, provider, model, messages, schema, traces)
+            trace = traces[-1] if traces else None
+            daily_spend.add(DAILY_SPEND_KIND, trace.total_cost if trace else 0.0)
+            meter.add(trace)
+            return content
+
+        async def run_tools(turn: BaseModel) -> tuple[str, bool]:
+            assert isinstance(turn, SwarmTurn)
             logger.info(
-                f"swarm_runner_001: \033[36m{profile.agent_id}\033[0m round {rounds} tools="
+                f"swarm_runner_001: \033[36m{profile.agent_id}\033[0m round {meter.rounds} tools="
                 f"{[(tc.tool_name, {p.name: p.value for p in tc.arguments}) for tc in turn.tool_calls]} "
                 f"reasoning: \033[33m{turn.reasoning}\033[0m"
             )
-            results, new_actions = await self._execute(
-                profile, turn.tool_calls, context
-            )
+            results, new_actions = await self._execute(profile, turn.tool_calls, context)
             actions.extend(new_actions)
-            messages.append(
-                {
-                    "role": "system",
-                    "content": self._format_results(
-                        results,
-                        new_actions,
-                        profile.tool_result_max_chars
-                        or settings.swarm_tool_result_max_chars,
-                    ),
-                }
+            text = self._format_results(
+                results,
+                new_actions,
+                profile.tool_result_max_chars or settings.swarm_tool_result_max_chars,
             )
             # After a successful side effect only the reply is left: no repeated actions.
-            last_round = rounds >= settings.swarm_max_tool_rounds or any(
-                a.status == "success" for a in new_actions
-            )
-            messages.append(
-                {
-                    "role": "user",
-                    "content": (
-                        final_task
-                        if last_round
-                        else f"Call more tools if you still need them. Else: {final_task}"
-                    ),
-                }
-            )
-            turn = await self._call(
-                client,
-                provider,
-                model,
-                messages,
-                reply_schema if last_round else turn_schema,
-                traces,
-            )
-        return turn, actions, traces
+            return text, any(a.status == "success" for a in new_actions)
+
+        turn = await run_tool_loop(
+            call,
+            lambda turn: turn.tool_calls if isinstance(turn, SwarmTurn) else [],
+            run_tools,
+            messages,
+            turn_schema,
+            reply_schema,
+            final_task,
+            meter,
+        )
+        return turn, actions, traces  # type: ignore[return-value]
 
     async def _call(
         self,
