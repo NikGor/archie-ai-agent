@@ -1,39 +1,12 @@
 from typing import Literal
 from pydantic import BaseModel, Field
+from ..platform.tools.models import Parameter, ToolCall, ToolName
 from ..utils.intent_config import IntentType
-
-
-ToolName = Literal[
-    "smarthome_control_tool",
-    "smarthome_status_tool",
-    "spotify_tool",
-    "tv_tool",
-    "google_search_tool",
-    "google_places_search_tool",
-    "task_tool",
-    "notes_tool",
-    "events_tool",
-    "gmail_tool",
-    "cron_tool",
-    "announce_tool",
-    "awtrix_tool",
-    "weather_tool",
-    "alert_chat_tool",
-    "swarm_alert_tool",
-    "agent_task_tool",
-    "document_search_tool",
-    "skill_loader_tool",
-]
 
 
 class ActionType(BaseModel):
     type: Literal["function_call", "parameters_request", "final_response"]
     reasoning: str = Field(description="Why this action type was chosen")
-
-
-class Parameter(BaseModel):
-    name: str = Field(description="Parameter name")
-    value: str = Field(description="Parameter value")
 
 
 class ToolCallRequest(BaseModel):
@@ -49,6 +22,12 @@ class ToolCallRequest(BaseModel):
         description="Has the user explicitly confirmed the tool call with current parameters? Even when all parameters are present, always ask the user for additional confirmation before function_call. Exceptions: smarthome_control_tool for light/climate and task_tool need no confirmation — set true directly.",
     )
     reason: str = Field(description="Why this tool is needed")
+
+    def to_call(self) -> ToolCall:
+        """The neutral call the executor runs (ARCHIE-292)."""
+        return ToolCall(
+            tool_name=self.tool_name, arguments=self.arguments, reason=self.reason
+        )
 
 
 class SGROrchestration(BaseModel):
