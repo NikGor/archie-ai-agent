@@ -3,6 +3,7 @@
 import time
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
+from archie_shared.chat.models import ReasoningEffort
 from ...backend.llm.base import LLMClient
 from ...utils.stream_utils import JsonPathExtractor
 
@@ -22,6 +23,7 @@ async def stream_and_collect(
         Sequence[tuple[Any, Callable[[str], Awaitable[None]]]] | None
     ) = None,
     observation_name: str = "llm-call",
+    reasoning_effort: ReasoningEffort | None = None,
 ) -> tuple[str, int | None]:
     """Stream LLM response, collect JSON, return (full_json, ttft_ms).
 
@@ -38,6 +40,8 @@ async def stream_and_collect(
         kwargs["max_output_tokens"] = max_output_tokens
     if usage_out is not None:
         kwargs["usage_out"] = usage_out
+    if reasoning_effort is not None:
+        kwargs["reasoning_effort"] = reasoning_effort
     async for token in client.create_completion_stream(
         messages=messages,
         model=model,
