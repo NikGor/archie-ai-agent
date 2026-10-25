@@ -31,7 +31,7 @@ CORE_TOOL_GROUPS = [
             "cron_tool": "app.tools.cron_tool",
             "announce_tool": "app.tools.announce_tool",
             "awtrix_tool": "app.tools.awtrix_tool",
-            "agent_task_tool": "app.tools.agent_task_tool",
+            "agent_task_tool": "app.agents.chat.tools.agent_task_tool",
         },
     ),
     ToolGroup(
