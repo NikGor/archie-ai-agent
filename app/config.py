@@ -1,6 +1,6 @@
 """Configuration constants and centralized settings for the application."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
@@ -40,6 +40,9 @@ class Settings(BaseSettings):
 
     # Agent swarm chat (ARCHIE-199)
     swarm_enabled: bool = True
+    # embedded: one process; api: chat and /ws_swarm only; runtime: swarm and
+    # cron only, events and commands via Redis (ARCHIE-299)
+    runtime_mode: Literal["embedded", "api", "runtime"] = "embedded"
     # DeepSeek V4.1 Flash broke tool calls and looped to 131k output tokens
     # (ARCHIE-241); GPT-6 Luna via OpenRouter returned several JSON objects in one
     # answer and made up tool results (ARCHIE-243). GPT-5.6 Luna runs on the
