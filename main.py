@@ -14,8 +14,8 @@ from app.endpoints import router  # noqa: E402
 from app.evals.endpoints import router as evals_router  # noqa: E402
 from app.evals.endpoints import ws_router as evals_ws_router  # noqa: E402
 from app.monitoring.endpoints import router as monitoring_router  # noqa: E402
-from app.swarm.endpoints import router as swarm_router  # noqa: E402
-from app.swarm.service import swarm_service  # noqa: E402
+from app.agents.swarm.endpoints import router as swarm_router  # noqa: E402
+from app.agents.swarm.service import swarm_service  # noqa: E402
 from app.utils.tracing import init_tracing, shutdown_tracing  # noqa: E402
 from app.ws_docs import router as ws_docs_router  # noqa: E402
 

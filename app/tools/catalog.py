@@ -1,5 +1,5 @@
 """Tools every agent kind may use, registered in the process tool registry
-(ARCHIE-292). Packages with their own tools add exclusive groups (app.swarm.tools)."""
+(ARCHIE-292). Packages with their own tools add exclusive groups (app.agents.swarm.tools)."""
 
 from ..platform.tools.registry import ToolGroup, ToolRegistry
 
