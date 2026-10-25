@@ -11,6 +11,7 @@ from archie_shared.evals.models import (
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from app.config import settings
 from app.platform.llm.catalog import MODEL_PROVIDERS
+from app.platform.prompts.descriptions import PROMPT_DESCRIPTIONS
 from .catalog import (
     CatalogError,
     EvalCaseDraft,
@@ -19,7 +20,6 @@ from .catalog import (
     compute_prompt_hashes,
     get_schema,
 )
-from .prompt_descriptions import PROMPT_DESCRIPTIONS
 from .service import EvalBusyError, EvalRunNotFoundError, eval_service
 
 
