@@ -21,8 +21,8 @@ so the turn grade stays meaningful with 30+ rules per turn.
 import functools
 import re
 from dataclasses import dataclass
-from app.agent.prompt_builder import PromptBuilder
-from app.agent.prompt_compiler import PromptCompiler, PromptLibrary, load_library
+from app.agents.chat.messages import ChatPromptBuilder
+from app.platform.prompts.compiler import PromptCompiler, PromptLibrary, load_library
 
 
 COMMAND_SPEC = "cmd_prompt"
@@ -222,7 +222,7 @@ def specs_for_turn(content_format: str, trace_found: bool) -> list[str]:
     if content_format not in DIRECT_FORMATS and trace_found:
         specs.append(COMMAND_SPEC)
     specs.append(ASSISTANT_SPEC)
-    format_spec = PromptBuilder.format_spec_name(content_format)
+    format_spec = ChatPromptBuilder.format_spec_name(content_format)
     if format_spec in _library().specs:
         specs.append(format_spec)
     return specs

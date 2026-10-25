@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from archie_shared.monitoring.models import MonitorToolCall
 from langfuse import get_client
 from pydantic import BaseModel, Field
-from app.agent.prompt_builder import SKILLS_HEADER
+from app.agents.chat.messages import SKILLS_HEADER
 from app.utils.tracing import CHAT_TRACE_NAME, COMMAND_TRACE_NAME
 
 

@@ -16,11 +16,11 @@ from archie_shared.monitoring.models import (
     MonitorRuleScore,
 )
 from pydantic import BaseModel, Field
-from app.agent.prompt_builder import PromptBuilder
+from app.agents.chat.messages import ChatPromptBuilder
+from app.agents.chat.tool_access import chat_tool_names
 from app.evals.prompt_descriptions import PROMPT_DESCRIPTIONS
 from app.platform.llm.decisions import DecisionsError as JudgeError
 from app.platform.llm.decisions import decide as _decide
-from app.agent.tool_access import chat_tool_names
 from app.tools.catalog import tool_registry
 from app.utils.skill_utils import list_skills
 from .outcome import GOAL_KEY as OUTCOME_GOAL_KEY
@@ -203,7 +203,7 @@ def build_state(
     content = _content(response)
     content_format = judged_format(content, response.response_format)
     purpose = PROMPT_DESCRIPTIONS.get(
-        PromptBuilder.format_spec_name(content_format), ""
+        ChatPromptBuilder.format_spec_name(content_format), ""
     )
     user_messages = [m for m in history if m.role == "user"]
     next_message = _next_user_message(messages, index)
