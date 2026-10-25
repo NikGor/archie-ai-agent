@@ -39,6 +39,7 @@ from app.models.state_models import UserState
 from app.platform.llm.catalog import get_provider_for_model
 from app.platform.llm.registry import get_client, parse_llm_response
 from app.platform.runtime.budget import Budget, BudgetMeter, daily_spend
+from app.platform.runtime.spawn import SpawnContext, spawn_scope
 from app.platform.runtime.tool_loop import run_tool_loop
 from app.platform.tools.executor import execute_tool_calls
 from app.platform.tools.models import ToolCall, ToolContext, ToolResult
@@ -136,14 +137,22 @@ class SwarmAgentRunner:
             history,
             f"React to this message:\n{format_chat_line(trigger)}",
         )
-        turn, actions, traces = await self._loop(
-            profile,
-            model,
-            messages,
-            ToolContext(user_timezone=state.user_timezone),
-            SwarmTurn,
-            SwarmReply,
-        )
+        with spawn_scope(
+            SpawnContext(
+                source=profile.agent_id,
+                parent_run_id=trigger.run_id or trigger.message_id,
+                depth=0,
+                user_timezone=state.user_timezone,
+            )
+        ):
+            turn, actions, traces = await self._loop(
+                profile,
+                model,
+                messages,
+                ToolContext(user_timezone=state.user_timezone),
+                SwarmTurn,
+                SwarmReply,
+            )
         reply = turn.reply.strip()
         if not reply and not actions:
             logger.info(
@@ -162,6 +171,7 @@ class SwarmAgentRunner:
         watch_task: SwarmWatchTask,
         history: list[SwarmMessage],
         task: str,
+        run_id: str = "swarm-watch",
     ) -> SwarmWatchDraft:
         """One spontaneous check: read fresh data, compare with today's notes,
         return an alert or an empty reply (ARCHIE-238)."""
@@ -170,15 +180,23 @@ class SwarmAgentRunner:
         messages = await self.prompts.build_messages(
             state, profile, model, None, history, task, watch_task
         )
-        turn, _, traces = await self._loop(
-            profile,
-            model,
-            messages,
-            ToolContext(user_timezone=state.user_timezone),
-            SwarmWatchTurn,
-            SwarmWatchReply,
-            WATCH_FINAL_TASK,
-        )
+        with spawn_scope(
+            SpawnContext(
+                source=profile.agent_id,
+                parent_run_id=run_id,
+                depth=0,
+                user_timezone=state.user_timezone,
+            )
+        ):
+            turn, _, traces = await self._loop(
+                profile,
+                model,
+                messages,
+                ToolContext(user_timezone=state.user_timezone),
+                SwarmWatchTurn,
+                SwarmWatchReply,
+                WATCH_FINAL_TASK,
+            )
         return SwarmWatchDraft(
             outcome=SwarmWatchReply.model_validate(turn.model_dump()),
             usage=self._sum_usage(model, traces),
@@ -210,7 +228,9 @@ class SwarmAgentRunner:
         meter = BudgetMeter(self._budget())
 
         async def call(schema: type[BaseModel]) -> BaseModel:
-            content = await self._call(client, provider, model, messages, schema, traces)
+            content = await self._call(
+                client, provider, model, messages, schema, traces
+            )
             trace = traces[-1] if traces else None
             daily_spend.add(DAILY_SPEND_KIND, trace.total_cost if trace else 0.0)
             meter.add(trace)
@@ -223,7 +243,9 @@ class SwarmAgentRunner:
                 f"{[(tc.tool_name, {p.name: p.value for p in tc.arguments}) for tc in turn.tool_calls]} "
                 f"reasoning: \033[33m{turn.reasoning}\033[0m"
             )
-            results, new_actions = await self._execute(profile, turn.tool_calls, context)
+            results, new_actions = await self._execute(
+                profile, turn.tool_calls, context
+            )
             actions.extend(new_actions)
             text = self._format_results(
                 results,
