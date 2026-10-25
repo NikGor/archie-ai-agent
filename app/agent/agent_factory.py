@@ -1,7 +1,6 @@
 import logging
 import time
 from archie_shared.chat.models import ImageAttachment, LllmTrace, ReasoningEffort
-from ..backend.llm.registry import get_client
 from ..backend.state_service import StateService
 from ..backend.tool_result_store import ToolResultStore
 from ..config import DEFAULT_MODEL, MAX_COMMAND_ITERATIONS
@@ -15,14 +14,14 @@ from ..models.ws_models import (
     StreamCallback,
     StreamEventCallback,
 )
+from ..platform.llm.catalog import get_provider_for_model
+from ..platform.llm.context import ConversationContext
+from ..platform.llm.registry import get_client, parse_llm_response
 from ..tools.output import create_output
 from ..tools.tool_factory import ToolFactory
-from ..utils.llm_parser import parse_llm_response
-from ..utils.provider_utils import get_provider_for_model
 from ..utils.trace_utils import StepTimer
 from ..utils.tracing import COMMAND_TRACE_NAME
 from .command_loop import CommandLoop
-from .context import ConversationContext
 from .pipeline_metrics import PipelineMetrics
 from .prompt_builder import PromptBuilder
 from .response_format_router import select_response_format
