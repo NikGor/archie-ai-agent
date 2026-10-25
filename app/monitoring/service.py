@@ -19,9 +19,10 @@ from archie_shared.monitoring.models import (
 )
 from langfuse import get_client
 from tenacity import AsyncRetrying, stop_after_attempt, wait_exponential
+from app.agents.chat.quality.judge import judge_turn
+from app.agents.chat.quality.traces import TraceTurn, fetch_session_turns, match_turn
 from app.config import settings
-from .judge import judge_turn, worst_grade
-from .traces import TraceTurn, fetch_session_turns, match_turn
+from app.platform.quality.judge import worst_grade
 
 
 logger = logging.getLogger(__name__)
