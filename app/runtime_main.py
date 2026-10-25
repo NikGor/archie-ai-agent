@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from app.agents.background import configure_ephemeral
 from app.agents.registry import load_agent_kinds  # noqa: E402
 from app.agents.swarm.bridge import SwarmHubBridge  # noqa: E402
 from app.agents.swarm.control import apply_command  # noqa: E402
@@ -20,6 +21,7 @@ from app.agents.swarm.service import swarm_service  # noqa: E402
 from app.backend.cron_scheduler import cron_scheduler  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.platform.runtime.budget import daily_spend  # noqa: E402
+from app.platform.runtime.status import agent_status
 from app.platform.runtime.supervisor import Supervisor  # noqa: E402
 from app.runtime_endpoints import RuntimeStatus, publish_status  # noqa: E402
 from app.utils.tracing import init_tracing, shutdown_tracing  # noqa: E402
@@ -38,7 +40,10 @@ async def _report(supervisor: Supervisor, stopping: asyncio.Event) -> None:
             await publish_status(
                 RuntimeStatus(
                     services=supervisor.status(),
-                    daily_spend_usd={k: round(v, 4) for k, v in daily_spend.by_kind.items()},
+                    agent_kinds=await agent_status(),
+                    daily_spend_usd={
+                        k: round(v, 4) for k, v in daily_spend.by_kind.items()
+                    },
                 )
             )
         except Exception as exc:
@@ -51,6 +56,7 @@ async def main() -> None:
         raise SystemExit("runtime_main needs RUNTIME_MODE=runtime")
     init_tracing()
     load_agent_kinds()
+    configure_ephemeral()
     supervisor = Supervisor()
     swarm_service.bridge = SwarmHubBridge(
         swarm_service.hub, role="runtime", on_command=apply_command
