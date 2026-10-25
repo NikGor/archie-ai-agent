@@ -21,16 +21,15 @@ from archie_shared.swarm.models import (
 from pydantic import BaseModel, Field
 from ..agent.prompt_builder import PromptBuilder
 from ..agent.prompt_compiler import PromptCompiler
-from ..backend.llm.registry import get_client
 from ..backend.state_service import StateService
 from ..config import settings
 from ..models.orchestration_sgr import ToolCallRequest
 from ..models.state_models import UserState
 from ..models.tool_models import ToolContext, ToolResult
+from ..platform.llm.catalog import get_provider_for_model
+from ..platform.llm.registry import get_client, parse_llm_response
 from ..tools.tool_factory import ToolFactory
 from ..utils.general_utils import local_now
-from ..utils.llm_parser import parse_llm_response
-from ..utils.provider_utils import get_provider_for_model
 from ..utils.skill_utils import load_skill, load_skill_references
 from ..utils.tool_executor import execute_tool_calls
 from .agents import SWARM_AGENTS, SWARM_GROUPS, SwarmRoster

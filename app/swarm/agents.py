@@ -3,7 +3,8 @@
 import logging
 from archie_shared.swarm.models import SwarmAgentInfo
 from ..backend.redis_factory import get_async_redis
-from ..config import MODEL_PROVIDERS, settings
+from ..config import settings
+from ..platform.llm.catalog import MODEL_PROVIDERS
 from .models import ActionRule, SwarmAgentProfile
 
 
@@ -273,9 +274,7 @@ SELECTABLE_MODELS: list[str] = list(
 
 
 def get_group_chair(group: str) -> str | None:
-    return next(
-        (a for a in get_group_members(group) if SWARM_AGENTS[a].chair), None
-    )
+    return next((a for a in get_group_members(group) if SWARM_AGENTS[a].chair), None)
 
 
 def get_group_members(group: str) -> list[str]:
