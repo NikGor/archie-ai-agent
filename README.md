@@ -74,7 +74,7 @@ come from the `archie-shared` package, installed from the Django repo by git tag
 | `app/models/` | Stage 1/3 models, `ToolResult`, WS events |
 | `app/utils/` | LLM parser, provider routing, intent config and schema filter, tracing, status messages |
 | `app/skills/` | Runtime skills for the LLM |
-| `app/swarm/` | Agent swarm: bus, dispatcher, council, runner, policy |
+| `app/agents/swarm/` | Agent swarm: bus, dispatcher, council, runner, policy |
 | `app/evals/` | Eval engine and API |
 | `app/monitoring/` | Chat monitoring judge and API |
 | `tests/` | Unit and smoke tests |
