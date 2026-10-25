@@ -21,10 +21,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from app.agents.chat.formats import resolve_format
 from app.agents.chat.messages import ChatPromptBuilder
 from app.agents.chat.quality.rules import ASSISTANT_SPEC, COMMAND_SPEC, rules_for_turn
+from app.agents.registry import load_agent_kinds
 from app.agents.swarm.agents import SWARM_AGENTS
 from app.agents.swarm.quality.rules import case_rules, case_specs
 from app.config import settings
 from app.platform.prompts.compiler import PromptCompiler
+from app.platform.quality.adapter import UnknownAgentKindError, quality_adapter
 from app.platform.tools.models import ToolName
 
 
@@ -185,6 +187,37 @@ def build_case(draft: EvalCaseDraft) -> EvalCaseInfo:
         inferred = case_specs(draft.swarm.agent_id, draft.stage)
         return EvalCaseInfo(
             prompts=inferred + [p for p in draft.extra_prompts if p not in inferred],
+            **draft.model_dump(exclude={"extra_prompts"}),
+        )
+    if draft.agent_kind != "chat":
+        load_agent_kinds()
+        try:
+            adapter = quality_adapter(draft.agent_kind)
+        except UnknownAgentKindError as exc:
+            raise CatalogError(f"{draft.id}: unregistered agent kind") from exc
+        if (
+            draft.stage
+            != f"{draft.agent_kind}_{'tick' if draft.agent_kind == 'cognitive' else 'run'}"
+        ):
+            raise CatalogError(f"{draft.id}: stage does not match agent kind")
+        try:
+            versions = adapter.spec_versions(draft.response_format)
+            known_rules = {
+                rule.key for rule in adapter.rules_for(draft.response_format)
+            }
+        except ValueError as exc:
+            raise CatalogError(f"{draft.id}: {exc}") from exc
+        unknown = set(draft.rules) - known_rules
+        if unknown:
+            raise CatalogError(f"{draft.id}: unknown rules {sorted(unknown)}")
+        if draft.expect.rules_followed and not draft.rules:
+            raise CatalogError(f"{draft.id}: rules_followed needs at least one rule")
+        unknown_prompts = set(draft.extra_prompts) - set(list_prompt_templates())
+        if unknown_prompts:
+            raise CatalogError(f"{draft.id}: unknown prompts {sorted(unknown_prompts)}")
+        return EvalCaseInfo(
+            prompts=list(versions)
+            + [name for name in draft.extra_prompts if name not in versions],
             **draft.model_dump(exclude={"extra_prompts"}),
         )
     if draft.stage.startswith("swarm_"):
