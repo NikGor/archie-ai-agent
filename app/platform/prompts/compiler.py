@@ -20,8 +20,8 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 logger = logging.getLogger(__name__)
 
-# Prompt data stays in app/agent/prompts until ARCHIE-294 moves it to app/prompts
-PROMPTS_DIR = Path(__file__).resolve().parents[2] / "agent" / "prompts"
+# Prompt data (specs and rules) lives apart from the code (ARCHIE-294)
+PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
 
 SectionStyle = Literal["bullets", "numbered", "lines", "paragraphs"]
 ItemStyle = Literal["bullets", "numbered"]
