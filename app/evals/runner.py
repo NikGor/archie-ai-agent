@@ -13,8 +13,8 @@ from archie_shared.evals.models import (
     EvalCaseResult,
 )
 from archie_shared.monitoring.models import MonitorMessage, MonitorRuleScore
-from app.agent.agent_factory import AgentFactory
-from app.agent.tool_access import chat_tool_names
+from app.agents.chat.pipeline import ChatPipeline
+from app.agents.chat.tool_access import chat_tool_names
 from app.config import MAX_COMMAND_ITERATIONS, settings
 from app.models.orchestration_sgr import DecisionResponse
 from app.models.output_models import AgentResponse
@@ -88,8 +88,8 @@ def _only_loads_skills(decision: DecisionResponse) -> bool:
 class EvalAttemptRunner:
     """Runs eval attempts in demo mode as a dedicated eval user."""
 
-    def __init__(self, agent_factory: AgentFactory | None = None) -> None:
-        self.agent_factory = agent_factory or AgentFactory(demo_mode=True)
+    def __init__(self, agent_factory: ChatPipeline | None = None) -> None:
+        self.agent_factory = agent_factory or ChatPipeline()
 
     async def run(
         self,
@@ -192,6 +192,7 @@ class EvalAttemptRunner:
             response_format=case.response_format,
             user_name=settings.eval_user_name,
             on_status=on_status,
+            demo_mode=True,
         )
         trace = response.pipeline_trace
         total_tokens = _sum_tokens(trace)

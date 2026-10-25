@@ -16,18 +16,18 @@ from archie_shared.evals.models import (
 )
 from archie_shared.ui.models import AdvancedAnswerItem
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from app.agent.prompt_builder import PromptBuilder
-from app.agent.prompt_compiler import PromptCompiler
+from app.agents.chat.messages import ChatPromptBuilder
 from app.config import settings
-from app.platform.tools.models import ToolName
 from app.monitoring.spec_rules import ASSISTANT_SPEC, COMMAND_SPEC, rules_for_turn
+from app.platform.prompts.compiler import PromptCompiler
+from app.platform.tools.models import ToolName
 
 
 logger = logging.getLogger(__name__)
 
 CASE_ID_PATTERN = r"^[a-z0-9_]+(\.[a-z0-9_]+)+$"
 
-# Formats that skip Stage 1 (see AgentFactory.arun)
+# Formats that skip Stage 1 (see ChatPipeline.arun)
 _DIRECT_OUTPUT_FORMATS = {"dashboard", "widget"}
 
 
@@ -122,7 +122,7 @@ def get_schema() -> EvalSchema:
 
 def infer_prompts(stage: EvalStage, response_format: str) -> list[str]:
     """Prompt templates a case exercises, from its stage and response format."""
-    format_prompt = PromptBuilder.format_spec_name(response_format)
+    format_prompt = ChatPromptBuilder.format_spec_name(response_format)
     if stage == "stage1":
         return ["cmd_prompt"]
     if response_format in _DIRECT_OUTPUT_FORMATS:
