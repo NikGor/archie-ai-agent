@@ -2,7 +2,8 @@
 today's LLM spend of background kinds."""
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, JsonValue
+from app.platform.runtime.status import agent_status
 from .backend.redis_factory import get_async_redis
 from .platform.runtime.budget import daily_spend
 from .platform.runtime.supervisor import ServiceStatus, Supervisor
@@ -17,6 +18,10 @@ RUNTIME_STATUS_TTL_SECONDS = 120
 
 
 class RuntimeStatus(BaseModel):
+    agent_kinds: dict[str, dict[str, JsonValue]] = Field(
+        default_factory=dict,
+        description="State and persistent budgets of background kinds",
+    )
     services: list[ServiceStatus] = Field(description="Services under the supervisor")
     daily_spend_usd: dict[str, float] = Field(description="Kind -> LLM spend today")
     runtime_process: "RuntimeStatus | None" = Field(
@@ -28,7 +33,9 @@ class RuntimeStatus(BaseModel):
 def local_status() -> RuntimeStatus:
     return RuntimeStatus(
         services=supervisor.status(),
-        daily_spend_usd={kind: round(cost, 4) for kind, cost in daily_spend.by_kind.items()},
+        daily_spend_usd={
+            kind: round(cost, 4) for kind, cost in daily_spend.by_kind.items()
+        },
     )
 
 
@@ -45,6 +52,7 @@ async def publish_status(status: RuntimeStatus) -> None:
 @router.get("/runtime/status", response_model=RuntimeStatus)
 async def runtime_status() -> RuntimeStatus:
     status = local_status()
+    status.agent_kinds = await agent_status()
     redis = get_async_redis()
     try:
         raw = await redis.get(RUNTIME_STATUS_KEY)
