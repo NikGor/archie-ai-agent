@@ -19,19 +19,19 @@ from archie_shared.swarm.models import (
     SwarmWatchTask,
 )
 from pydantic import BaseModel, Field
-from ..agent.prompt_builder import PromptBuilder
-from ..agent.prompt_compiler import PromptCompiler
+from app.platform.prompts.compiler import PromptCompiler
 from ..backend.state_service import StateService
 from ..config import settings
 from ..models.state_models import UserState
-from ..platform.tools.models import ToolCall, ToolContext, ToolResult
 from ..platform.llm.catalog import get_provider_for_model
 from ..platform.llm.registry import get_client, parse_llm_response
+from ..platform.prompts.context import datetime_note
+from ..platform.tools.executor import execute_tool_calls
+from ..platform.tools.models import ToolCall, ToolContext, ToolResult
 from ..platform.tools.registry import ToolRegistry
 from ..tools.catalog import tool_registry as default_tool_registry
 from ..utils.general_utils import local_now
 from ..utils.skill_utils import load_skill, load_skill_references
-from ..platform.tools.executor import execute_tool_calls
 from . import tools as _swarm_tools  # noqa: F401  registers the swarm tool group
 from .agents import SWARM_AGENTS, SWARM_GROUPS, SwarmRoster
 from .memory import DayNote, SwarmMemory
@@ -100,13 +100,13 @@ class SwarmAgentRunner:
         self,
         tool_registry: ToolRegistry | None = None,
         state_service: StateService | None = None,
-        prompt_builder: PromptBuilder | None = None,
         roster: SwarmRoster | None = None,
         memory: SwarmMemory | None = None,
     ) -> None:
         self.tool_registry = tool_registry or default_tool_registry
+        # Current date/time line of the prompt; tests replace it to fix the clock
+        self.datetime_note = datetime_note
         self.state_service = state_service or StateService()
-        self.prompt_builder = prompt_builder or PromptBuilder()
         self.roster = roster or SwarmRoster()
         self.memory = memory or SwarmMemory()
         # Swarm prompts are rule specs (specs/swarm, rules/swarm.json; ARCHIE-285)
@@ -165,7 +165,7 @@ class SwarmAgentRunner:
             else []
         )
         lines = [
-            self.prompt_builder.build_datetime_note(state_dict),
+            self.datetime_note(state_dict),
             *late_night,
             f"User city: {state.default_city}, user language: {state.language}",
             *memory_lines,
