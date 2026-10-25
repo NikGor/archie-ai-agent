@@ -5,8 +5,8 @@ Wire-level types (SwarmMessage, WS events) live in archie_shared.swarm.models.
 
 from archie_shared.swarm.models import SwarmAgentInfo, SwarmAgentRole, SwarmImportance
 from pydantic import BaseModel, Field
-from ..config import settings
-from ..platform.tools.models import Parameter, ToolName
+from app.config import settings
+from app.platform.tools.models import Parameter, ToolName
 
 
 class ActionRule(BaseModel):
