@@ -50,6 +50,8 @@ async def handle_chat(
         messages=current_messages,
         command_model=command_model,
         final_output_model=final_output_model,
+        command_effort=user_request.command_effort,
+        final_output_effort=user_request.final_output_effort,
         response_format=user_request.response_format,
         previous_response_id=user_request.previous_message_id,
         chat_history=user_request.chat_history,
