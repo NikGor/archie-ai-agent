@@ -213,6 +213,8 @@ class CronScheduler:
         self._worker = asyncio.create_task(self._run_loop(), name="archie-cron")
         logger.info("cron_scheduler_001: Scheduler started")
 
+    name = "cron"
+
     async def stop(self) -> None:
         self._stopping.set()
         if self._worker:
@@ -220,8 +222,15 @@ class CronScheduler:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._worker
             self._worker = None
-        await self.redis.aclose()
         logger.info("cron_scheduler_002: Scheduler stopped")
+
+    def healthy(self) -> bool:
+        """The worker loop is alive (the supervisor restarts a dead one, ARCHIE-298)."""
+        return self._worker is not None and not self._worker.done()
+
+    async def close(self) -> None:
+        """Close Redis at process exit; stop() keeps it for a restart."""
+        await self.redis.aclose()
 
     async def _run_loop(self) -> None:
         recovered = False

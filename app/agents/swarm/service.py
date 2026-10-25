@@ -11,6 +11,8 @@ from app.agents.swarm.ticker import SwarmTicker
 
 
 class SwarmService:
+    name = "swarm"
+
     def __init__(self) -> None:
         self.hub = SwarmHub()
         self.bus = SwarmBus(self.hub)
@@ -47,6 +49,16 @@ class SwarmService:
         await self.ticker.stop()
         await self.dispatcher.stop()
         await self.journal.stop()
+
+    def healthy(self) -> bool:
+        """Every swarm loop is alive (the supervisor restarts the swarm, ARCHIE-298)."""
+        workers = [self.ticker._worker, self.dispatcher._worker]
+        if self.journal.is_configured():
+            workers.append(self.journal._worker)
+        return all(worker is not None and not worker.done() for worker in workers)
+
+    async def close(self) -> None:
+        """Close Redis at process exit; stop() keeps it for a restart."""
         await self.bus.redis.aclose()
         await self.roster.redis.aclose()
         await self.memory.redis.aclose()
