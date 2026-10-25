@@ -1,53 +1,50 @@
 import logging
 import time
 from archie_shared.chat.models import ImageAttachment, LllmTrace, ReasoningEffort
-from ..backend.state_service import StateService
-from ..backend.tool_result_store import ToolResultStore
-from ..config import DEFAULT_MODEL, MAX_COMMAND_ITERATIONS
-from ..models.orchestration_sgr import DecisionResponse
-from ..models.output_models import AgentResponse
-from ..models.state_models import UserState
-from ..platform.tools.models import ToolResult
-from ..models.ws_models import (
+from app.agents.chat.command_loop import CommandLoop
+from app.agents.chat.format_router import select_response_format
+from app.agents.chat.messages import ChatPromptBuilder
+from app.agents.chat.metrics import PipelineMetrics
+from app.agents.chat.output import create_output
+from app.agents.chat.tool_access import chat_tool_names
+from app.backend.state_service import StateService
+from app.backend.tool_result_store import ToolResultStore
+from app.config import DEFAULT_MODEL, MAX_COMMAND_ITERATIONS
+from app.models.orchestration_sgr import DecisionResponse
+from app.models.output_models import AgentResponse
+from app.models.state_models import UserState
+from app.models.ws_models import (
     StatusCallback,
     StatusNotifier,
     StreamCallback,
     StreamEventCallback,
 )
-from ..platform.llm.catalog import get_provider_for_model
-from ..platform.llm.context import ConversationContext
-from ..platform.llm.registry import get_client, parse_llm_response
-from ..tools.output import create_output
-from ..platform.tools.registry import ToolRegistry
-from ..tools.catalog import tool_registry as default_tool_registry
-from ..utils.trace_utils import StepTimer
-from ..utils.tracing import COMMAND_TRACE_NAME
-from .command_loop import CommandLoop
-from .pipeline_metrics import PipelineMetrics
-from .prompt_builder import PromptBuilder
-from .response_format_router import select_response_format
-from .tool_access import chat_tool_names
+from app.platform.llm.catalog import get_provider_for_model
+from app.platform.llm.context import ConversationContext
+from app.platform.llm.registry import get_client, parse_llm_response
+from app.platform.tools.models import ToolResult
+from app.platform.tools.registry import ToolRegistry
+from app.tools.catalog import tool_registry as default_tool_registry
+from app.utils.trace_utils import StepTimer
+from app.utils.tracing import COMMAND_TRACE_NAME
 
 
 logger = logging.getLogger(__name__)
 
 
-class AgentFactory:
+class ChatPipeline:
     def __init__(
         self,
-        prompt_builder: PromptBuilder | None = None,
+        prompt_builder: ChatPromptBuilder | None = None,
         tool_registry: ToolRegistry | None = None,
         state_service: StateService | None = None,
-        demo_mode: bool = False,
     ):
-        self.prompt_builder = prompt_builder or PromptBuilder()
+        """One pipeline per process; per-request facts (demo_mode) go to arun()."""
+        self.prompt_builder = prompt_builder or ChatPromptBuilder()
         self.tool_registry = tool_registry or default_tool_registry
         self.state_service = state_service or StateService()
         self.tool_result_store = ToolResultStore()
-        self.demo_mode = demo_mode
-        logger.info(
-            f"agent_factory_001: Initialized AgentFactory, demo_mode: \033[35m{demo_mode}\033[0m"
-        )
+        logger.info("chat_pipeline_001: Initialized ChatPipeline")
 
     async def _make_command_call(
         self,
@@ -81,7 +78,7 @@ class AgentFactory:
             chat_history=ctx.chat_history,
             images=images,
         )
-        logger.info(f"agent_factory_008: Making command call with {provider}")
+        logger.info(f"chat_pipeline_008: Making command call with {provider}")
         raw_response = await client.create_completion(
             messages=messages,
             model=model,
@@ -96,7 +93,7 @@ class AgentFactory:
             expected_type=DecisionResponse,
         )
         logger.info(
-            f"agent_factory_009: Decision made - Action: \033[36m{parsed.parsed_content.sgr.action.type}\033[0m"
+            f"chat_pipeline_009: Decision made - Action: \033[36m{parsed.parsed_content.sgr.action.type}\033[0m"
         )
 
         return parsed.parsed_content, parsed.llm_trace
@@ -119,7 +116,7 @@ class AgentFactory:
         `ctx` must already be gated for the output provider.
         """
         logger.info(
-            f"agent_factory_003b: {response_format} format - skipping command loop"
+            f"chat_pipeline_003b: {response_format} format - skipping command loop"
         )
         with StepTimer() as stage3_timer:
             final_response = await create_output(
@@ -144,11 +141,11 @@ class AgentFactory:
             stage3_ttft_ms=final_response.ttft_ms,
         )
         logger.info(
-            f"agent_factory_010: Pipeline trace (direct): output=\033[33m{stage3_timer.duration_ms}\033[0mms, "
+            f"chat_pipeline_010: Pipeline trace (direct): output=\033[33m{stage3_timer.duration_ms}\033[0mms, "
             f"ttft=\033[33m{final_response.ttft_ms}\033[0mms, "
             f"total=\033[33m{total_ms}\033[0mms"
         )
-        logger.info("=== AgentFactory: Response Created ===")
+        logger.info("=== ChatPipeline: Response Created ===")
         return final_response
 
     async def arun(
@@ -169,6 +166,7 @@ class AgentFactory:
         on_status: StatusCallback = None,
         on_stream: StreamCallback = None,
         on_stream_event: StreamEventCallback = None,
+        demo_mode: bool = False,
     ) -> AgentResponse:
         """
         Main entry point: Create an agent response through 3-stage flow.
@@ -177,7 +175,7 @@ class AgentFactory:
         Stage 2: Tool execution (if needed)
         Stage 3: Final response generation (uses final_output_model)
         """
-        logger.info("=== AgentFactory: Creating Agent Response ===")
+        logger.info("=== ChatPipeline: Creating Agent Response ===")
         arun_start = time.monotonic()
         cmd_provider = get_provider_for_model(command_model)
         output_provider = get_provider_for_model(final_output_model)
@@ -185,20 +183,20 @@ class AgentFactory:
             previous_response_id=previous_response_id, chat_history=chat_history
         )
         logger.info(
-            f"agent_factory_001b: Command: \033[34m{cmd_provider}\033[0m/\033[36m{command_model}\033[0m | "
+            f"chat_pipeline_001b: Command: \033[34m{cmd_provider}\033[0m/\033[36m{command_model}\033[0m | "
             f"Output: \033[34m{output_provider}\033[0m/\033[36m{final_output_model}\033[0m | "
             f"Effort: \033[35m{command_effort or 'default'}/{final_output_effort or 'default'}\033[0m"
         )
         if user_name:
             logger.info(
-                f"agent_factory_001c: Using user_name: \033[35m{user_name}\033[0m"
+                f"chat_pipeline_001c: Using user_name: \033[35m{user_name}\033[0m"
             )
         user_state = await self.state_service.get_user_state(
-            user_name=user_name, demo_mode=self.demo_mode
+            user_name=user_name, demo_mode=demo_mode
         )
         persona_key = user_state.persona
-        logger.info(f"agent_factory_002: Persona: \033[35m{persona_key}\033[0m")
-        logger.info(f"agent_factory_003: Format: \033[36m{response_format}\033[0m")
+        logger.info(f"chat_pipeline_002: Persona: \033[35m{persona_key}\033[0m")
+        logger.info(f"chat_pipeline_003: Format: \033[36m{response_format}\033[0m")
         notifier = StatusNotifier(on_status)
         await notifier.emit(
             "init",
@@ -232,7 +230,7 @@ class AgentFactory:
             self.tool_registry,
             metrics,
             max_command_iterations or MAX_COMMAND_ITERATIONS,
-            demo_mode=self.demo_mode,
+            demo_mode=demo_mode,
         )
         loop_result = await command_loop.run(
             make_command_call=self._make_command_call,
@@ -272,7 +270,7 @@ class AgentFactory:
                 "response_format", "completed", f"Selected {response_format}"
             )
         logger.info(
-            f"agent_factory_007: Creating final output, intents: \033[35m{loop_result.ui_intents}\033[0m"
+            f"chat_pipeline_007: Creating final output, intents: \033[35m{loop_result.ui_intents}\033[0m"
         )
         await notifier.emit(
             "output",
@@ -313,11 +311,11 @@ class AgentFactory:
             stage3_ttft_ms=final_response.ttft_ms,
         )
         logger.info(
-            f"agent_factory_010: Pipeline trace: command_call=\033[33m{metrics.stage1_duration_ms}\033[0mms, "
+            f"chat_pipeline_010: Pipeline trace: command_call=\033[33m{metrics.stage1_duration_ms}\033[0mms, "
             f"tool_execution=\033[33m{metrics.stage2_duration_ms}\033[0mms, "
             f"create_output=\033[33m{stage3_timer.duration_ms}\033[0mms, "
             f"ttft=\033[33m{final_response.pipeline_trace.ttft_ms}\033[0mms, "
             f"total=\033[33m{total_ms}\033[0mms"
         )
-        logger.info("=== AgentFactory: Response Created ===")
+        logger.info("=== ChatPipeline: Response Created ===")
         return final_response
