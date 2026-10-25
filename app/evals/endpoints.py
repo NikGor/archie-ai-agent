@@ -9,7 +9,8 @@ from archie_shared.evals.models import (
     EvalSnapshotEvent,
 )
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-from app.config import MODEL_PROVIDERS, settings
+from app.config import settings
+from app.platform.llm.catalog import MODEL_PROVIDERS
 from .catalog import (
     CatalogError,
     EvalCaseDraft,

@@ -14,13 +14,13 @@ from archie_shared.evals.models import (
 )
 from archie_shared.monitoring.models import MonitorMessage, MonitorRuleScore
 from app.agent.agent_factory import AgentFactory
-from app.agent.context import ConversationContext
 from app.config import MAX_COMMAND_ITERATIONS, settings
 from app.models.orchestration_sgr import DecisionResponse
 from app.models.output_models import AgentResponse
 from app.models.ws_models import StatusUpdate
 from app.monitoring.judge import judge_rules
-from app.utils.provider_utils import get_provider_for_model
+from app.platform.llm.catalog import get_provider_for_model
+from app.platform.llm.context import ConversationContext
 from app.utils.tool_executor import execute_tool_calls
 from .assertions import check_decision, check_response, check_rules, find_ui_answer
 from .judge import judge_response
