@@ -17,8 +17,8 @@ from archie_shared.evals.models import (
 from archie_shared.ui.models import AdvancedAnswerItem
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from app.agents.chat.messages import ChatPromptBuilder
+from app.agents.chat.quality.rules import ASSISTANT_SPEC, COMMAND_SPEC, rules_for_turn
 from app.config import settings
-from app.monitoring.spec_rules import ASSISTANT_SPEC, COMMAND_SPEC, rules_for_turn
 from app.platform.prompts.compiler import PromptCompiler
 from app.platform.tools.models import ToolName
 
