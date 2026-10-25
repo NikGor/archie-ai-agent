@@ -6,9 +6,9 @@ from archie_shared.chat.models import ChatMessage, ChatRequest
 from .agent.agent_factory import AgentFactory
 from .config import DEFAULT_MODEL
 from .models.ws_models import StatusUpdate, StreamCallback, StreamEventCallback
+from .platform.llm.catalog import supports_vision
 from .utils.file_utils import build_input_with_files
 from .utils.general_utils import generate_message_id
-from .utils.provider_utils import supports_vision
 from .utils.tracing import trace_chat_turn
 
 
