@@ -2,13 +2,13 @@
 
 from dataclasses import dataclass, field
 from archie_shared.chat.models import LllmTrace, PipelineTrace, StepTrace
-from ..utils.trace_utils import build_pipeline_trace
+from app.utils.trace_utils import build_pipeline_trace
 
 
 @dataclass
 class PipelineMetrics:
     """Replaces the manually threaded stage1/stage2 accumulator variables
-    that used to live as local variables inside AgentFactory.arun()."""
+    that used to live as local variables inside ChatPipeline.arun()."""
 
     stage1_duration_ms: int = 0
     stage1_llm_traces: list[LllmTrace] = field(default_factory=list)
