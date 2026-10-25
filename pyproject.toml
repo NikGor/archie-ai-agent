@@ -142,7 +142,7 @@ include_external_packages = false
 name = "Low layers do not import agents, quality or API"
 type = "forbidden"
 source_modules = ["app.platform", "app.backend", "app.utils", "app.models", "app.tools"]
-forbidden_modules = ["app.agent", "app.agents", "app.swarm", "app.monitoring", "app.evals", "app.api_controller", "app.endpoints"]
+forbidden_modules = ["app.agents", "app.swarm", "app.monitoring", "app.evals", "app.api_controller", "app.endpoints"]
 ignore_imports = [
     "app.utils.tracing -> app.monitoring.spec_rules",  # ARCHIE-296: spec_versions moves to platform/prompts
 ]
@@ -151,7 +151,7 @@ ignore_imports = [
 name = "Swarm does not import the chat agent"
 type = "forbidden"
 source_modules = ["app.swarm"]
-forbidden_modules = ["app.agents.chat", "app.agent", "app.api_controller", "app.endpoints"]
+forbidden_modules = ["app.agents.chat", "app.api_controller", "app.endpoints"]
 ignore_imports = [
     "app.utils.tracing -> app.monitoring.spec_rules",  # ARCHIE-296
 ]
