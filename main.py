@@ -18,6 +18,7 @@ from app.agents.swarm.endpoints import router as swarm_router  # noqa: E402
 from app.agents.swarm.service import swarm_service  # noqa: E402
 from app.utils.tracing import init_tracing, shutdown_tracing  # noqa: E402
 from app.agents.chat.service import ChatService  # noqa: E402
+from app.agents.swarm.bridge import SwarmHubBridge  # noqa: E402
 from app.agents.registry import load_agent_kinds  # noqa: E402
 from app.runtime_endpoints import router as runtime_router  # noqa: E402
 from app.runtime_endpoints import supervisor  # noqa: E402
@@ -37,9 +38,15 @@ init_tracing()
 # Composition root (ARCHIE-298): the supervisor starts, watches and stops the
 # long-lived services of this process
 supervisor.register(ChatService())
-supervisor.register(cron_scheduler)
-if settings.swarm_enabled:
-    supervisor.register(swarm_service)
+if settings.runtime_mode == "api":
+    # Swarm and cron run in the runtime process (python -m app.runtime_main);
+    # this process relays swarm events and commands through Redis (ARCHIE-299)
+    swarm_service.bridge = SwarmHubBridge(swarm_service.hub, role="api")
+    supervisor.register(swarm_service.bridge)
+else:
+    supervisor.register(cron_scheduler)
+    if settings.swarm_enabled:
+        supervisor.register(swarm_service)
 
 
 @asynccontextmanager
@@ -50,7 +57,7 @@ async def lifespan(_app: FastAPI):
         yield
     finally:
         await supervisor.stop()
-        if settings.swarm_enabled:
+        if settings.swarm_enabled or settings.runtime_mode == "api":
             await swarm_service.close()
         await cron_scheduler.close()
         shutdown_tracing()
