@@ -41,6 +41,12 @@ SWARM_RULE_POLICY = RulePolicy(
             "swarm_voice_job",
             "swarm_display_job",
             "swarm_marcus_knows",
+            # council views (ARCHIE-318): judged through swarm_opinion_own_lens
+            *(
+                f"swarm_lens_{member}_{part}"
+                for member in ("business", "bro", "flirty", "marcus")
+                for part in ("value", "doubt", "trade")
+            ),
             "swarm_alert_intro",
             # council mechanics of the structured output
             "swarm_consul_more_rounds",
