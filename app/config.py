@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     # answer and made up tool results (ARCHIE-243). GPT-5.6 Luna runs on the
     # OpenAI API with strict structured output.
     swarm_model: str = "gpt-5.6-luna"
-    # The consul (butler) leads the council discussion on a flagship model (ARCHIE-249)
+    # The consul leads the council discussion on a flagship model (ARCHIE-249)
     swarm_consul_model: str = "anthropic/claude-opus-5.5"
     swarm_council_max_rounds: int = 3
     # How long a plan step waits for the agent's reply before the next step
