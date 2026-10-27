@@ -44,7 +44,7 @@ SWARM_RULE_POLICY = RulePolicy(
             # council views (ARCHIE-318): judged through swarm_opinion_own_lens
             *(
                 f"swarm_lens_{member}_{part}"
-                for member in ("business", "bro", "flirty", "marcus")
+                for member in ("butler", "business", "bro", "flirty", "marcus")
                 for part in ("value", "doubt", "trade")
             ),
             "swarm_alert_intro",
