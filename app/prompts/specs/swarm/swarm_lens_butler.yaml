@@ -1,0 +1,6 @@
+# View of council member @butler (ARCHIE-318). Rule texts: rules/swarm.json
+sections:
+  - title: "Your view"
+    level: 2
+    style: lines
+    rules: [swarm_lens_butler_value, swarm_lens_butler_doubt, swarm_lens_butler_trade]
