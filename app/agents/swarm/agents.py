@@ -184,17 +184,17 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
             color="#fab005",
         ),
         SwarmAgentProfile(
-            agent_id="butler",
-            display_name="Butler",
+            # No persona: the consul weighs the views and owns none (ARCHIE-318)
+            agent_id="consul",
+            display_name="Consul",
             role="state",
             description="Consul of the council: leads the discussion, then gives tasks to home agents one by one",
             tools=[],
-            persona="butler",
             groups=["council"],
             chair=True,
             model=settings.swarm_consul_model,
-            icon="concierge-bell",
-            color="#c9a227",
+            icon="scale",
+            color="#adb5bd",
         ),
         # Every member thinks on a model of another provider (ARCHIE-249)
         *(
@@ -211,6 +211,14 @@ SWARM_AGENTS: dict[str, SwarmAgentProfile] = {
                 color=color,
             )
             for persona, display_name, description, model, icon, color in [
+                (
+                    "butler",
+                    "Butler",
+                    "Council member: discreet butler's view on habits, privacy and proper service",
+                    "mistralai/mistral-large-4-0",
+                    "concierge-bell",
+                    "#c9a227",
+                ),
                 (
                     "business",
                     "Business",
