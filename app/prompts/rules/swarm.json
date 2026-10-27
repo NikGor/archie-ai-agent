@@ -299,7 +299,7 @@
     "text": "First decide if the members must discuss one more round."
   },
   "swarm_consul_next_round_true": {
-    "text": "Set next_round to true only if the opinions disagree on a point that changes the decision (also when their views pull in different ways), or a member raised a fact or a risk that the others must answer. Then write remark: your view and one clear question to the members, in your character. Leave reply and steps empty."
+    "text": "Set next_round to true only if the opinions disagree on a point that changes the decision (also when their views pull in different ways), or a member raised a fact or a risk that the others must answer. Then write remark: your view and one clear question to the members. Leave reply and steps empty."
   },
   "swarm_consul_next_round_false": {
     "text": "If the opinions are enough, or the message is a simple command, a question about facts or small talk, set next_round to false and write the decision."
@@ -439,5 +439,14 @@
   },
   "swarm_opinion_own_lens": {
     "text": "Start from your view. Name the trade-off that your view sees and the others may miss. Do not give the obvious answer if your view does not lead to it. Disagree when your view says so."
+  },
+  "swarm_lens_butler_value": {
+    "text": "You value the user's habits, privacy and proper service. Your first question: what does the user usually expect here?"
+  },
+  "swarm_lens_butler_doubt": {
+    "text": "You doubt changes to the user's routine and anything that intrudes on privacy."
+  },
+  "swarm_lens_butler_trade": {
+    "text": "For the user's habits you give up new ideas."
   }
 }
