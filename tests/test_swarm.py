@@ -135,7 +135,7 @@ def test_clip_text_limits_length():
 
 
 ALL_AGENTS = set(SWARM_AGENTS)
-COUNCIL = ["butler", "business", "bro", "flirty", "marcus"]
+COUNCIL = ["consul", "butler", "business", "bro", "flirty", "marcus"]
 
 
 def _dispatcher() -> SwarmDispatcher:
@@ -219,15 +219,15 @@ async def test_council_runs_with_enabled_members():
     await dispatcher._start_council(_message(text="@council?"), ALL_AGENTS - {"bro"})
     await asyncio.gather(*dispatcher._tasks)
     args = dispatcher.council.discuss.await_args.args
-    assert args[1] == ["butler", "business", "flirty", "marcus"]
+    assert args[1] == ["consul", "butler", "business", "flirty", "marcus"]
     assert not dispatcher._running
 
 
 async def test_plan_runs_after_the_council_is_free():
     dispatcher = _dispatcher()
     plan = CouncilPlan(
-        consul="butler",
-        decision=_message(sender="butler", text="d"),
+        consul="consul",
+        decision=_message(sender="consul", text="d"),
         steps=[CouncilStep(agent_id="light", task="выключи", wait=False)],
     )
     dispatcher.council.discuss = AsyncMock(return_value=plan)
@@ -401,7 +401,7 @@ def _council(answers: dict[str, list]) -> SwarmCouncil:
 
     runner.ask = AsyncMock(side_effect=ask)
     bus = MagicMock(
-        post=AsyncMock(return_value=_message(sender="butler", text="d")),
+        post=AsyncMock(return_value=_message(sender="consul", text="d")),
         get_history=AsyncMock(return_value=[]),
     )
     return SwarmCouncil(hub=SwarmHub(), bus=bus, runner=runner)
@@ -441,7 +441,7 @@ def _done(reply: str, steps=None) -> ConsulTurn:
     )
 
 
-MEMBERS = ["business", "bro", "flirty", "marcus"]
+MEMBERS = ["butler", "business", "bro", "flirty", "marcus"]
 
 
 def _opinions(*rounds: str) -> dict[str, list]:
@@ -470,7 +470,7 @@ async def test_reply_to_a_plan_step_wakes_nobody():
         )
     )
     dispatcher.bus.get_history = AsyncMock(return_value=[])
-    task = _message(sender="butler", text="1/2 @weather: погода").model_copy(
+    task = _message(sender="consul", text="1/2 @weather: погода").model_copy(
         update={"kind": "task"}
     )
     await dispatcher._run_agent("weather", task)
@@ -478,12 +478,12 @@ async def test_reply_to_a_plan_step_wakes_nobody():
 
 
 def test_consul_is_the_chair_or_the_first_awake_member():
-    assert SwarmCouncil.choose_consul(COUNCIL) == "butler"
+    assert SwarmCouncil.choose_consul(COUNCIL) == "consul"
     assert SwarmCouncil.choose_consul(["bro", "flirty"]) == "bro"
 
 
 async def test_first_round_runs_in_parallel_on_one_chat_snapshot():
-    council = _council({**_opinions("1"), "butler": [_done("Решено.")]})
+    council = _council({**_opinions("1"), "consul": [_done("Решено.")]})
     active, peak = 0, 0
     ask = council.runner.ask.side_effect
 
@@ -500,44 +500,44 @@ async def test_first_round_runs_in_parallel_on_one_chat_snapshot():
     assert peak == len(MEMBERS)
     calls = council.runner.ask.await_args_list
     assert len({id(c.args[2]) for c in calls[: len(MEMBERS)]}) == 1
-    assert _asked(council)[-1] == ("butler", "swarm_consul")
+    assert _asked(council)[-1] == ("consul", "swarm_consul")
     posted = _posted(council)
     assert sorted(posted[:-1]) == sorted((m, "opinion", f"{m} 1") for m in MEMBERS)
-    assert posted[-1] == ("butler", "decision", "Решено.")
+    assert posted[-1] == ("consul", "decision", "Решено.")
     rounds = {c.kwargs["round_number"] for c in council.bus.post.await_args_list[:-1]}
     assert rounds == {1}
 
 
 async def test_consul_starts_another_round_with_a_remark():
     council = _council(
-        {**_opinions("1", "2"), "butler": [_more("А соседи?"), _done("Итог.")]}
+        {**_opinions("1", "2"), "consul": [_more("А соседи?"), _done("Итог.")]}
     )
     await council.discuss(_message(text="вечеринка в воскресенье?"), COUNCIL)
     posted = _posted(council)
-    assert posted[len(MEMBERS)] == ("butler", "opinion", "А соседи?")
+    assert posted[len(MEMBERS)] == ("consul", "opinion", "А соседи?")
     assert {p[2] for p in posted[len(MEMBERS) + 1 : -1]} == {f"{m} 2" for m in MEMBERS}
-    assert posted[-1] == ("butler", "decision", "Итог.")
+    assert posted[-1] == ("consul", "decision", "Итог.")
     decision_usage = council.bus.post.await_args_list[-1].kwargs["usage"]
     assert decision_usage.input_tokens == 20
 
 
 async def test_last_round_asks_for_the_decision_only(monkeypatch):
     monkeypatch.setattr("app.agents.swarm.council.settings.swarm_council_max_rounds", 1)
-    council = _council({**_opinions("1"), "butler": [_decision("Итог.")]})
+    council = _council({**_opinions("1"), "consul": [_decision("Итог.")]})
     await council.discuss(_message(text="?"), COUNCIL)
     schema = council.runner.ask.await_args_list[-1].args[4]
     assert schema is ConsulDecision
 
 
 async def test_silent_or_failed_member_does_not_stop_the_discussion():
-    answers = {**_opinions("1"), "butler": [_done("Итог.")]}
+    answers = {**_opinions("1"), "consul": [_done("Итог.")]}
     answers["marcus"] = [SwarmReply(reply="")]
     answers["bro"] = []  # pop from an empty list fails
     council = _council(answers)
     await council.discuss(_message(text="?"), COUNCIL)
     senders = [p[0] for p in _posted(council)]
     assert "marcus" not in senders and "bro" not in senders
-    assert senders[-1] == "butler"
+    assert senders[-1] == "consul"
 
 
 async def test_decision_shows_the_plan_and_wakes_nobody():
@@ -547,7 +547,7 @@ async def test_decision_shows_the_plan_and_wakes_nobody():
         CouncilStep(agent_id="nobody", task="x", wait=False),
     ]
     council = _council(
-        {**_opinions("1"), "butler": [_done("Прошу @light приглушить.", steps)]}
+        {**_opinions("1"), "consul": [_done("Прошу @light приглушить.", steps)]}
     )
     plan = await council.discuss(_message(text="приглуши свет"), COUNCIL)
     kwargs = council.bus.post.await_args.kwargs
@@ -558,15 +558,15 @@ async def test_decision_shows_the_plan_and_wakes_nobody():
 
 async def test_alert_that_needs_nothing_posts_no_decision():
     alert = _alert("Письмо от банка")
-    council = _council({**_opinions("1"), "butler": [_done("")]})
+    council = _council({**_opinions("1"), "consul": [_done("")]})
     assert await council.discuss(alert, COUNCIL) is None
     assert [p[1] for p in _posted(council)] == ["opinion"] * len(MEMBERS)
 
 
 def _plan(*steps: CouncilStep, delivered=None) -> CouncilPlan:
     return CouncilPlan(
-        consul="butler",
-        decision=_message(sender="butler", text="d").model_copy(
+        consul="consul",
+        decision=_message(sender="consul", text="d").model_copy(
             update={"run_id": "run-d"}
         ),
         steps=list(steps),
@@ -635,7 +635,7 @@ async def test_alert_output_is_not_delivered_twice():
     council = _council(
         {
             **_opinions("1"),
-            "butler": [
+            "consul": [
                 _done(
                     "Открою чат.",
                     [
@@ -656,14 +656,14 @@ async def test_alert_output_is_not_delivered_twice():
     assert council.bus.post.await_args.kwargs["mentions"] == ["chat"]
 
 
-def test_council_members_think_on_models_of_four_providers():
+def test_council_members_think_on_models_of_five_providers():
     models = {m: SWARM_AGENTS[m].default_model for m in MEMBERS}
     providers = {
         "openai" if "/" not in model else model.split("/")[0]
         for model in models.values()
     }
-    assert providers == {"openai", "x-ai", "google", "anthropic"}
-    assert SWARM_AGENTS["butler"].default_model == settings.swarm_consul_model
+    assert providers == {"openai", "x-ai", "google", "anthropic", "mistralai"}
+    assert SWARM_AGENTS["consul"].default_model == settings.swarm_consul_model
     assert SWARM_AGENTS["light"].default_model == settings.swarm_model
 
 
@@ -684,7 +684,7 @@ def test_marcus_prompt_has_germany_rules_and_persona():
     prompt = runner.prompts.build_system_prompt(SWARM_AGENTS["marcus"], "gpt-5.4-nano")
     assert "## Your job: Germany" in prompt
     assert "# Persona: Marcus" in prompt
-    assert "@butler (consul)" in prompt
+    assert "@consul (consul)" in prompt
 
 
 # --- runner ---
