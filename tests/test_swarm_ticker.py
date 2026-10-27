@@ -444,7 +444,7 @@ async def test_council_saves_remembered_facts():
         text="не говори мне про влажность",
     )
     # Only the consul is awake: no discussion round, one decision
-    await council.discuss(trigger, ["butler"])
+    await council.discuss(trigger, ["consul"])
     runner.memory.add_fact.assert_awaited_once_with("Не сообщать про влажность")
     council.on_memory_change.assert_awaited_once()
 
