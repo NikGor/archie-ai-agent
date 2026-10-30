@@ -124,7 +124,24 @@ class AgentRunRecord(BaseModel):
             "proposed_actions": result.get("proposed_actions") or [],
             "cost_usd": round(self.cost_usd, 5),
             "evidence_items": len(self.evidence),
+            **(
+                {"partial_evidence": self.partial_evidence()}
+                if not result.get("summary") and self.evidence
+                else {}
+            ),
         }
+
+    def partial_evidence(self, limit: int = 3000) -> list[str]:
+        """Tool results of a run that stopped before its reply, clipped."""
+        items, used = [], 0
+        for item in self.evidence:
+            text = f"{item.get('tool_name')}: {json.dumps(item.get('output'), ensure_ascii=False)}"
+            text = text[: max(0, limit - used)]
+            if not text:
+                break
+            items.append(text)
+            used += len(text)
+        return items
 
 
 class RunStore(Protocol):
