@@ -79,9 +79,9 @@ DEFAULT_BUDGET = Budget(
 
 
 class LoopGuardError(RuntimeError):
-    """A run repeats itself or calls too many tools."""
+    """A run repeats the same tool call without progress."""
 
-    def __init__(self, reason: Literal["max_tool_calls", "no_progress"], detail: str):
+    def __init__(self, reason: Literal["no_progress"], detail: str):
         super().__init__(f"{reason}: {detail}")
         self.reason = reason
 
@@ -388,8 +388,11 @@ class _Run:
     async def tools(self, turn: BaseModel) -> tuple[str, bool]:
         """Policy for each call right before it runs; loop guards after it."""
         check_remaining(self.meter)
+        shown = len(self.evidence) if self.agent.new_evidence_only else 0
         permitted: list[ToolCall] = []
         progress = False
+        skipped = 0
+        limit = self.spec.execution.max_tool_calls
         for call in getattr(turn, "tool_calls", []):
             arguments = {p.name: p.value for p in call.arguments}
             if self._allowed_read(call, arguments):
@@ -397,12 +400,9 @@ class _Run:
                 if key in self.seen:
                     self.guards.append(f"repeat {call.tool_name}")
                     continue
-                if self.tool_calls >= self.spec.execution.max_tool_calls:
-                    self.guards.append("max_tool_calls")
-                    self.event("loop_guard", reason="max_tool_calls")
-                    raise LoopGuardError(
-                        "max_tool_calls", f"{self.tool_calls} calls already made"
-                    )
+                if self.tool_calls >= limit:
+                    skipped += 1
+                    continue
                 self.seen.add(key)
                 self.tool_calls += 1
                 permitted.append(call)
@@ -416,7 +416,10 @@ class _Run:
                 )
             else:
                 self._block(call, "not allowed for this agent")
-        shown = len(self.evidence) if self.agent.new_evidence_only else 0
+        if skipped:
+            # The limit ends tool use, not the run: the agent reports what it has
+            self.guards.append("max_tool_calls")
+            self.event("loop_guard", reason="max_tool_calls", skipped=skipped)
         if permitted:
             progress = True
             for call in permitted:
@@ -430,11 +433,21 @@ class _Run:
                     ),
                 )
             )
-        if not progress and any(g.startswith("repeat") for g in self.guards):
+        if (
+            not progress
+            and not skipped
+            and any(g.startswith("repeat") for g in self.guards)
+        ):
             self.event("loop_guard", reason="no_progress")
             raise LoopGuardError("no_progress", "the same tool call was repeated")
         self.meter.check()
-        return self._visible_evidence(self.evidence[shown:]), False
+        text = self._visible_evidence(self.evidence[shown:])
+        if self.tool_calls >= limit:
+            text += (
+                "\n[Tool call limit reached. Give the final reply with this evidence.]"
+            )
+            return text, True
+        return text, False
 
     def _visible_evidence(self, evidence: list[ToolResult] | None = None) -> str:
         """Earlier rounds are already in the messages; a round shows its results."""
