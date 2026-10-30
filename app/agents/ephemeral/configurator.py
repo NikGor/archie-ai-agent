@@ -60,7 +60,9 @@ class SpecDraft(BaseModel):
     effort: Literal["low", "medium", "high"] = Field(description="Reasoning effort")
     profile_reason: str = Field(description="Why this profile and effort")
     tools: list[str] = Field(description="Smallest set of listed tools")
-    skills: list[str] = Field(description="Listed skills the agent needs")
+    skills: list[str] = Field(
+        description="Names from capabilities.skills only, never tool names; usually empty"
+    )
     facts: list[str] = Field(description="Facts from the context the task needs")
     output_schema: str = Field(description="One of the listed output schemas")
     max_iterations: int = Field(description="Tool rounds")
