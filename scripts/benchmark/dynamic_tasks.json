@@ -1,0 +1,78 @@
+{
+  "caller_tools": ["google_search_tool", "google_places_search_tool", "smarthome_status_tool", "events_tool", "document_search_tool", "notes_tool", "smarthome_control_tool"],
+  "tasks": [
+    {
+      "id": "trivial.place_rating", "category": "trivial",
+      "task": "Какой рейтинг у ресторана Pulcinella на Große Hamburger Straße в Берлине?",
+      "fixtures": {"google_places_search_tool": {"default": {"places": [{"name": "Pulcinella", "address": "Große Hamburger Straße 21, Berlin", "rating": 4.7, "reviews": 1090, "price_level": "moderate"}]}}},
+      "require": [["4,7", "4.7"]]
+    },
+    {
+      "id": "trivial.room_temperature", "category": "trivial",
+      "task": "Сколько сейчас градусов в гостиной?",
+      "fixtures": {"smarthome_status_tool": {"default": {"status": "success", "context": "sensor.living_room_temperature: 21.5 C; sensor.bedroom_temperature: 19.0 C; climate.living_room: heat, target 22 C"}}},
+      "require": [["21,5", "21.5"]]
+    },
+    {
+      "id": "diagnosis.thermostat", "category": "diagnosis",
+      "task": "Почему не работает термостат в спальне? Найди причину и предложи следующий шаг.",
+      "fixtures": {"smarthome_status_tool": {"default": {"status": "success", "context": "climate.bedroom: unavailable since 2026-10-29 06:12; sensor.bedroom_thermostat_battery: 3 %; zigbee coordinator: online, 34 devices connected; climate.living_room: heat 21 C"}}},
+      "require": [["батаре", "battery", "заряд"], ["3"]]
+    },
+    {
+      "id": "diagnosis.hall_light", "category": "diagnosis",
+      "task": "Почему свет в коридоре больше не включается по датчику движения?",
+      "fixtures": {"smarthome_status_tool": {"default": {"status": "success", "context": "binary_sensor.hall_motion: unavailable since 2 days; light.hall: off, available; automation.hall_motion_light: on, last triggered 2 days ago"}}},
+      "require": [["движ", "motion"], ["недоступ", "unavailable"]]
+    },
+    {
+      "id": "research.scooter_range", "category": "research",
+      "task": "Сравни реальный запас хода электросамокатов NIU KQi3 и Segway Ninebot G30 по отзывам и скажи, у какого он больше.",
+      "fixtures": {"google_search_tool": {"KQi3": {"results": [{"title": "NIU KQi3 Pro review", "snippet": "Real-world range in tests: 35-40 km at 20 km/h; claimed 50 km."}]}, "G30": {"results": [{"title": "Segway Ninebot Max G30 long-term test", "snippet": "Owners report 45-55 km real range; claimed 65 km."}]}, "default": {"results": [{"title": "Scooter range comparison", "snippet": "NIU KQi3: 35-40 km real. Segway G30: 45-55 km real."}]}}},
+      "require": [["35", "40"], ["45", "55"], ["G30"]]
+    },
+    {
+      "id": "research.vegan_cafe", "category": "research",
+      "task": "Найди три веганских кафе в Кройцберге, сравни их по рейтингу и числу отзывов и выбери лучшее для бранча.",
+      "fixtures": {"google_places_search_tool": {"default": {"places": [{"name": "Café Grün", "rating": 4.8, "reviews": 940, "address": "Oranienstraße 12"}, {"name": "Vegan Ecke", "rating": 4.3, "reviews": 210, "address": "Wiener Straße 5"}, {"name": "Blattwerk", "rating": 4.6, "reviews": 530, "address": "Bergmannstraße 40"}]}}},
+      "require": [["Café Grün", "Cafe Grün", "Café Grun"], ["4,8", "4.8"]]
+    },
+    {
+      "id": "analysis.calendar_overlap", "category": "analysis",
+      "task": "Проверь мои события на следующую неделю и найди пересечения по времени.",
+      "fixtures": {"events_tool": {"default": {"events": [{"title": "Стоматолог", "start": "2026-11-02T10:00", "end": "2026-11-02T11:00"}, {"title": "Звонок с Анной", "start": "2026-11-02T10:30", "end": "2026-11-02T11:30"}, {"title": "Спортзал", "start": "2026-11-03T18:00", "end": "2026-11-03T19:00"}, {"title": "Ужин с Максом", "start": "2026-11-04T19:30", "end": "2026-11-04T21:00"}]}}},
+      "require": [["Стоматолог", "стоматолог"], ["Анн"]],
+      "forbid": [["Спортзал пересекается"]]
+    },
+    {
+      "id": "analysis.power_bills", "category": "analysis",
+      "task": "По моим документам посчитай, сколько я заплатил за электричество за весь 2025 год.",
+      "fixtures": {"document_search_tool": {"default": {"results": [{"document": "Stromrechnung Q1 2025.pdf", "text": "Betrag Q1 2025: 180,00 EUR"}, {"document": "Stromrechnung Q2 2025.pdf", "text": "Betrag Q2 2025: 165,00 EUR"}, {"document": "Stromrechnung Q3 2025.pdf", "text": "Betrag Q3 2025: 150,00 EUR"}, {"document": "Stromrechnung Q4 2025.pdf", "text": "Betrag Q4 2025: 175,00 EUR"}]}}},
+      "require": [["670"]]
+    },
+    {
+      "id": "permission.lights_off", "category": "permission",
+      "task": "Выключи свет в гостиной, если там никого нет.",
+      "fixtures": {"smarthome_status_tool": {"default": {"status": "success", "context": "light.living_room: on, 80 %; binary_sensor.living_room_motion: off for 40 minutes; media_player.tv: off"}}},
+      "expect_proposal": "smarthome_control_tool"
+    },
+    {
+      "id": "permission.note_from_events", "category": "permission",
+      "task": "Создай заметку со списком моих дел на завтра по событиям календаря.",
+      "fixtures": {"events_tool": {"default": {"events": [{"title": "Стоматолог", "start": "2026-10-31T10:00"}, {"title": "Забрать посылку", "start": "2026-10-31T15:00"}]}}},
+      "expect_proposal": "notes_tool"
+    },
+    {
+      "id": "conflict.museum_hours", "category": "conflict",
+      "task": "Во сколько закрывается Пергамский музей по воскресеньям?",
+      "fixtures": {"google_search_tool": {"default": {"results": [{"title": "Pergamonmuseum opening hours (official, 2026)", "snippet": "Sunday 10:00-18:00."}, {"title": "Berlin travel blog, summer guide", "snippet": "Pergamon is open until 20:00 on Sundays."}]}}},
+      "require": [["18"], ["20"]]
+    },
+    {
+      "id": "conflict.zoo_ticket", "category": "conflict",
+      "task": "Сколько стоит взрослый билет в Берлинский зоопарк?",
+      "fixtures": {"google_search_tool": {"default": {"results": [{"title": "Zoo Berlin tickets (official site)", "snippet": "Adult day ticket: 22,00 EUR (2026)."}, {"title": "Berlin city guide 2024", "snippet": "Adults pay 19,50 EUR at the Zoo Berlin."}]}}},
+      "require": [["22"], ["19"]]
+    }
+  ]
+}
