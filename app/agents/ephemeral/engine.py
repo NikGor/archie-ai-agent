@@ -101,6 +101,9 @@ class AgentInstance(BaseModel):
     final_task: str = Field(FINAL_TASK, description="Ask for the final reply")
     evidence_bytes: int = Field(8000, description="Evidence shown to the model")
     spend_kind: str = Field("agent", description="Daily spend bucket")
+    new_evidence_only: bool = Field(
+        True, description="A round shows only its own results (presets: all)"
+    )
 
 
 class RunUsage(BaseModel):
@@ -413,6 +416,7 @@ class _Run:
                 )
             else:
                 self._block(call, "not allowed for this agent")
+        shown = len(self.evidence) if self.agent.new_evidence_only else 0
         if permitted:
             progress = True
             for call in permitted:
@@ -430,11 +434,13 @@ class _Run:
             self.event("loop_guard", reason="no_progress")
             raise LoopGuardError("no_progress", "the same tool call was repeated")
         self.meter.check()
-        return self._visible_evidence(), False
+        return self._visible_evidence(self.evidence[shown:]), False
 
-    def _visible_evidence(self) -> str:
+    def _visible_evidence(self, evidence: list[ToolResult] | None = None) -> str:
+        """Earlier rounds are already in the messages; a round shows its results."""
+        items = self.evidence if evidence is None else evidence
         visible = json.dumps(
-            [result.model_dump() for result in self.evidence], ensure_ascii=False
+            [result.model_dump() for result in items], ensure_ascii=False
         ).encode("utf-8")
         if len(visible) <= self.agent.evidence_bytes:
             return visible.decode("utf-8")
