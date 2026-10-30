@@ -201,7 +201,6 @@ async def test_parallel_runs_do_not_share_evidence_or_budget():
         ({"execution": {"timeout_seconds": 0.2}}, ["turn", "hang"], "timeout"),
         ({}, ["turn", "costly"], "budget_exhausted"),
         ({}, ["turn", "wordy"], "budget_exhausted"),
-        ({"execution": {"max_tool_calls": 1}}, ["two_calls"], "max_tool_calls"),
     ],
 )
 async def test_limits_stop_the_run_with_state_reason_and_evidence(
@@ -228,7 +227,9 @@ async def test_limits_stop_the_run_with_state_reason_and_evidence(
     if reason in ("budget_exhausted", "timeout"):
         assert "budget_exhausted" in kinds and record.evidence
         if reason == "timeout":
-            assert record.summary()["partial_evidence"][0].startswith("google_search_tool")
+            assert record.summary()["partial_evidence"][0].startswith(
+                "google_search_tool"
+            )
 
 
 async def test_iteration_limit_forces_the_final_reply():
@@ -383,13 +384,18 @@ async def test_runs_api_lists_shows_and_cancels(monkeypatch):
     assert listed[0]["run_id"] == record.run_id and listed[0]["model"] == "gpt-5.6-luna"
     full = client.get(f"/runtime/runs/{record.run_id}").json()
     assert full["events"][0]["kind"] == "task_created"
-    assert client.post(f"/runtime/runs/{record.run_id}/cancel").json()["cancelled"] is False
+    assert (
+        client.post(f"/runtime/runs/{record.run_id}/cancel").json()["cancelled"]
+        is False
+    )
     assert client.get("/runtime/runs/nope").status_code == 404
 
 
 async def test_reasoning_effort_raises_the_output_cap():
     script = Script(findings_reply())
-    await service(script).run("task", spec(tools=[], model={"profile": "FAST"}), policy())
+    await service(script).run(
+        "task", spec(tools=[], model={"profile": "FAST"}), policy()
+    )
     assert script.efforts == ["low"] and script.caps[0] > 2048
 
 
@@ -425,6 +431,18 @@ async def test_each_round_shows_only_its_new_results():
             seen.append(messages[-2]["content"] if len(messages) > 2 else "")
             return await super().__call__(messages, schema, model, cap, effort)
 
-    script = Watch(findings_turn(search("a")), findings_turn(search("b")), findings_reply())
+    script = Watch(
+        findings_turn(search("a")), findings_turn(search("b")), findings_reply()
+    )
     await service(script).run("task", spec(), policy())
     assert seen[2].count("google_search_tool") == 1
+
+
+async def test_tool_call_limit_ends_tool_use_and_asks_for_the_reply():
+    script = Script(findings_turn(search("a"), search("b")), findings_reply())
+    record = await service(script).run(
+        "task", spec(execution={"max_tool_calls": 1}), policy()
+    )
+    assert record.state == "completed"
+    assert record.tool_calls == 1 and "max_tool_calls" in record.loop_guards
+    assert "loop_guard" in [e.kind for e in record.events]
