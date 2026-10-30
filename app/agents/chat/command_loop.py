@@ -7,6 +7,7 @@ patch it) keep working unchanged.
 """
 
 import logging
+import uuid
 from collections.abc import Awaitable, Callable
 from archie_shared.chat.models import ImageAttachment, LllmTrace, ReasoningEffort
 from app.agents.chat.metrics import PipelineMetrics
@@ -15,6 +16,8 @@ from app.models.orchestration_sgr import DecisionResponse
 from app.models.state_models import UserState
 from app.models.ws_models import StatusCallback, StatusNotifier
 from app.platform.llm.context import ConversationContext
+from app.platform.runtime.delegation import DelegationCaller, delegation_scope
+from app.platform.runtime.spawn import SpawnContext
 from app.platform.tools.executor import execute_tool_calls
 from app.platform.tools.models import ToolContext, ToolResult
 from app.platform.tools.registry import ToolRegistry
@@ -83,6 +86,7 @@ class CommandLoop:
         reasoning_effort: ReasoningEffort | None = None,
     ) -> CommandLoopResult:
         tool_results = list(seed_results)
+        turn_id = f"chat-{uuid.uuid4().hex[:12]}"
         image_description = ""
         command_history: list[dict] = []
         iteration = 0
@@ -167,11 +171,25 @@ class CommandLoop:
                 )
 
                 # STAGE 2: Tool execution
-                with StepTimer() as s2_timer:
+                allowed = chat_tool_names(response_format)
+                # ARCHIE-324: delegate_agent_tool may grant only the tools of this turn
+                caller = DelegationCaller(
+                    caller=SpawnContext(
+                        source="chat",
+                        parent_run_id=turn_id,
+                        user_timezone=user_state.user_timezone,
+                        demo_mode=self.demo_mode,
+                    ),
+                    tools=tuple(allowed),
+                    on_step=lambda detail: notifier.emit(
+                        "tools", "running", "Agent", detail=detail
+                    ),
+                )
+                with StepTimer() as s2_timer, delegation_scope(caller):
                     new_results = await execute_tool_calls(
                         tool_calls=[tc.to_call() for tc in decision.sgr.tool_calls],
                         registry=self.tool_registry,
-                        allowed=chat_tool_names(response_format),
+                        allowed=allowed,
                         on_status=on_status,
                         context=ToolContext(
                             user_timezone=user_state.user_timezone,
