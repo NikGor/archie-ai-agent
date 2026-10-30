@@ -16,6 +16,10 @@ from app.utils.retry_utils import call_with_retry
 logger = logging.getLogger(__name__)
 
 
+class TruncatedOutputError(RuntimeError):
+    """The model stopped at the output token limit before a valid answer."""
+
+
 def _openai_usage_to_dict(usage: Any) -> dict[str, int]:
     """Normalize an OpenAI Responses usage object into the stream usage shape."""
     input_details = getattr(usage, "input_tokens_details", None)
@@ -167,11 +171,16 @@ class OpenAIClient:
                     elif event.type == "response.incomplete":
                         details = event.response.incomplete_details
                         reason = details.reason if details else "unknown"
+                        # ARCHIE-321: a cut-off call is still paid; budgets must see it
+                        if usage_out is not None and event.response.usage:
+                            usage_out.update(
+                                _openai_usage_to_dict(event.response.usage)
+                            )
                         logger.error(
                             f"openai_client_error_003: Stream truncated before valid JSON "
                             f"(reason: {reason}, max_output_tokens={max_output_tokens})"
                         )
-                        raise RuntimeError(
+                        raise TruncatedOutputError(
                             "LLM response was cut off before completing a valid answer "
                             "(output too long for the configured token limit)"
                         )
