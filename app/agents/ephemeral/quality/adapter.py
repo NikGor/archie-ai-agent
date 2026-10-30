@@ -12,6 +12,7 @@ from archie_shared.evals.models import (
 from archie_shared.monitoring.models import MonitorRuleScore
 from pydantic import BaseModel, Field, JsonValue
 from app.agents.ephemeral.models import EphemeralResult, SpawnRequest
+from app.agents.ephemeral.quality import configurator as configurator_eval
 from app.agents.ephemeral.runner import EphemeralRunner
 from app.platform.llm.decisions import decide
 from app.platform.quality.adapter import StepCallback
@@ -54,21 +55,23 @@ class EphemeralQualityAdapter:
     kind = "ephemeral"
 
     def rules_for(self, target: str = "ha_diagnosis") -> list[SpecRule]:
-        self._check_target(target)
         return [
             rule
-            for spec in _SPECS
+            for spec in self._specs(target)
             for rule in select_spec_rules(spec, {}, RulePolicy())
         ]
 
     def spec_versions(self, target: str = "ha_diagnosis") -> dict[str, str]:
-        self._check_target(target)
-        return spec_fingerprints(_SPECS)
+        return spec_fingerprints(self._specs(target))
 
     @staticmethod
-    def _check_target(target: str) -> None:
-        if target != "ha_diagnosis":
-            raise ValueError(f"Unknown ephemeral target: {target}")
+    def _specs(target: str) -> list[str]:
+        """ha_diagnosis: the swarm preset; configurator: ARCHIE-323 cases."""
+        if target == "ha_diagnosis":
+            return _SPECS
+        if target == configurator_eval.TARGET:
+            return [configurator_eval.TARGET]
+        raise ValueError(f"Unknown ephemeral target: {target}")
 
     async def judge(
         self,
@@ -112,6 +115,10 @@ class EphemeralQualityAdapter:
         judge_model: str | None,
         on_step: StepCallback,
     ) -> EvalCaseResult:
+        if case.response_format == configurator_eval.TARGET:
+            return await self._run_configurator_case(
+                run_id, case, model, attempt, judge_model, on_step
+            )
         started = time.monotonic()
         failures = []
         error = None
@@ -208,6 +215,43 @@ class EphemeralQualityAdapter:
                 result.usage.input_tokens + result.usage.output_tokens
                 if result
                 else None
+            ),
+            output_json=result.model_dump_json() if result else None,
+            finished_at=datetime.now(UTC).isoformat(),
+        )
+
+    async def _run_configurator_case(
+        self,
+        run_id: str,
+        case: EvalCaseInfo,
+        model: str,
+        attempt: int,
+        judge_model: str | None,
+        on_step: StepCallback,
+    ) -> EvalCaseResult:
+        started = time.monotonic()
+        failures: list[EvalAssertionFailure] = []
+        error = None
+        result = None
+        try:
+            await on_step("configurator")
+            result, failures = await configurator_eval.run_scenario(
+                case.input, run_id, model, bool(case.expect.rules_followed), judge_model
+            )
+        except Exception as exc:
+            logger.exception(f"ephemeral_eval_error_002: {case.id} {exc}")
+            error = f"{type(exc).__name__}: {exc}"
+        return EvalCaseResult(
+            run_id=run_id,
+            case_id=case.id,
+            model=model,
+            attempt=attempt,
+            status="error" if error else "failed" if failures else "passed",
+            error=error,
+            failures=failures,
+            total_ms=int((time.monotonic() - started) * 1000),
+            total_tokens=(
+                result.input_tokens + result.output_tokens if result else None
             ),
             output_json=result.model_dump_json() if result else None,
             finished_at=datetime.now(UTC).isoformat(),
