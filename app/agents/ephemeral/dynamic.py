@@ -16,7 +16,12 @@ from app.agents.ephemeral.engine import (
     AgentRuntime,
     RunCancelledError,
 )
-from app.platform.runtime.runs import AgentRunRecord, RunManager, RunRecorder
+from app.platform.runtime.runs import (
+    AgentRunRecord,
+    EventListener,
+    RunManager,
+    RunRecorder,
+)
 from app.platform.runtime.spec import (
     AgentSpec,
     CallerPolicy,
@@ -173,12 +178,18 @@ class DynamicAgents:
         return await self.manager.run(recorder, body)
 
     async def delegate(
-        self, task: str, context: str, policy: CallerPolicy
+        self,
+        task: str,
+        context: str,
+        policy: CallerPolicy,
+        listener: EventListener | None = None,
     ) -> AgentRunRecord:
         """Configurator, then the agent; `direct` creates no agent."""
-        recorder, _ = self.manager.create(
+        recorder, existing = self.manager.create(
             task, policy.parent_run_id, policy.source, context
         )
+        if not existing:
+            recorder.listener = listener
 
         async def body(active: RunRecorder) -> None:
             with self.observe(active):
