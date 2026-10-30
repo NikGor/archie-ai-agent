@@ -227,6 +227,8 @@ async def test_limits_stop_the_run_with_state_reason_and_evidence(
     assert kinds[-1] == "agent_failed"
     if reason in ("budget_exhausted", "timeout"):
         assert "budget_exhausted" in kinds and record.evidence
+        if reason == "timeout":
+            assert record.summary()["partial_evidence"][0].startswith("google_search_tool")
 
 
 async def test_iteration_limit_forces_the_final_reply():
