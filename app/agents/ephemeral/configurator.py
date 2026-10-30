@@ -23,6 +23,7 @@ from app.platform.runtime.completion import (
     CompletionCall,
     InvalidOutputError,
     complete,
+    max_output_for,
     output_cap,
 )
 from app.platform.runtime.results import RESULT_SCHEMAS
@@ -214,7 +215,13 @@ class AgentConfigurator:
         for attempt in range(2):
             result.attempts = attempt + 1
             try:
-                cap = output_cap(meter, messages, ConfigurationDraft, selection.model)
+                cap = output_cap(
+                    meter,
+                    messages,
+                    ConfigurationDraft,
+                    selection.model,
+                    max_output_for(selection.effort),
+                )
                 completion = await self.call(
                     messages,
                     ConfigurationDraft,
