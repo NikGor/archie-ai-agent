@@ -5,6 +5,7 @@ remaining tokens and money; unknown prices fail closed.
 """
 
 import json
+import logging
 import math
 from collections.abc import Awaitable, Callable
 from archie_shared.chat.models import LllmTrace, ReasoningEffort
@@ -16,6 +17,7 @@ from app.platform.runtime.budget import BudgetExceededError, BudgetMeter
 from app.utils.llm_parser import build_stream_trace, parse_assembled_stream
 
 
+logger = logging.getLogger(__name__)
 MAX_OUTPUT_TOKENS = 2048
 # Reasoning tokens count as output: a higher effort needs a higher cap (ARCHIE-321)
 EFFORT_OUTPUT_TOKENS = {"none": 2048, "minimal": 2048, "low": 4096, "medium": 8192}
@@ -117,14 +119,36 @@ async def complete(
             f"output cut off at {max_output_tokens} tokens",
             build_stream_trace(model, usage) if usage else None,
         ) from exc
+    text = "".join(chunks)
     try:
-        parsed = parse_assembled_stream("".join(chunks), model, schema, usage)
+        parsed = parse_assembled_stream(first_object(text, model), model, schema, usage)
     except ValueError as exc:
         raise InvalidOutputError(
             f"{type(exc).__name__}: {str(exc)[:300]}",
             build_stream_trace(model, usage) if usage else None,
         ) from exc
     return Completion(content=parsed.parsed_content, trace=parsed.llm_trace)
+
+
+def first_object(text: str, model: str) -> str:
+    """The first complete JSON object of a reply.
+
+    A reasoning model can play several turns in one structured reply: the first
+    object asks for tools, the next ones invent their results (ARCHIE-321,
+    seen on gpt-5.4 and gpt-5.6-luna with effort high). Only the first object
+    is the model's real turn; the rest is dropped.
+    """
+    stripped = text.strip()
+    try:
+        _, end = json.JSONDecoder().raw_decode(stripped)
+    except ValueError:
+        return text
+    if stripped[end:].strip():
+        logger.warning(
+            f"agent_completion_warning_001: {model} sent {len(stripped) - end} chars after the first JSON object; dropped"
+        )
+        return stripped[:end]
+    return text
 
 
 def check_remaining(meter: BudgetMeter) -> None:
