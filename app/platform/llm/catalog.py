@@ -382,6 +382,47 @@ MODEL_STAGE_SUPPORT: dict[str, dict[str, bool]] = {
 }
 
 
+# ARCHIE-322: reasoning effort levels per model, copied from AI_MODEL_EFFORTS in
+# archie-web model-catalog.js (OpenRouter supported_efforts, checked 2026-10-25).
+# OpenAI models use the levels of their openai/<id> twin. A model missing here
+# gets no effort parameter.
+MODEL_EFFORTS: dict[str, tuple[str, ...]] = {
+    "gpt-6-luna": ("none", "low", "medium", "high", "xhigh", "max"),
+    "gpt-5.6-luna": ("none", "low", "medium", "high", "xhigh", "max"),
+    "gpt-5.4": ("none", "low", "medium", "high", "xhigh"),
+    "gpt-5.4-pro": ("medium", "high", "xhigh"),
+    "gpt-5.4-mini": ("none", "low", "medium", "high", "xhigh"),
+    "gpt-5.4-nano": ("none", "low", "medium", "high", "xhigh"),
+    "google/gemini-3.1-pro-preview": ("low", "medium", "high"),
+    "google/gemini-3-flash-preview": ("none", "minimal", "low", "medium", "high"),
+    "anthropic/claude-opus-4.6": ("none", "low", "medium", "high", "max"),
+    "anthropic/claude-sonnet-4.6": ("none", "low", "medium", "high", "max"),
+    "openai/gpt-6.1-sol": ("low", "medium", "high", "xhigh", "max"),
+    "openai/gpt-6-luna": ("none", "low", "medium", "high", "xhigh", "max"),
+    "openai/gpt-6-astra": ("low", "medium", "high", "xhigh", "max"),
+    "openai/gpt-5.6-terra": ("none", "low", "medium", "high", "xhigh", "max"),
+    "anthropic/claude-haiku-5.5": ("none", "low", "medium", "high", "xhigh", "max"),
+    "google/gemini-4-argon": ("low", "medium", "high"),
+    "google/gemini-3.8-flash": ("low", "medium", "high"),
+    "google/gemini-3.5-flash-lite": ("minimal", "low", "medium", "high"),
+    "x-ai/grok-4.7": ("low", "medium", "high", "xhigh"),
+    "deepseek/deepseek-v4-pro-0813": ("none", "low", "high", "max"),
+    "qwen/qwen3.8-max-prime": ("minimal", "low", "medium", "high", "xhigh"),
+    "z-ai/glm-5.3": ("low", "high", "max"),
+    "moonshotai/kimi-k3": ("none", "low", "high", "max"),
+    "mistralai/mistral-large-4-0": ("none", "high"),
+    "meta/muse-spark-open": ("low", "medium", "high", "xhigh"),
+}
+
+
+def supports_agent(model: str) -> bool:
+    """Structured agent replies (ARCHIE-322): OpenAI API models use strict
+    structured output; an OpenRouter model needs "agent" in MODEL_STAGE_SUPPORT."""
+    if get_provider_for_model(model) == "openai":
+        return model in MODEL_PROVIDERS["openai"]
+    return MODEL_STAGE_SUPPORT.get(model, {}).get("agent", False)
+
+
 def get_provider_for_model(model: str) -> str:
     """Return provider name ('openai', 'openrouter', 'gemini') for a given model.
 
