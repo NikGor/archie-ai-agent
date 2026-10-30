@@ -48,9 +48,7 @@ from app.platform.tools.registry import ToolRegistry
 from app.tools.catalog import tool_registry
 
 
-LIMIT_STOPS = frozenset(
-    {"timeout", "budget_exhausted", "max_tool_calls", "no_progress"}
-)
+LIMIT_STOPS = frozenset({"timeout", "budget_exhausted", "no_progress"})
 
 
 class EphemeralCancelledError(asyncio.CancelledError):
