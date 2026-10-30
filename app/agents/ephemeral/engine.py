@@ -12,7 +12,9 @@ import json
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from typing import Literal
+from zoneinfo import ZoneInfo
 from archie_shared.chat.models import LllmTrace
 from pydantic import BaseModel, ConfigDict, Field
 from app.platform.llm.profiles import (
@@ -70,7 +72,11 @@ StopReason = Literal[
 ]
 BASE_SPEC = "agent_base"
 BLOCKED_OUTPUT = {"error": "read-only policy blocked this call"}
-FINAL_TASK = "Report the result against the completion criteria. Do not take action."
+# ARCHIE-326: "Do not take action" made agents drop the proposals the task asked for
+FINAL_TASK = (
+    "Report the result against the completion criteria. "
+    "Put each change the task needs in proposed_actions; do not claim it was done."
+)
 SKILL_CHARS = 4000
 # Defaults for a spec whose caller left a limit open
 DEFAULT_BUDGET = Budget(
@@ -169,6 +175,7 @@ class AgentFactory:
         messages: list[dict[str, str]] | None = None,
         base_specs: tuple[str, ...] = (BASE_SPEC,),
         read_tools: frozenset[str] | None = None,
+        timezone: str = "UTC",
         **options,
     ) -> AgentInstance:
         """Trusted presets may pass their own messages, base specs or model."""
@@ -185,7 +192,8 @@ class AgentFactory:
             selection=selection,
             ceiling=ceiling or spec.model.profile,
             schema=result_schema(spec.output.schema_name),
-            messages=messages or self.messages(spec, selection.model, base_specs),
+            messages=messages
+            or self.messages(spec, selection.model, base_specs, timezone),
             read_tools=read_tools,
             prompt_version=f"{base}:{spec.fingerprint()}",
             **options,
@@ -198,7 +206,11 @@ class AgentFactory:
             return "unknown"
 
     def messages(
-        self, spec: AgentSpec, model: str, base_specs: tuple[str, ...]
+        self,
+        spec: AgentSpec,
+        model: str,
+        base_specs: tuple[str, ...],
+        timezone: str = "UTC",
     ) -> list[dict[str, str]]:
         """Fixed platform rules; the brief, task and facts go in as data."""
         system = "\n".join(self.compiler.compile(name) for name in base_specs)
@@ -220,6 +232,9 @@ class AgentFactory:
             "completion_criteria": spec.objective.completion_criteria,
             "brief": spec.instructions,
             "facts": spec.context.facts,
+            # ARCHIE-326: without the date "tomorrow" or "next week" cannot be resolved
+            "now": datetime.now(ZoneInfo(timezone)).strftime("%Y-%m-%d %H:%M %A"),
+            "timezone": timezone,
         }
         return [
             {"role": "system", "content": system},
