@@ -45,6 +45,17 @@ class Settings(BaseSettings):
     runtime_mode: Literal["embedded", "api", "runtime"] = "embedded"
     ephemeral_model: str = "gpt-4.1"
     ephemeral_daily_cost_usd: float = Field(default=1.0, ge=0)
+    # Model profiles of AgentSpec runs (ARCHIE-322): profile -> ordered
+    # "model:effort" candidates; the first priced model with agent support wins.
+    # Models for profiles are chosen by the ARCHIE-307 benchmark, not here.
+    agent_profiles: dict[str, list[str]] = {
+        "FAST": ["gpt-5.6-luna:low", "gpt-4.1"],
+        "BALANCED": ["gpt-5.6-luna:medium", "gpt-4.1"],
+        "DEEP": ["gpt-5.4:medium", "gpt-4.1"],
+        "MAXIMUM": ["gpt-5.4:high"],
+    }
+    # Daily LLM spend of delegated chat agents (ARCHIE-324)
+    agent_daily_cost_usd: float = Field(default=2.0, ge=0)
     # DeepSeek V4.1 Flash broke tool calls and looped to 131k output tokens
     # (ARCHIE-241); GPT-6 Luna via OpenRouter returned several JSON objects in one
     # answer and made up tool results (ARCHIE-243). GPT-5.6 Luna runs on the
