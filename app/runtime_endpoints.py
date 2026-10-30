@@ -1,8 +1,9 @@
 """Runtime state of the process (ARCHIE-298): services under the supervisor and
 today's LLM spend of background kinds."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, JsonValue
+from app.platform.runtime.runs import AgentRunRecord, RunManager, run_manager
 from app.platform.runtime.status import agent_status
 from .backend.redis_factory import get_async_redis
 from .platform.runtime.budget import daily_spend
@@ -61,3 +62,56 @@ async def runtime_status() -> RuntimeStatus:
     if raw:
         status.runtime_process = RuntimeStatus.model_validate_json(raw)
     return status
+
+
+class RunList(BaseModel):
+    runs: list[dict[str, JsonValue]] = Field(description="Run summaries, newest first")
+
+
+def _manager() -> RunManager:
+    manager = run_manager()
+    if manager is None:
+        raise HTTPException(503, "Dynamic agents are not configured in this process")
+    return manager
+
+
+@router.get("/runtime/runs", response_model=RunList)
+async def list_runs(limit: int = 50) -> RunList:
+    """Runs of dynamic agents (ARCHIE-325): summary, model, cost, state."""
+    records = await _manager().recent(min(max(limit, 1), 200))
+    return RunList(
+        runs=[
+            {
+                **record.summary(),
+                "task": record.task,
+                "parent_run_id": record.parent_run_id,
+                "trace_id": record.trace_id,
+                "model": record.model,
+                "created_at": record.created_at,
+                "seconds": record.seconds,
+            }
+            for record in records
+        ]
+    )
+
+
+@router.get("/runtime/runs/{run_id}", response_model=AgentRunRecord)
+async def get_run(run_id: str) -> AgentRunRecord:
+    record = await _manager().status(run_id)
+    if record is None:
+        raise HTTPException(404, f"Unknown run {run_id}")
+    return record
+
+
+@router.post("/runtime/runs/{run_id}/cancel")
+async def cancel_run(run_id: str) -> dict[str, JsonValue]:
+    manager = _manager()
+    if await manager.status(run_id) is None:
+        raise HTTPException(404, f"Unknown run {run_id}")
+    cancelled = await manager.cancel(run_id)
+    record = await manager.status(run_id)
+    return {
+        "run_id": run_id,
+        "cancelled": cancelled,
+        "state": record.state if record else None,
+    }
