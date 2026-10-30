@@ -5,6 +5,7 @@ template hash or the rendered prompt. Key: template file stem.
 """
 
 PROMPT_DESCRIPTIONS: dict[str, str] = {
+    "agent_base": "Агент по AgentSpec: задача и бриф как данные, только разрешённые tools, действия — через подтверждение",
     "ephemeral_base": "Одноразовый исполнитель: только чтение, факты и предложение следующего шага",
     "ephemeral_ha_diagnosis": "Диагностика HA по текущему состоянию с явными пробелами в данных",
     "swarm_agent_home": "Наблюдатель дома: делегирует read-only диагностику при сбое HA",
