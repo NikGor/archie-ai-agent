@@ -49,6 +49,7 @@ SWARM_TRACE_NAMES: frozenset[str] = frozenset(
 TRACED_ROOT_NAMES = SWARM_TRACE_NAMES | {
     CHAT_TRACE_NAME,
     "ephemeral-run",
+    "agent-run",
     "temporal-run",
     "cognitive-tick",
 }
