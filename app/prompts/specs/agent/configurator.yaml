@@ -1,0 +1,4 @@
+sections:
+  - title: Agent configurator
+    style: numbered
+    rules: [cfg_role, cfg_direct, cfg_spawn, cfg_tools, cfg_profile, cfg_criteria, cfg_brief, cfg_actions, cfg_output, cfg_limits]
