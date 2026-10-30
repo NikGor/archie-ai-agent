@@ -23,7 +23,7 @@ from app.platform.tools.models import ToolContext, ToolResult
 from app.models.ws_models import StatusNotifier
 from app.platform.llm.context import ConversationContext
 from app.tools.google_search_tool import build_search_instruction, google_search_tool
-from app.platform.tools.registry import ToolGroup, ToolRegistry
+from app.platform.tools.registry import READ, WRITE, ToolGroup, ToolRegistry
 from app.platform.tools.executor import execute_tool_calls
 from app.utils.tools_utils import openai_parse
 from tests.conftest import make_user_state
@@ -42,7 +42,13 @@ async def _tool_without_timezone(query: str) -> dict:
 
 def _factory() -> ToolRegistry:
     registry = ToolRegistry(
-        [ToolGroup(name="test", tools={"google_search_tool": "x", "notes_tool": "y"})]
+        [
+            ToolGroup(
+                name="test",
+                tools={"google_search_tool": "x", "notes_tool": "y"},
+                capabilities={"google_search_tool": READ, "notes_tool": WRITE},
+            )
+        ]
     )
     registry._functions = {
         "google_search_tool": _tool_with_timezone,

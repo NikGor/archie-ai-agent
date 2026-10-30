@@ -30,7 +30,7 @@ from app.agents.swarm.models import (
     SwarmWatchReply,
     SwarmWatchTurn,
 )
-from app.agents.swarm.policy import READ_ONLY_TOOLS, check_tool_call
+from app.agents.swarm.policy import check_tool_call
 from app.agents.swarm.messages import format_chat_line
 from app.agents.swarm.runner import SwarmAgentRunner, SwarmDraft
 import app.agents.swarm.tools  # noqa: F401
@@ -1013,7 +1013,7 @@ async def test_dry_run_simulates_actions_but_reads_real_state():
 def test_search_agent_can_be_delegated_and_only_reads():
     profile = SWARM_AGENTS["search"]
     assert profile.role == "state" and not profile.groups
-    assert all(tool in READ_ONLY_TOOLS for tool in profile.tools)
+    assert all(tool_registry.capability(tool).effect == "read" for tool in profile.tools)
     runner = SwarmAgentRunner(
         tool_registry=tool_registry, state_service=MagicMock(), roster=MagicMock()
     )
