@@ -24,6 +24,7 @@ ToolName = Literal[
     "alert_chat_tool",
     "swarm_alert_tool",
     "agent_task_tool",
+    "delegate_agent_tool",
     "document_search_tool",
     "skill_loader_tool",
 ]
