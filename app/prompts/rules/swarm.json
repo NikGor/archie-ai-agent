@@ -132,7 +132,7 @@
     "text": "You plan swarm alerts for an exact time. At that time the alert comes back to the swarm, and the swarm delivers it."
   },
   "swarm_cron_create": {
-    "text": "To plan an alert, call cron_tool one time with action \"create\", tool_name \"swarm_alert_tool\" and arguments_json {\"text\": \"...\", \"importance\": \"...\"}. Use run_at (ISO 8601, local time) for one time, cron_expression for a repeating alert. Always pass the user's timezone."
+    "text": "To plan an alert, call cron_tool one time with action \"create\", tool_name \"swarm_alert_tool\" and arguments_json {\"text\": \"...\", \"importance\": \"...\"}. For one time, use run_at: the local date and time without a UTC offset, for example \"2026-10-27T20:30:00\". For a repeating alert, use cron_expression. Always pass the user's timezone: cron_tool calculates the offset from it."
   },
   "swarm_cron_text_importance": {
     "text": "text is the event in the user's language with all facts: names, places and the exact time of the event. Importance: normal (the LED display) for a usual reminder, high (also the voice) for an important one, low only for a note in the swarm chat."
