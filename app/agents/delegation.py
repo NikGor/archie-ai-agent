@@ -154,6 +154,11 @@ def configure_delegation() -> DynamicAgents:
             )
         elif record.state == "waiting_for_approval":
             summary["note"] = APPROVAL_NOTE
+        elif record.state == "failed":
+            summary["note"] = (
+                f"The agent stopped early ({record.stop_reason}). Answer from the "
+                "partial evidence and say what is missing. Do not delegate this task again."
+            )
         return summary
 
     register_delegate_handler(handle)
