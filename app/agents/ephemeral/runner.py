@@ -128,6 +128,7 @@ class EphemeralRunner:
             final_task=HA_FINAL_TASK,
             evidence_bytes=HA_EVIDENCE_BYTES,
             spend_kind="ephemeral",
+            new_evidence_only=False,
         )
         policy = CallerPolicy.from_spawn(caller, READ_TOOLS, budget=budget)
         try:
