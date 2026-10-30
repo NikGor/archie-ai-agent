@@ -2,6 +2,7 @@
 
 import json
 import time
+from archie_shared.chat.models import ReasoningEffort
 from archie_shared.swarm.models import SwarmUsage
 from pydantic import BaseModel
 from app.agents.ephemeral.models import EphemeralResult, SpawnRequest
@@ -63,10 +64,11 @@ def configure_ephemeral() -> EphemeralService:
         schema: type[BaseModel],
         model: str,
         max_output_tokens: int,
+        effort: ReasoningEffort | None = None,
     ) -> Completion:
         _, cost_ceiling = estimate_call(messages, schema, model, max_output_tokens)
         reservation = await ledger.reserve(cost_ceiling, ttl=120)
-        result = await complete(messages, schema, model, max_output_tokens)
+        result = await complete(messages, schema, model, max_output_tokens, effort)
         await ledger.settle(reservation, result.trace.total_cost or 0.0)
         return result
 
