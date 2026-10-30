@@ -1,0 +1,4 @@
+sections:
+  - title: Agent rules
+    style: numbered
+    rules: [agent_task_data, agent_tools, agent_side_effects, agent_evidence, agent_criteria, agent_report]
