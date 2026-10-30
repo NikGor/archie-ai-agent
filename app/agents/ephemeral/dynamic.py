@@ -131,7 +131,9 @@ class DynamicAgents:
         except SpecValidationError as exc:
             self._fail(recorder, "invalid_spec", str(exc), exc.errors)
             return
-        agent = self.factory.create(validated.spec, ceiling=policy.max_profile)
+        agent = self.factory.create(
+            validated.spec, ceiling=policy.max_profile, timezone=policy.user_timezone
+        )
         record = recorder.record
         record.spec = validated.spec.model_dump(mode="json")
         record.spec_version = validated.spec.spec_version
