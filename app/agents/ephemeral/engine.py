@@ -37,6 +37,7 @@ from app.platform.runtime.completion import (
     InvalidOutputError,
     check_remaining,
     complete,
+    max_output_for,
     output_cap,
 )
 from app.platform.runtime.results import (
@@ -296,7 +297,13 @@ class _Run:
         model = self.selection.model
         attempts = self.spec.execution.retries + 1
         for attempt in range(attempts):
-            cap = output_cap(self.meter, self.messages, schema, model)
+            cap = output_cap(
+                self.meter,
+                self.messages,
+                schema,
+                model,
+                max_output_for(self.selection.effort),
+            )
             try:
                 effort = self.selection.effort
                 completion: Completion = await self.runtime.call(
