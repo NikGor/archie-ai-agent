@@ -413,3 +413,16 @@ def test_only_the_first_json_object_of_a_reply_counts():
     assert first_object('{"a": 1}{"a": 2}', "m") == '{"a": 1}'
     assert first_object(' {"a": 1} ', "m") == ' {"a": 1} '
     assert first_object("not json", "m") == "not json"
+
+
+async def test_each_round_shows_only_its_new_results():
+    seen = []
+
+    class Watch(Script):
+        async def __call__(self, messages, schema, model, cap, effort=None):
+            seen.append(messages[-2]["content"] if len(messages) > 2 else "")
+            return await super().__call__(messages, schema, model, cap, effort)
+
+    script = Watch(findings_turn(search("a")), findings_turn(search("b")), findings_reply())
+    await service(script).run("task", spec(), policy())
+    assert seen[2].count("google_search_tool") == 1
