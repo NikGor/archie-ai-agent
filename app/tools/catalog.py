@@ -72,6 +72,11 @@ CORE_TOOL_GROUPS = [
         capabilities={"document_search_tool": READ},
     ),
     ToolGroup(
+        name="agents",
+        tools={"delegate_agent_tool": "app.agents.chat.tools.delegate_agent_tool"},
+        capabilities={"delegate_agent_tool": READ},
+    ),
+    ToolGroup(
         name="skills",
         tools={"skill_loader_tool": "app.tools.skill_loader_tool"},
         capabilities={"skill_loader_tool": READ},
