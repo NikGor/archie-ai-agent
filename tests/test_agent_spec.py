@@ -135,3 +135,13 @@ def test_depth_limit_and_delegation_tools_never_reach_policy():
 def test_spec_model_rejects_unknown_nested_fields():
     with pytest.raises(Exception):
         AgentSpec.model_validate(draft(context={"facts": [], "secrets": "x"}))
+
+
+def test_effort_is_capped_with_the_profile():
+    result = validate_spec(
+        draft(model={"profile": "DEEP", "effort": "high"}),
+        policy(max_effort="medium"),
+        tool_registry,
+    )
+    assert result.spec.model.profile == "BALANCED"
+    assert result.spec.model.effort == "medium"
