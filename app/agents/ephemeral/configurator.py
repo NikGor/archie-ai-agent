@@ -41,8 +41,9 @@ from app.utils.skill_utils import list_skills
 logger = logging.getLogger(__name__)
 
 PROMPT = "configurator"
-# One configurator call: small, fixed budget
-CONFIGURATOR_BUDGET = Budget(max_tokens=30000, max_cost_usd=0.03, max_seconds=60)
+# One configurator call: small, fixed budget. The byte-based estimate is about
+# 5x the real price (gpt-4.1: ~$0.035 estimated, ~$0.006 paid), ARCHIE-323 eval.
+CONFIGURATOR_BUDGET = Budget(max_tokens=40000, max_cost_usd=0.10, max_seconds=60)
 
 
 class SpecDraft(BaseModel):
