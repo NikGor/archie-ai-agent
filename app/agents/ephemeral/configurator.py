@@ -95,7 +95,9 @@ class ConfigurationResult(BaseModel):
     prompt_version: str = Field("", description="Fingerprint of the configurator spec")
 
 
-def to_spec(draft: SpecDraft, task: str, retries: int = 1) -> dict:
+def to_spec(
+    draft: SpecDraft, task: str, timeout_seconds: float, retries: int = 1
+) -> dict:
     """The original task stays the objective; the draft cannot rewrite it."""
     return {
         "identity": {"name": draft.name, "role": draft.role, "purpose": draft.purpose},
@@ -112,6 +114,7 @@ def to_spec(draft: SpecDraft, task: str, retries: int = 1) -> dict:
         "execution": {
             "max_iterations": max(1, min(8, draft.max_iterations)),
             "max_tool_calls": max(0, min(24, draft.max_tool_calls)),
+            "timeout_seconds": timeout_seconds,
             "retries": retries,
         },
         "budget": {"max_cost_usd": max(0.0, draft.max_cost_usd)},
@@ -251,7 +254,10 @@ class AgentConfigurator:
                 if draft.spec is None:
                     raise SpecValidationError(["spawn needs a spec"])
                 validated = validate_spec(
-                    to_spec(draft.spec, task), policy, self.registry, skills
+                    to_spec(draft.spec, task, policy.limits.timeout_seconds),
+                    policy,
+                    self.registry,
+                    skills,
                 )
             except SpecValidationError as exc:
                 result.errors = exc.errors
