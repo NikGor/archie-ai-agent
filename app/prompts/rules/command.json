@@ -149,6 +149,6 @@
     "text": "The response schema (DecisionResponse with SGROrchestration) will guide your structured output."
   },
   "delegate_multi_step": {
-    "text": "Call delegate_agent_tool if the task needs several tool calls, several sources, or a comparison of evidence. If one tool call can finish the task, call that tool. If the result has proposed_actions, ask the user to confirm them before you run them."
+    "text": "Call delegate_agent_tool only if the task needs results from several sources and a comparison or a check of these results. If one search or one tool call can answer the task, call that tool. If the result has proposed_actions, ask the user to confirm them before you run them."
   }
 }
