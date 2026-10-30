@@ -10,6 +10,7 @@ import logging
 from collections.abc import Iterable
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from app.platform.llm.profiles import PROFILES, LogicalEffort, ModelProfile
 from app.platform.runtime.budget import Budget
 from app.platform.runtime.results import RESULT_SCHEMAS
 from app.platform.runtime.spawn import SpawnContext
@@ -18,9 +19,6 @@ from app.platform.tools.registry import ToolRegistry, UnknownToolError
 
 logger = logging.getLogger(__name__)
 
-ModelProfile = Literal["FAST", "BALANCED", "DEEP", "MAXIMUM"]
-PROFILES: tuple[ModelProfile, ...] = ("FAST", "BALANCED", "DEEP", "MAXIMUM")
-LogicalEffort = Literal["low", "medium", "high"]
 # Tools that create agents or hand work to other agents: never inside a spec (no recursion)
 DELEGATION_TOOLS = frozenset(
     {"delegate_agent_tool", "agent_task_tool", "spawn_agent_tool"}
@@ -157,6 +155,73 @@ def _cap(value: float | None, ceiling: float | None) -> float | None:
     return ceiling if value is None else min(value, ceiling)
 
 
+def _tool_errors(
+    spec: AgentSpec, policy: CallerPolicy, registry: ToolRegistry
+) -> list[str]:
+    errors: list[str] = []
+    write_tools = []
+    for name in spec.tools:
+        try:
+            capability = registry.capability(name)
+        except UnknownToolError:
+            errors.append(f"unknown tool {name}")
+            continue
+        if name in DELEGATION_TOOLS:
+            errors.append(f"{name} creates agents; delegation is not recursive")
+        elif name not in policy.tools:
+            errors.append(f"{name} is not allowed for caller {policy.source}")
+        elif capability.effect == "write" and not capability.read_actions:
+            write_tools.append(name)
+    errors += [
+        f"approval tool {name} is not in tools"
+        for name in spec.permissions.approval_tools
+        if name not in spec.tools
+    ]
+    if not write_tools and spec.permissions.mode == "read_only":
+        return errors
+    if not policy.may_request_approval:
+        errors.append(
+            "tools with side effects need approval the caller cannot ask: "
+            + (", ".join(write_tools) or "propose_actions")
+        )
+    elif set(write_tools) - set(spec.permissions.approval_tools):
+        errors.append("write tools must be listed in permissions.approval_tools")
+    return errors
+
+
+def _capped(spec: AgentSpec, policy: CallerPolicy) -> ValidatedSpec:
+    budget = {
+        name: _cap(getattr(spec.budget, name), getattr(policy.budget, name))
+        for name in Budget.model_fields
+    }
+    limits = {
+        name: min(getattr(spec.execution, name), getattr(policy.limits, name))
+        for name in Execution.model_fields
+    }
+    profile = spec.model.profile
+    if PROFILES.index(profile) > PROFILES.index(policy.max_profile):
+        profile = policy.max_profile
+    adjustments = [
+        f"{label} capped: {before} -> {after}"
+        for label, before, after in (
+            ("budget", spec.budget.model_dump(), budget),
+            ("execution", spec.execution.model_dump(), limits),
+            ("profile", spec.model.profile, profile),
+        )
+        if before != after
+    ]
+    capped = spec.model_copy(
+        update={
+            "budget": Budget.model_validate(budget),
+            "execution": Execution.model_validate(limits),
+            "model": spec.model.model_copy(update={"profile": profile}),
+        }
+    )
+    if adjustments:
+        logger.info(f"agent_spec_001: {spec.identity.name}: {'; '.join(adjustments)}")
+    return ValidatedSpec(spec=capped, adjustments=adjustments)
+
+
 def validate_spec(
     draft: AgentSpec | dict,
     policy: CallerPolicy,
@@ -172,33 +237,8 @@ def validate_spec(
         raise SpecValidationError(
             [f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()]
         ) from exc
-    errors: list[str] = []
-    adjustments: list[str] = []
-    if policy.depth >= policy.max_depth:
-        errors.append("maximum spawn depth reached")
-    write_tools = []
-    for name in spec.tools:
-        try:
-            capability = registry.capability(name)
-        except UnknownToolError:
-            errors.append(f"unknown tool {name}")
-            continue
-        if name in DELEGATION_TOOLS:
-            errors.append(f"{name} creates agents; delegation is not recursive")
-        elif name not in policy.tools:
-            errors.append(f"{name} is not allowed for caller {policy.source}")
-        elif capability.effect == "write" and not capability.read_actions:
-            write_tools.append(name)
-    for name in spec.permissions.approval_tools:
-        if name not in spec.tools:
-            errors.append(f"approval tool {name} is not in tools")
-    if write_tools or spec.permissions.mode == "propose_actions":
-        if not policy.may_request_approval:
-            errors.append(
-                f"tools with side effects need approval the caller cannot ask: {', '.join(write_tools) or 'propose_actions'}"
-            )
-        elif set(write_tools) - set(spec.permissions.approval_tools):
-            errors.append("write tools must be listed in permissions.approval_tools")
+    errors = ["maximum spawn depth reached"] if policy.depth >= policy.max_depth else []
+    errors += _tool_errors(spec, policy, registry)
     known_skills = set(skills)
     errors += [f"unknown skill {s}" for s in spec.skills if s not in known_skills]
     if spec.output.schema_name not in RESULT_SCHEMAS:
@@ -208,32 +248,4 @@ def validate_spec(
             f"agent_spec_warning_001: Rejected {spec.identity.name}: {errors}"
         )
         raise SpecValidationError(errors)
-
-    budget = {
-        name: _cap(getattr(spec.budget, name), getattr(policy.budget, name))
-        for name in Budget.model_fields
-    }
-    limits = {
-        name: min(getattr(spec.execution, name), getattr(policy.limits, name))
-        for name in Execution.model_fields
-    }
-    profile = spec.model.profile
-    if PROFILES.index(profile) > PROFILES.index(policy.max_profile):
-        profile = policy.max_profile
-    for label, before, after in (
-        ("budget", spec.budget.model_dump(), budget),
-        ("execution", spec.execution.model_dump(), limits),
-        ("profile", spec.model.profile, profile),
-    ):
-        if before != after:
-            adjustments.append(f"{label} capped: {before} -> {after}")
-    capped = spec.model_copy(
-        update={
-            "budget": Budget(**budget),
-            "execution": Execution(**limits),
-            "model": spec.model.model_copy(update={"profile": profile}),
-        }
-    )
-    if adjustments:
-        logger.info(f"agent_spec_001: {spec.identity.name}: {'; '.join(adjustments)}")
-    return ValidatedSpec(spec=capped, adjustments=adjustments)
+    return _capped(spec, policy)
