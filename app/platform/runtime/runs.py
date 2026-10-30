@@ -185,18 +185,35 @@ class RedisRunStore:
         return records
 
 
+EventListener = Callable[[RunEvent], Awaitable[None]]
+
+
 class RunRecorder:
     """Writes events and state of one run; the engine never touches the store."""
 
     def __init__(self, record: AgentRunRecord, store: RunStore) -> None:
         self.record = record
         self.store = store
+        self.listener: EventListener | None = None
+        self._pending: set[asyncio.Task] = set()
 
     def event(self, kind: EventKind, **detail: JsonValue) -> None:
-        self.record.events.append(RunEvent(kind=kind, at=time.time(), detail=detail))
+        event = RunEvent(kind=kind, at=time.time(), detail=detail)
+        self.record.events.append(event)
+        if self.listener is not None:
+            # Progress for the caller (WS status); never blocks or fails the run
+            task = asyncio.get_running_loop().create_task(self._notify(event))
+            self._pending.add(task)
+            task.add_done_callback(self._pending.discard)
         logger.info(
             f"agent_run_001: \033[36m{self.record.run_id}\033[0m {kind} {json.dumps(detail, ensure_ascii=False, default=str)[:300]}"
         )
+
+    async def _notify(self, event: RunEvent) -> None:
+        try:
+            await self.listener(event)
+        except Exception as exc:
+            logger.warning(f"agent_run_warning_001: Listener failed: {exc}")
 
     def state(self, state: RunState) -> None:
         self.record.state = state
@@ -362,3 +379,16 @@ class RunManager:
             if records
             else None,
         }
+
+
+_manager: RunManager | None = None
+
+
+def register_run_manager(manager: RunManager) -> None:
+    """The composition root registers the process RunManager for the API."""
+    global _manager
+    _manager = manager
+
+
+def run_manager() -> RunManager | None:
+    return _manager
