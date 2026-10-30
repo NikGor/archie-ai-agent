@@ -54,6 +54,8 @@ class Settings(BaseSettings):
         "DEEP": ["gpt-5.4:medium", "gpt-4.1"],
         "MAXIMUM": ["gpt-5.4:high"],
     }
+    # Profile of the AgentConfigurator call (ARCHIE-323)
+    agent_configurator_profile: Literal["FAST", "BALANCED"] = "BALANCED"
     # Daily LLM spend of delegated chat agents (ARCHIE-324)
     agent_daily_cost_usd: float = Field(default=2.0, ge=0)
     # DeepSeek V4.1 Flash broke tool calls and looped to 131k output tokens
