@@ -9,6 +9,7 @@ load_dotenv()
 import uvicorn  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from app.agents.background import configure_ephemeral
+from app.agents.delegation import configure_delegation  # noqa: E402
 from app.agents.chat.service import ChatService  # noqa: E402
 from app.agents.registry import load_agent_kinds  # noqa: E402
 from app.agents.swarm.bridge import SwarmHubBridge  # noqa: E402
@@ -39,6 +40,8 @@ init_tracing()
 # Composition root (ARCHIE-298): the supervisor starts, watches and stops the
 # long-lived services of this process
 supervisor.register(ChatService())
+# ARCHIE-324: the chat delegates to dynamic agents in this process
+configure_delegation()
 if settings.runtime_mode == "api":
     # Swarm and cron run in the runtime process (python -m app.runtime_main);
     # this process relays swarm events and commands through Redis (ARCHIE-299)
