@@ -19,6 +19,8 @@ from app.platform.tools.registry import ToolRegistry, UnknownToolError
 
 logger = logging.getLogger(__name__)
 
+EFFORTS: tuple[LogicalEffort, ...] = ("low", "medium", "high")
+
 # Tools that create agents or hand work to other agents: never inside a spec (no recursion)
 DELEGATION_TOOLS = frozenset(
     {"delegate_agent_tool", "agent_task_tool", "spawn_agent_tool"}
@@ -111,6 +113,7 @@ class CallerPolicy(BaseModel):
     max_depth: int = Field(1, ge=1, description="Deepest allowed spawn")
     tools: frozenset[str] = Field(description="Tools the caller may grant")
     max_profile: ModelProfile = Field("DEEP", description="Most expensive profile")
+    max_effort: LogicalEffort = Field("high", description="Highest logical effort")
     budget: Budget = Field(description="Budget ceiling; every limit is set")
     limits: Execution = Field(default_factory=Execution, description="Limit ceiling")
     may_request_approval: bool = Field(
@@ -201,12 +204,16 @@ def _capped(spec: AgentSpec, policy: CallerPolicy) -> ValidatedSpec:
     profile = spec.model.profile
     if PROFILES.index(profile) > PROFILES.index(policy.max_profile):
         profile = policy.max_profile
+    effort = spec.model.effort
+    if effort and EFFORTS.index(effort) > EFFORTS.index(policy.max_effort):
+        effort = policy.max_effort
     adjustments = [
         f"{label} capped: {before} -> {after}"
         for label, before, after in (
             ("budget", spec.budget.model_dump(), budget),
             ("execution", spec.execution.model_dump(), limits),
             ("profile", spec.model.profile, profile),
+            ("effort", spec.model.effort, effort),
         )
         if before != after
     ]
@@ -214,7 +221,9 @@ def _capped(spec: AgentSpec, policy: CallerPolicy) -> ValidatedSpec:
         update={
             "budget": Budget.model_validate(budget),
             "execution": Execution.model_validate(limits),
-            "model": spec.model.model_copy(update={"profile": profile}),
+            "model": spec.model.model_copy(
+                update={"profile": profile, "effort": effort}
+            ),
         }
     )
     if adjustments:
