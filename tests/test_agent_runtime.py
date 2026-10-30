@@ -113,6 +113,7 @@ class Script:
     async def __call__(self, messages, schema, model, cap, effort=None):
         self.models.append(model)
         self.efforts.append(effort)
+        self.caps = getattr(self, "caps", []) + [cap]
         reply = self.replies.pop(0)
         if isinstance(reply, Exception):
             raise reply
@@ -382,3 +383,25 @@ async def test_runs_api_lists_shows_and_cancels(monkeypatch):
     assert full["events"][0]["kind"] == "task_created"
     assert client.post(f"/runtime/runs/{record.run_id}/cancel").json()["cancelled"] is False
     assert client.get("/runtime/runs/nope").status_code == 404
+
+
+async def test_reasoning_effort_raises_the_output_cap():
+    script = Script(findings_reply())
+    await service(script).run("task", spec(tools=[], model={"profile": "FAST"}), policy())
+    assert script.efforts == ["low"] and script.caps[0] > 2048
+
+
+async def test_truncated_stream_becomes_invalid_output_with_its_cost(monkeypatch):
+    from app.platform.llm.openai_client import TruncatedOutputError
+    from app.platform.runtime import completion
+
+    class Client:
+        async def create_completion_stream(self, usage_out, **_kwargs):
+            usage_out.update({"input_tokens": 100, "output_tokens": 4096})
+            raise TruncatedOutputError("cut off")
+            yield ""
+
+    monkeypatch.setattr(completion, "get_client", lambda _provider: Client())
+    with pytest.raises(InvalidOutputError) as raised:
+        await completion.complete([], FindingsReply, "gpt-5.4", 4096, "high")
+    assert raised.value.trace.output_tokens == 4096
