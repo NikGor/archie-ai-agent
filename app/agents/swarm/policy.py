@@ -2,39 +2,21 @@
 
 import logging
 from typing import Literal
+import app.agents.swarm.tools  # noqa: F401  registers the swarm tool group
 from app.agents.swarm.models import SwarmAgentProfile, SwarmToolCall
+from app.tools.catalog import tool_registry
 
 
 logger = logging.getLogger(__name__)
-
-# Tools that only read data. Every other tool has side effects.
-READ_ONLY_TOOLS: frozenset[str] = frozenset(
-    {
-        "smarthome_status_tool",
-        "spawn_agent_tool",
-        "google_search_tool",
-        "google_places_search_tool",
-        "document_search_tool",
-        "skill_loader_tool",
-        "gmail_tool",
-        "weather_tool",
-    }
-)
-
-# Tools whose listed actions only read data; their other actions have side effects.
-READ_ONLY_ACTIONS: dict[str, frozenset[str]] = {
-    "events_tool": frozenset({"list", "read", "today", "upcoming"}),
-    "cron_tool": frozenset({"list", "get"}),
-}
 
 PolicyDecision = Literal["allow", "block"]
 
 
 def is_read_only(tool_call: SwarmToolCall) -> bool:
-    if tool_call.tool_name in READ_ONLY_TOOLS:
-        return True
-    actions = READ_ONLY_ACTIONS.get(tool_call.tool_name, frozenset())
-    return any(p.name == "action" and p.value in actions for p in tool_call.arguments)
+    """Read-only by the tool capabilities of the registry (ARCHIE-320)."""
+    return tool_registry.is_read_only(
+        tool_call.tool_name, {p.name: p.value for p in tool_call.arguments}
+    )
 
 
 def check_tool_call(
