@@ -11,8 +11,8 @@ import importlib
 import inspect
 import logging
 from collections.abc import Callable, Iterable
-from typing import Any
-from pydantic import BaseModel, Field
+from typing import Any, Literal
+from pydantic import BaseModel, Field, model_validator
 from ..llm.catalog import get_provider_for_model
 from ..llm.registry import get_provider
 from .models import ToolContext
@@ -21,15 +21,46 @@ from .models import ToolContext
 logger = logging.getLogger(__name__)
 
 
+class ToolCapability(BaseModel):
+    """What a tool does to the world (ARCHIE-320). Policies read this, not lists."""
+
+    effect: Literal["read", "write"] = Field(
+        description="read: only reads data; write: has side effects"
+    )
+    read_actions: tuple[str, ...] = Field(
+        default=(),
+        description="Values of the `action` argument that only read, for a write tool",
+    )
+    approval: bool = Field(
+        default=False,
+        description="A side effect needs the user's approval before it runs",
+    )
+
+
+READ = ToolCapability(effect="read")
+WRITE = ToolCapability(effect="write", approval=True)
+
+
 class ToolGroup(BaseModel):
     """Tools registered together: tool name -> module path."""
 
     name: str = Field(description="Group name, e.g. smarthome")
     tools: dict[str, str] = Field(description="Tool name -> module path")
+    capabilities: dict[str, ToolCapability] = Field(
+        description="Tool name -> capability; every tool of the group must have one"
+    )
     exclusive: bool = Field(
         default=False,
         description="Only the agent kind that registered it may see these tools",
     )
+
+    @model_validator(mode="after")
+    def every_tool_has_capability(self) -> "ToolGroup":
+        if set(self.capabilities) != set(self.tools):
+            raise ValueError(
+                f"Group {self.name}: capabilities must match tools exactly"
+            )
+        return self
 
 
 class UnknownToolError(KeyError):
@@ -63,6 +94,23 @@ class ToolRegistry:
             and (include_exclusive or not group.exclusive)
             for name in group.tools
         ]
+
+    def capability(self, name: str) -> ToolCapability:
+        for group in self.groups.values():
+            if name in group.capabilities:
+                return group.capabilities[name]
+        raise UnknownToolError(name)
+
+    def is_read_only(self, name: str, arguments: dict[str, str]) -> bool:
+        """True when this call only reads data; unknown tools are not read-only."""
+        try:
+            capability = self.capability(name)
+        except UnknownToolError:
+            return False
+        return (
+            capability.effect == "read"
+            or arguments.get("action") in capability.read_actions
+        )
 
     def module_path(self, name: str) -> str:
         for group in self.groups.values():
@@ -112,19 +160,27 @@ class ToolRegistry:
     ) -> dict[str, Any]:
         """Run a tool. Fields of `context` (timezone, demo_mode) go to the tool
         only if its signature declares them. Errors come back as {"error": ...}."""
-        logger.info(f"tool_registry_004: Executing \033[36m{name}\033[0m with args: {arguments}")
+        logger.info(
+            f"tool_registry_004: Executing \033[36m{name}\033[0m with args: {arguments}"
+        )
         try:
             func = self.function(name)
         except (UnknownToolError, ImportError, AttributeError) as e:
-            logger.error(f"tool_registry_error_002: Unknown tool: \033[31m{name}\033[0m ({e})")
+            logger.error(
+                f"tool_registry_error_002: Unknown tool: \033[31m{name}\033[0m ({e})"
+            )
             return {"error": f"Unknown tool: {name}"}
         parameters = inspect.signature(func).parameters
         facts = context.model_dump() if context else {"demo_mode": False}
         injected = {key: value for key, value in facts.items() if key in parameters}
         if injected:
-            logger.info(f"tool_registry_005: Injected context: \033[35m{injected}\033[0m")
+            logger.info(
+                f"tool_registry_005: Injected context: \033[35m{injected}\033[0m"
+            )
         try:
             return await func(**{**arguments, **injected})
         except Exception as e:
-            logger.error(f"tool_registry_error_003: Tool execution failed: \033[31m{e}\033[0m")
+            logger.error(
+                f"tool_registry_error_003: Tool execution failed: \033[31m{e}\033[0m"
+            )
             return {"error": f"Tool execution failed: {e!s}"}
