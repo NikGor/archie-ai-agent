@@ -22,6 +22,7 @@ ChatToolName = Literal[
     "announce_tool",
     "awtrix_tool",
     "agent_task_tool",
+    "delegate_agent_tool",
     "document_search_tool",
     "skill_loader_tool",
 ]
