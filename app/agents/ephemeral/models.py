@@ -4,6 +4,7 @@ import math
 from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 from app.platform.runtime.budget import Budget
+from app.platform.runtime.results import ResultSchema, register_result_schema
 from app.platform.tools.models import ToolCall, ToolResult
 
 
@@ -111,3 +112,15 @@ class EphemeralTurn(EphemeralReply):
         max_length=4,
         description="Read tools needed to finish the goal; empty when finished",
     )
+
+
+# ARCHIE-321: the swarm's HA diagnosis is a fixed AgentSpec preset with its own schema
+register_result_schema(
+    ResultSchema(
+        name="ha_diagnosis_v1",
+        description="Swarm HA diagnosis preset (ARCHIE-300)",
+        reply=EphemeralReply,
+        turn=EphemeralTurn,
+        configurable=False,
+    )
+)
