@@ -241,17 +241,20 @@ MODEL_STAGE_SUPPORT: dict[str, dict[str, bool]] = {
         "final_plain": True,
         "final_ui": False,
     },
+    # "agent": findings_v1 run with tool calls completed (ARCHIE-322 probe, 30.10.2026)
     "anthropic/claude-sonnet-5.5": {
         "command": False,
         "final_plain": False,
         "final_ui": False,
         "swarm": True,
+        "agent": True,
     },
     "anthropic/claude-opus-5.5": {
         "command": False,
         "final_plain": False,
         "final_ui": False,
         "swarm": True,
+        "agent": True,
     },
     "anthropic/claude-fable-5.1": {
         "command": False,
