@@ -10,12 +10,22 @@ from collections.abc import Awaitable, Callable
 from archie_shared.chat.models import LllmTrace, ReasoningEffort
 from pydantic import BaseModel, Field
 from app.platform.llm.catalog import MODEL_TOKEN_PRICES, get_provider_for_model
+from app.platform.llm.openai_client import TruncatedOutputError
 from app.platform.llm.registry import get_client
 from app.platform.runtime.budget import BudgetExceededError, BudgetMeter
 from app.utils.llm_parser import build_stream_trace, parse_assembled_stream
 
 
 MAX_OUTPUT_TOKENS = 2048
+# Reasoning tokens count as output: a higher effort needs a higher cap (ARCHIE-321)
+EFFORT_OUTPUT_TOKENS = {"none": 2048, "minimal": 2048, "low": 4096, "medium": 8192}
+REASONING_OUTPUT_TOKENS = 16384
+
+
+def max_output_for(effort: str | None) -> int:
+    if effort is None:
+        return MAX_OUTPUT_TOKENS
+    return EFFORT_OUTPUT_TOKENS.get(effort, REASONING_OUTPUT_TOKENS)
 
 
 class Completion(BaseModel):
@@ -91,16 +101,22 @@ async def complete(
     client = get_client(get_provider_for_model(model))
     usage: dict[str, int] = {}
     chunks = []
-    async for chunk in client.create_completion_stream(
-        messages=messages,
-        model=model,
-        response_format=schema,
-        max_output_tokens=max_output_tokens,
-        usage_out=usage,
-        observation_name="ephemeral-step",
-        reasoning_effort=effort,
-    ):
-        chunks.append(chunk)
+    try:
+        async for chunk in client.create_completion_stream(
+            messages=messages,
+            model=model,
+            response_format=schema,
+            max_output_tokens=max_output_tokens,
+            usage_out=usage,
+            observation_name="ephemeral-step",
+            reasoning_effort=effort,
+        ):
+            chunks.append(chunk)
+    except TruncatedOutputError as exc:
+        raise InvalidOutputError(
+            f"output cut off at {max_output_tokens} tokens",
+            build_stream_trace(model, usage) if usage else None,
+        ) from exc
     try:
         parsed = parse_assembled_stream("".join(chunks), model, schema, usage)
     except ValueError as exc:
@@ -129,12 +145,13 @@ def output_cap(
     messages: list[dict[str, str]],
     schema: type[BaseModel],
     model: str,
+    maximum: int = MAX_OUTPUT_TOKENS,
 ) -> int:
     """Largest output that keeps the call inside the remaining tokens and money."""
     check_remaining(meter)
     input_bound, input_cost = estimate_call(messages, schema, model, 0)
     remaining_tokens = int(meter.budget.max_tokens - meter.tokens)
-    cap = min(MAX_OUTPUT_TOKENS, remaining_tokens - input_bound)
+    cap = min(maximum, remaining_tokens - input_bound)
     if cap < 1:
         raise BudgetExceededError(
             "max_tokens", meter.tokens + input_bound + 1, meter.budget.max_tokens
