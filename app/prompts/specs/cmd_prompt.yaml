@@ -46,6 +46,7 @@ sections:
       - smarthome_infer_parameters
       - stop_when_results_complete
       - gmail_read_only
+      - delegate_multi_step
       - {rule: form_before_create, when: "response_format == 'ui_answer'"}
       - load_matching_skill
 
