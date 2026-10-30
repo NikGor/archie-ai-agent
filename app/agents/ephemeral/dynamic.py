@@ -6,7 +6,10 @@ idempotent per parent, task and context and returns a summary with the run_id.
 """
 
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 from langfuse import get_client
+from app.agents.ephemeral.configurator import AgentConfigurator
 from app.agents.ephemeral.engine import (
     AgentFactory,
     AgentRunResult,
@@ -78,13 +81,41 @@ class DynamicAgents:
         runtime: AgentRuntime | None = None,
         factory: AgentFactory | None = None,
         registry: ToolRegistry | None = None,
-        configurator=None,
+        configurator: AgentConfigurator | None = None,
     ) -> None:
         self.registry = registry or tool_registry
         self.manager = manager or RunManager()
         self.runtime = runtime or AgentRuntime(self.registry)
         self.factory = factory or AgentFactory(self.registry)
-        self.configurator = configurator
+        self.configurator = configurator or AgentConfigurator(self.registry)
+
+    @contextmanager
+    def observe(self, recorder: RunRecorder) -> Iterator[None]:
+        """One Langfuse agent-run with the configurator and the agent inside."""
+        record = recorder.record
+        with get_client().start_as_current_observation(
+            as_type="agent",
+            name="agent-run",
+            input=record.task,
+            metadata={"run_id": record.run_id, "parent_run_id": record.parent_run_id},
+        ) as observation:
+            record.trace_id = get_client().get_current_trace_id()
+            try:
+                yield
+            finally:
+                observation.update(
+                    output=record.summary(),
+                    metadata={
+                        "run_id": record.run_id,
+                        "parent_run_id": record.parent_run_id,
+                        "spec_version": record.spec_version,
+                        "spec_fingerprint": record.spec_fingerprint,
+                        "prompt_version": record.prompt_version,
+                        "model": record.model,
+                        "state": record.state,
+                        "cost_usd": record.cost_usd,
+                    },
+                )
 
     async def run_spec(
         self, recorder: RunRecorder, spec: AgentSpec | dict, policy: CallerPolicy
@@ -93,11 +124,7 @@ class DynamicAgents:
         try:
             validated = validate_spec(spec, policy, self.registry, skill_names())
         except SpecValidationError as exc:
-            recorder.record.stop_reason = "invalid_spec"
-            recorder.record.detail = str(exc)
-            recorder.record.errors.extend(exc.errors)
-            recorder.state("failed")
-            recorder.event("agent_failed", reason="invalid_spec", detail=str(exc))
+            self._fail(recorder, "invalid_spec", str(exc), exc.errors)
             return
         agent = self.factory.create(validated.spec, ceiling=policy.max_profile)
         record = recorder.record
@@ -114,29 +141,22 @@ class DynamicAgents:
             tools=list(validated.spec.tools),
         )
         recorder.state("running")
-        with get_client().start_as_current_observation(
-            as_type="agent",
-            name="agent-run",
-            input=validated.spec.objective.task,
-            metadata={
-                "run_id": record.run_id,
-                "parent_run_id": record.parent_run_id,
-                "spec_version": record.spec_version,
-                "spec_fingerprint": record.spec_fingerprint,
-                "prompt_version": record.prompt_version,
-            },
-        ) as observation:
-            record.trace_id = get_client().get_current_trace_id()
-            try:
-                result = await self.runtime.execute(
-                    agent, policy, record.run_id, recorder
-                )
-            except RunCancelledError as exc:
-                record_result(recorder, exc.result)
-                observation.update(output=record.summary())
-                raise
-            record_result(recorder, result)
-            observation.update(output=record.summary())
+        try:
+            result = await self.runtime.execute(agent, policy, record.run_id, recorder)
+        except RunCancelledError as exc:
+            record_result(recorder, exc.result)
+            raise
+        record_result(recorder, result)
+
+    @staticmethod
+    def _fail(
+        recorder: RunRecorder, reason: str, detail: str, errors: list[str]
+    ) -> None:
+        recorder.record.stop_reason = reason
+        recorder.record.detail = detail
+        recorder.record.errors.extend(errors)
+        recorder.state("failed")
+        recorder.event("agent_failed", reason=reason, detail=detail)
 
     async def run(
         self, task: str, spec: AgentSpec | dict, policy: CallerPolicy, context: str = ""
@@ -147,6 +167,40 @@ class DynamicAgents:
         )
 
         async def body(active: RunRecorder) -> None:
-            await self.run_spec(active, spec, policy)
+            with self.observe(active):
+                await self.run_spec(active, spec, policy)
+
+        return await self.manager.run(recorder, body)
+
+    async def delegate(
+        self, task: str, context: str, policy: CallerPolicy
+    ) -> AgentRunRecord:
+        """Configurator, then the agent; `direct` creates no agent."""
+        recorder, _ = self.manager.create(
+            task, policy.parent_run_id, policy.source, context
+        )
+
+        async def body(active: RunRecorder) -> None:
+            with self.observe(active):
+                config = await self.configurator.configure(
+                    task, context, policy, skill_names()
+                )
+                record = active.record
+                record.configuration = config.model_dump(mode="json", exclude={"spec"})
+                record.configurator_cost_usd = config.cost_usd
+                record.cost_usd += config.cost_usd
+                record.input_tokens += config.input_tokens
+                record.output_tokens += config.output_tokens
+                if config.decision == "direct":
+                    active.event("agent_configured", decision="direct")
+                    record.stop_reason = "direct"
+                    record.detail = config.reason
+                    active.state("completed")
+                    active.event("agent_completed", decision="direct")
+                    return
+                if config.spec is None:
+                    self._fail(active, "invalid_spec", config.reason, config.errors)
+                    return
+                await self.run_spec(active, config.spec, policy)
 
         return await self.manager.run(recorder, body)
