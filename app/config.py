@@ -48,11 +48,13 @@ class Settings(BaseSettings):
     # Model profiles of AgentSpec runs (ARCHIE-322): profile -> ordered
     # "model:effort" candidates; the first priced model with agent support wins.
     # Models for profiles are chosen by the ARCHIE-307 benchmark, not here.
+    # Probe 30.10.2026 (one findings_v1 task): luna high $0.0025/21s, gpt-5.4
+    # high $0.05/40s, both complete.
     agent_profiles: dict[str, list[str]] = {
         "FAST": ["gpt-5.6-luna:low", "gpt-4.1"],
         "BALANCED": ["gpt-5.6-luna:medium", "gpt-4.1"],
-        "DEEP": ["gpt-5.4:medium", "gpt-4.1"],
-        "MAXIMUM": ["gpt-5.4:high"],
+        "DEEP": ["gpt-5.6-luna:high", "gpt-4.1"],
+        "MAXIMUM": ["gpt-5.4:high", "gpt-5.6-luna:high"],
     }
     # Profile of the AgentConfigurator call (ARCHIE-323)
     agent_configurator_profile: Literal["FAST", "BALANCED"] = "BALANCED"
