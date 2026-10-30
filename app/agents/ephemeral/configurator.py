@@ -200,6 +200,7 @@ class AgentConfigurator:
         policy: CallerPolicy,
         skills: list[str],
         model: str | None = None,
+        allow_direct: bool = True,
     ) -> ConfigurationResult:
         """One structured call; an invalid draft gets one repeat with the errors.
         `model` overrides the profile model (eval compares models)."""
@@ -210,6 +211,9 @@ class AgentConfigurator:
             )
         meter = BudgetMeter(CONFIGURATOR_BUDGET)
         messages = self.messages(task, context, policy)
+        if not allow_direct:
+            # ARCHIE-326 baseline "always spawn" (hypothesis H3)
+            messages[0]["content"] += "\nDecision direct is not available: choose spawn."
         result = ConfigurationResult(
             decision="failed",
             reason="",
