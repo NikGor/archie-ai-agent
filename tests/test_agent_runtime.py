@@ -360,3 +360,25 @@ async def test_record_has_model_choice_and_stats():
     assert record.spec_fingerprint and record.prompt_version
     stats = manager.stats()
     assert stats["runs"] == 1 and stats["success_rate"] == 1.0
+
+
+async def test_runs_api_lists_shows_and_cancels(monkeypatch):
+    from fastapi.testclient import TestClient
+    from fastapi import FastAPI
+    import app.platform.runtime.runs as runs
+    from app.runtime_endpoints import router
+
+    manager = RunManager()
+    monkeypatch.setattr(runs, "_manager", manager)
+    record = await service(Script(findings_reply()), manager=manager).run(
+        "task", spec(tools=[]), policy()
+    )
+    app = FastAPI()
+    app.include_router(router)
+    client = TestClient(app)
+    listed = client.get("/runtime/runs").json()["runs"]
+    assert listed[0]["run_id"] == record.run_id and listed[0]["model"] == "gpt-5.6-luna"
+    full = client.get(f"/runtime/runs/{record.run_id}").json()
+    assert full["events"][0]["kind"] == "task_created"
+    assert client.post(f"/runtime/runs/{record.run_id}/cancel").json()["cancelled"] is False
+    assert client.get("/runtime/runs/nope").status_code == 404
