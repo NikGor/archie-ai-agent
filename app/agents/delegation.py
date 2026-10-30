@@ -82,7 +82,8 @@ def chat_policy(caller: DelegationCaller) -> CallerPolicy:
         caller.tools,
         budget=CHAT_BUDGET,
         limits=CHAT_LIMITS,
-        max_profile="DEEP",
+        # The user waits in the chat: DEEP (effort high) took 40-100 s per run
+        max_profile="BALANCED",
         may_request_approval=True,
     )
 
