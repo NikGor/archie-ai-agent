@@ -405,3 +405,11 @@ async def test_truncated_stream_becomes_invalid_output_with_its_cost(monkeypatch
     with pytest.raises(InvalidOutputError) as raised:
         await completion.complete([], FindingsReply, "gpt-5.4", 4096, "high")
     assert raised.value.trace.output_tokens == 4096
+
+
+def test_only_the_first_json_object_of_a_reply_counts():
+    from app.platform.runtime.completion import first_object
+
+    assert first_object('{"a": 1}{"a": 2}', "m") == '{"a": 1}'
+    assert first_object(' {"a": 1} ', "m") == ' {"a": 1} '
+    assert first_object("not json", "m") == "not json"
