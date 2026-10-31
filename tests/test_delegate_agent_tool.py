@@ -3,9 +3,9 @@
 import pytest
 import app.platform.runtime.delegation as delegation
 from app.agents.chat.tools.delegate_agent_tool import delegate_agent_tool
-from app.agents.delegation import chat_policy, step_text
+from app.agents.delegation import NO_REPEAT, chat_policy, result_note, step_text
 from app.platform.runtime.delegation import DelegationCaller, delegation_scope
-from app.platform.runtime.runs import RunEvent
+from app.platform.runtime.runs import AgentRunRecord, RunEvent
 from app.platform.runtime.spawn import SpawnContext
 from app.platform.runtime.spec import SpecValidationError, validate_spec
 from app.tools.catalog import tool_registry
@@ -97,3 +97,28 @@ def test_step_text_reports_tools_to_the_status_stream():
         == "Agent: google_search_tool"
     )
     assert step_text(RunEvent(kind="task_created", at=0)) is None
+
+
+def run_record(state: str, criteria: list[bool], stop_reason: str | None = None):
+    return AgentRunRecord(
+        run_id="r1",
+        parent_run_id="turn",
+        idempotency_key="k",
+        source="chat",
+        task="Compare cafes",
+        state=state,
+        stop_reason=stop_reason,
+        result={
+            "summary": "s",
+            "criteria": [
+                {"criterion": f"c{i}", "met": met, "evidence": ""}
+                for i, met in enumerate(criteria)
+            ],
+        },
+    )
+
+
+def test_completed_run_with_unmet_criteria_is_not_delegated_again():
+    assert NO_REPEAT in result_note(run_record("completed", [True, False]))
+    assert NO_REPEAT in result_note(run_record("failed", [], "budget_exhausted"))
+    assert result_note(run_record("completed", [True, True])) is None

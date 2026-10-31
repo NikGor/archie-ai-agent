@@ -25,6 +25,7 @@ from app.platform.runtime.delegation import (
     register_delegate_handler,
 )
 from app.platform.runtime.runs import (
+    AgentRunRecord,
     EventListener,
     RedisRunStore,
     RunEvent,
@@ -49,6 +50,28 @@ APPROVAL_NOTE = (
     "The agent changed nothing. Ask the user to confirm each proposed action; "
     "run it only after the user confirms."
 )
+NO_REPEAT = "Do not delegate this task again."
+
+
+def result_note(record: AgentRunRecord) -> str | None:
+    """What the chat does with the result. A finished run that failed its own
+    criteria is final too: a second agent got the same gaps (ARCHIE-324)."""
+    if record.stop_reason == "direct":
+        return "No agent was needed: " + record.detail + ". Do the task yourself."
+    if record.state == "waiting_for_approval":
+        return APPROVAL_NOTE
+    if record.state == "failed":
+        return (
+            f"The agent stopped early ({record.stop_reason}). Answer from the "
+            f"partial evidence and say what is missing. {NO_REPEAT}"
+        )
+    criteria = (record.result or {}).get("criteria") or []
+    if any(isinstance(c, dict) and c.get("met") is False for c in criteria):
+        return (
+            "The agent did not meet all completion criteria. Answer from its "
+            f"findings and say what is missing. {NO_REPEAT}"
+        )
+    return None
 
 
 def step_text(event: RunEvent) -> str | None:
@@ -148,17 +171,9 @@ def configure_delegation() -> DynamicAgents:
         finally:
             gate.release()
         summary = record.summary()
-        if record.stop_reason == "direct":
-            summary["note"] = (
-                "No agent was needed: " + record.detail + ". Do the task yourself."
-            )
-        elif record.state == "waiting_for_approval":
-            summary["note"] = APPROVAL_NOTE
-        elif record.state == "failed":
-            summary["note"] = (
-                f"The agent stopped early ({record.stop_reason}). Answer from the "
-                "partial evidence and say what is missing. Do not delegate this task again."
-            )
+        note = result_note(record)
+        if note:
+            summary["note"] = note
         return summary
 
     register_delegate_handler(handle)
