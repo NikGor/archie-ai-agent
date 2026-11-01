@@ -9,12 +9,10 @@ import json
 import logging
 from typing import Literal
 from pydantic import BaseModel, Field
-from app.config import settings
 from app.platform.llm.profiles import (
     PROFILES,
     ModelProfile,
-    select_model,
-    translate_effort,
+    configurator_selection,
 )
 from app.platform.prompts.compiler import PromptCompiler
 from app.platform.runtime.budget import Budget, BudgetExceededError, BudgetMeter
@@ -206,16 +204,14 @@ class AgentConfigurator:
     ) -> ConfigurationResult:
         """One structured call; an invalid draft gets one repeat with the errors.
         `model` overrides the profile model (eval compares models)."""
-        selection = select_model(settings.agent_configurator_profile, "low")
-        if model:
-            selection = selection.model_copy(
-                update={"model": model, "effort": translate_effort(model, "low")}
-            )
+        selection = configurator_selection(model)
         meter = BudgetMeter(CONFIGURATOR_BUDGET)
         messages = self.messages(task, context, policy)
         if not allow_direct:
             # ARCHIE-326 baseline "always spawn" (hypothesis H3)
-            messages[0]["content"] += "\nDecision direct is not available: choose spawn."
+            messages[0]["content"] += (
+                "\nDecision direct is not available: choose spawn."
+            )
         result = ConfigurationResult(
             decision="failed",
             reason="",

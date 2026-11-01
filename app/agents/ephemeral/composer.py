@@ -8,8 +8,7 @@ import logging
 from typing import Literal
 from pydantic import BaseModel, Field
 from app.agents.ephemeral.configurator import AgentConfigurator, SpecDraft, to_spec
-from app.config import settings
-from app.platform.llm.profiles import select_model
+from app.platform.llm.profiles import configurator_selection
 from app.platform.prompts.compiler import PromptCompiler
 from app.platform.runtime.budget import Budget, BudgetExceededError, BudgetMeter
 from app.platform.runtime.completion import (
@@ -134,7 +133,7 @@ class AgentSystemComposer:
         topology: Literal["centralized", "workflow", "hierarchical", "decentralized"]
         | None = None,
     ) -> CompositionResult:
-        selection = select_model(settings.agent_configurator_profile, "low")
+        selection = configurator_selection()
         meter = BudgetMeter(COMPOSER_BUDGET)
         messages = self.messages(task, policy, topology)
         result = CompositionResult(

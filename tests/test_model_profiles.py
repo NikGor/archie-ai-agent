@@ -64,3 +64,15 @@ def test_escalation_is_one_step_and_stops_at_the_ceiling(caplog):
     assert next_profile("MAXIMUM", "criteria_failed", "MAXIMUM") is None
     with pytest.raises(ValidationError):
         next_profile("FAST", "agent_asked", "DEEP")  # not a checked problem
+
+
+def test_configurator_keeps_its_pinned_model(monkeypatch):
+    """ARCHIE-345: profiles change; the configurator stays on its evaluated model."""
+    from app.config import settings
+    from app.platform.llm.profiles import configurator_selection
+
+    monkeypatch.setattr(settings, "agent_configurator_model", "gpt-5.6-luna")
+    assert configurator_selection().model == "gpt-5.6-luna"
+    assert configurator_selection("gpt-4.1").model == "gpt-4.1"
+    monkeypatch.setattr(settings, "agent_configurator_model", "")
+    assert configurator_selection().model == select_model("BALANCED", "low").model

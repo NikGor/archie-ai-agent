@@ -115,3 +115,19 @@ def next_profile(
         f"model_profiles_warning_001: Escalate {current} -> {step.to_profile}: {reason} {detail}"
     )
     return step
+
+
+def configurator_selection(model: str | None = None) -> ModelSelection:
+    """Model of the configurator and the composer: `model`, else the pinned
+    setting, else the configurator profile (ARCHIE-345)."""
+    selection = select_model(settings.agent_configurator_profile, "low")
+    chosen = model or settings.agent_configurator_model
+    if not chosen:
+        return selection
+    return selection.model_copy(
+        update={
+            "model": chosen,
+            "effort": translate_effort(chosen, "low"),
+            "reason": f"configurator model {chosen}",
+        }
+    )

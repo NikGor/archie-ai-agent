@@ -5,10 +5,10 @@ import pytest
 from archie_shared.chat.models import LllmTrace
 from app.agents.ephemeral.dynamic import DynamicAgents
 from app.agents.ephemeral.engine import AgentFactory, AgentRuntime
+from app.platform.llm.profiles import select_model
 from app.platform.runtime.budget import Budget
 from app.platform.runtime.completion import Completion, InvalidOutputError
 from app.platform.runtime.results import (
-    AnswerReply,
     AnswerTurn,
     CriterionCheck,
     FindingsReply,
@@ -359,7 +359,7 @@ async def test_record_has_model_choice_and_stats():
     record = await service(script, manager=manager).run(
         "task", spec(tools=[]), policy()
     )
-    assert record.model == "gpt-5.6-luna" and record.effort == "low"
+    assert record.model == select_model("FAST").model and record.effort == "low"
     assert "profile FAST" in record.model_reason
     assert script.efforts == ["low"]
     assert record.spec_fingerprint and record.prompt_version
@@ -368,9 +368,9 @@ async def test_record_has_model_choice_and_stats():
 
 
 async def test_runs_api_lists_shows_and_cancels(monkeypatch):
-    from fastapi.testclient import TestClient
     from fastapi import FastAPI
-    import app.platform.runtime.runs as runs
+    from fastapi.testclient import TestClient
+    from app.platform.runtime import runs
     from app.runtime_endpoints import router
 
     manager = RunManager()
@@ -382,7 +382,10 @@ async def test_runs_api_lists_shows_and_cancels(monkeypatch):
     app.include_router(router)
     client = TestClient(app)
     listed = client.get("/runtime/runs").json()["runs"]
-    assert listed[0]["run_id"] == record.run_id and listed[0]["model"] == "gpt-5.6-luna"
+    assert (
+        listed[0]["run_id"] == record.run_id
+        and listed[0]["model"] == select_model("FAST").model
+    )
     full = client.get(f"/runtime/runs/{record.run_id}").json()
     assert full["events"][0]["kind"] == "task_created"
     assert (

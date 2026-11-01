@@ -29,6 +29,7 @@ MODEL_PROVIDERS = {
         "anthropic/claude-sonnet-4.5",
         "anthropic/claude-haiku-4.5",
         "openai/gpt-6.1-sol",
+        "openai/gpt-6.1-terra",
         "openai/gpt-6-luna",
         "openai/gpt-6-astra",
         "openai/gpt-5.6-terra",
@@ -47,6 +48,7 @@ MODEL_PROVIDERS = {
         "z-ai/glm-5.3",
         "z-ai/glm-5.3-flash",
         "moonshotai/kimi-k3",
+        "moonshotai/kimi-k3.1-pro",
         "minimax/minimax-m3",
         "mistralai/mistral-large-4-0",
         "meta/muse-spark-open",
@@ -221,6 +223,9 @@ MODEL_TOKEN_PRICES: dict[str, dict[str, float]] = {
     "nex-agi/nex-n2.5-pro": {"input": 0.075, "output": 0.25, "cached": 0.015},
     "aion-labs/aion-3.5": {"input": 3.0, "output": 6.0, "cached": 0.75},
     "openai/gpt-6.1-sol": {"input": 2.0, "output": 10.0, "cached": 0.1},
+    # ARCHIE-345: OpenRouter rates 01.11.2026
+    "openai/gpt-6.1-terra": {"input": 1.0, "output": 5.0, "cached": 0.1},
+    "moonshotai/kimi-k3.1-pro": {"input": 2.0, "output": 10.0, "cached": 0.2},
     "z-ai/glm-5.3-flash": {"input": 0.15, "output": 0.5, "cached": 0.03},
     "google/gemini-4-argon": {"input": 2.0, "output": 10.0, "cached": 0.1},
     "openai/gpt-6-astra": {"input": 10.0, "output": 50.0, "cached": 1.0},
@@ -232,16 +237,40 @@ MODEL_TOKEN_PRICES: dict[str, dict[str, float]] = {
 # ARCHIE-227: one smoke per case; see docs/model-catalog/openrouter-2026-10-17.md.
 # "swarm": small structured council schemas pass (ARCHIE-249 probe, 23.10.2026).
 MODEL_STAGE_SUPPORT: dict[str, dict[str, bool]] = {
-    "openai/gpt-6.1-sol": {"command": True, "final_plain": True, "final_ui": True},
+    "moonshotai/kimi-k3.1-pro": {
+        "command": False,
+        "final_plain": False,
+        "final_ui": False,
+        "agent": True,
+    },
+    "openai/gpt-6.1-terra": {
+        "command": False,
+        "final_plain": False,
+        "final_ui": False,
+        "agent": True,
+    },
+    "openai/gpt-6.1-sol": {
+        "command": True,
+        "final_plain": True,
+        "final_ui": True,
+        "agent": True,
+    },
     "openai/gpt-6-luna": {"command": True, "final_plain": True, "final_ui": True},
-    "openai/gpt-6-astra": {"command": True, "final_plain": True, "final_ui": True},
+    "openai/gpt-6-astra": {
+        "command": True,
+        "final_plain": True,
+        "final_ui": True,
+        "agent": True,
+    },
     "openai/gpt-5.6-terra": {"command": True, "final_plain": True, "final_ui": True},
     "anthropic/claude-haiku-5.5": {
         "command": True,
         "final_plain": True,
         "final_ui": False,
+        "agent": True,
     },
-    # "agent": findings_v1 run with tool calls completed (ARCHIE-322 probe, 30.10.2026)
+    # "agent": findings_v1 run with tool calls completed (ARCHIE-322 probe 30.10.2026,
+    # ARCHIE-345 probe 01.11.2026: conflicting sources, one tool round)
     "anthropic/claude-sonnet-5.5": {
         "command": False,
         "final_plain": False,
@@ -261,22 +290,34 @@ MODEL_STAGE_SUPPORT: dict[str, dict[str, bool]] = {
         "final_plain": False,
         "final_ui": False,
     },
-    "google/gemini-4-argon": {"command": True, "final_plain": True, "final_ui": True},
+    "google/gemini-4-argon": {
+        "command": True,
+        "final_plain": True,
+        "final_ui": True,
+        "agent": True,
+    },
     "google/gemini-3.8-flash": {
         "command": True,
         "final_plain": True,
         "final_ui": False,
+        "agent": True,
     },
     "google/gemini-3.5-flash-lite": {
         "command": True,
         "final_plain": True,
         "final_ui": False,
     },
-    "x-ai/grok-4.7": {"command": True, "final_plain": True, "final_ui": True},
+    "x-ai/grok-4.7": {
+        "command": True,
+        "final_plain": True,
+        "final_ui": True,
+        "agent": True,
+    },
     "deepseek/deepseek-v4.1-flash-1017": {
         "command": True,
         "final_plain": True,
         "final_ui": False,
+        "agent": True,
     },
     "deepseek/deepseek-v4-pro-0813": {
         "command": False,
@@ -401,6 +442,13 @@ MODEL_EFFORTS: dict[str, tuple[str, ...]] = {
     "anthropic/claude-opus-4.6": ("none", "low", "medium", "high", "max"),
     "anthropic/claude-sonnet-4.6": ("none", "low", "medium", "high", "max"),
     "openai/gpt-6.1-sol": ("low", "medium", "high", "xhigh", "max"),
+    # ARCHIE-345: OpenRouter supported_efforts, 01.11.2026
+    "openai/gpt-6.1-terra": ("none", "low", "medium", "high", "xhigh", "max"),
+    "anthropic/claude-sonnet-5.5": ("low", "medium", "high", "xhigh", "max"),
+    "anthropic/claude-opus-5.5": ("low", "medium", "high", "xhigh", "max"),
+    "anthropic/claude-fable-5.1": ("low", "medium", "high", "xhigh", "max"),
+    "deepseek/deepseek-v4.1-flash-1017": ("none", "low", "high", "max"),
+    "moonshotai/kimi-k3.1-pro": ("none", "low", "high", "max"),
     "openai/gpt-6-luna": ("none", "low", "medium", "high", "xhigh", "max"),
     "openai/gpt-6-astra": ("low", "medium", "high", "xhigh", "max"),
     "openai/gpt-5.6-terra": ("none", "low", "medium", "high", "xhigh", "max"),

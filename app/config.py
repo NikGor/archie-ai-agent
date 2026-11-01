@@ -47,17 +47,30 @@ class Settings(BaseSettings):
     ephemeral_daily_cost_usd: float = Field(default=1.0, ge=0)
     # Model profiles of AgentSpec runs (ARCHIE-322): profile -> ordered
     # "model:effort" candidates; the first priced model with agent support wins.
-    # Models for profiles are chosen by the ARCHIE-307 benchmark, not here.
-    # Probe 30.10.2026 (one findings_v1 task): luna high $0.0025/21s, gpt-5.4
-    # high $0.05/40s, both complete.
+    # ARCHIE-345 (01.11.2026): current generation. Order inside a profile =
+    # quality (Artificial Analysis index on OpenRouter) x price x latency; every
+    # model passed the agent probe (findings_v1, tool round, conflicting sources).
+    # FAST: GPT-6 Luna (AA 28, $0.1/0.5, native strict output) -> Claude Haiku 5.5 (AA 36)
+    # BALANCED: GPT-6.1 Terra (AA 51, $1/5) -> GPT-6 Luna
+    # DEEP: Claude Sonnet 5.5 (AA 54, $2/10, 7 s) -> GPT-6.1 Sol (AA 55, 19 s) -> Gemini 4 Argon
+    # MAXIMUM: Claude Opus 5.5 (AA 58, $4/20) -> GPT-6 Astra (AA 57, $10/50)
+    # GPT-5.4 left MAXIMUM: it hit the budget in the ARCHIE-326 benchmark.
     agent_profiles: dict[str, list[str]] = {
-        "FAST": ["gpt-5.6-luna:low", "gpt-4.1"],
-        "BALANCED": ["gpt-5.6-luna:medium", "gpt-4.1"],
-        "DEEP": ["gpt-5.6-luna:high", "gpt-4.1"],
-        "MAXIMUM": ["gpt-5.4:high", "gpt-5.6-luna:high"],
+        "FAST": ["gpt-6-luna:low", "anthropic/claude-haiku-5.5:low"],
+        "BALANCED": ["openai/gpt-6.1-terra:medium", "gpt-6-luna:medium"],
+        "DEEP": [
+            "anthropic/claude-sonnet-5.5:high",
+            "openai/gpt-6.1-sol:high",
+            "google/gemini-4-argon:high",
+        ],
+        "MAXIMUM": ["anthropic/claude-opus-5.5:high", "openai/gpt-6-astra:high"],
     }
     # Profile of the AgentConfigurator call (ARCHIE-323)
     agent_configurator_profile: Literal["FAST", "BALANCED"] = "BALANCED"
+    # ARCHIE-345: the configurator and the composer keep the model their eval
+    # cases passed on (24/24); GPT-6.1 Terra chose "direct" for a multi-source
+    # comparison. Change it only after the configurator eval on the new model.
+    agent_configurator_model: str = "gpt-5.6-luna"
     # Daily LLM spend of delegated chat agents (ARCHIE-324)
     agent_daily_cost_usd: float = Field(default=2.0, ge=0)
     # DeepSeek V4.1 Flash broke tool calls and looped to 131k output tokens
