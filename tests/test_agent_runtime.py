@@ -111,6 +111,7 @@ class Script:
         self.efforts = []
 
     async def __call__(self, messages, schema, model, cap, effort=None):
+        self.schemas = [*getattr(self, "schemas", []), schema]
         self.models.append(model)
         self.efforts.append(effort)
         self.caps = getattr(self, "caps", []) + [cap]
@@ -446,3 +447,11 @@ async def test_tool_call_limit_ends_tool_use_and_asks_for_the_reply():
     assert record.state == "completed"
     assert record.tool_calls == 1 and "max_tool_calls" in record.loop_guards
     assert "loop_guard" in [e.kind for e in record.events]
+
+
+async def test_agent_without_tools_gets_the_reply_schema():
+    """ARCHIE-339: no tool_calls field, so a tool-less agent cannot ask for tools."""
+    script = Script(findings_reply())
+    record = await service(script).run("task", spec(tools=[]), policy())
+    assert record.state == "completed"
+    assert script.schemas == [FindingsReply]

@@ -24,6 +24,7 @@ from app.platform.runtime.system import (
     AgentSystemSpec,
     NodeRole,
     Protocol,
+    SystemBudget,
     SystemCheck,
     Topology,
     check_system,
@@ -68,6 +69,8 @@ class CompositionResult(BaseModel):
 
 def to_system(draft: SystemDraft, task: str, policy: CallerPolicy) -> dict:
     proposes = any(n.spec.permissions_mode == "propose_actions" for n in draft.nodes)
+    # Every node gets at most its share of the default system budget
+    share = SystemBudget().max_cost_usd / max(1, len(draft.nodes))
     return {
         "name": draft.name,
         "description": draft.reason[:500],
@@ -84,7 +87,13 @@ def to_system(draft: SystemDraft, task: str, policy: CallerPolicy) -> dict:
                 "role": n.role,
                 "step": n.step,
                 "depends_on": n.depends_on,
-                "spec": to_spec(n.spec, n.step or task, policy.limits.timeout_seconds),
+                "spec": to_spec(
+                    n.spec.model_copy(
+                        update={"max_cost_usd": min(n.spec.max_cost_usd, share)}
+                    ),
+                    n.step or task,
+                    policy.limits.timeout_seconds,
+                ),
             }
             for n in draft.nodes
         ],

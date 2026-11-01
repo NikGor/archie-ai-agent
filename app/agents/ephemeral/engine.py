@@ -498,7 +498,10 @@ class _Run:
                 lambda turn: getattr(turn, "tool_calls", []),
                 self.tools,
                 self.messages,
-                schema.turn if self.meter.budget.max_tool_rounds else schema.reply,
+                # An agent without tools gets no tool_calls field: it cannot ask for tools (ARCHIE-339)
+                schema.turn
+                if self.meter.budget.max_tool_rounds and self.spec.tools
+                else schema.reply,
                 schema.reply,
                 self.agent.final_task,
                 self.meter,

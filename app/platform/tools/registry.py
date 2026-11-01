@@ -173,6 +173,16 @@ class ToolRegistry:
         parameters = inspect.signature(func).parameters
         facts = context.model_dump() if context else {"demo_mode": False}
         injected = {key: value for key, value in facts.items() if key in parameters}
+        accepts_any = any(
+            p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters.values()
+        )
+        unknown = [key for key in arguments if key not in parameters]
+        if unknown and not accepts_any:
+            # A model sometimes copies ToolCall.reason into the arguments (ARCHIE-339)
+            logger.warning(
+                f"tool_registry_warning_001: {name}: dropped unknown arguments {unknown}"
+            )
+            arguments = {k: v for k, v in arguments.items() if k in parameters}
         if injected:
             logger.info(
                 f"tool_registry_005: Injected context: \033[35m{injected}\033[0m"

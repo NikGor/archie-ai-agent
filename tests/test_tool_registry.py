@@ -95,6 +95,21 @@ async def test_tool_exception_becomes_error_dict():
     assert "boom" in result["error"]
 
 
+async def test_unknown_arguments_are_dropped_unless_the_tool_takes_any():
+    """ARCHIE-339: a model copied ToolCall.reason into the arguments."""
+
+    async def strict_tool(query: str) -> dict:
+        return {"query": query}
+
+    async def open_tool(**extra) -> dict:
+        return extra
+
+    registry = _registry(strict_tool=strict_tool, open_tool=open_tool)
+    args = {"query": "q", "reason": "why"}
+    assert await registry.execute("strict_tool", args) == {"query": "q"}
+    assert await registry.execute("open_tool", args) == args
+
+
 def test_every_registered_tool_has_a_capability():
     """ARCHIE-320: policies read effects from the registry, never guess them."""
     for name in tool_registry.names():
