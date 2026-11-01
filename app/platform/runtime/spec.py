@@ -23,7 +23,7 @@ EFFORTS: tuple[LogicalEffort, ...] = ("low", "medium", "high")
 
 # Tools that create agents or hand work to other agents: never inside a spec (no recursion)
 DELEGATION_TOOLS = frozenset(
-    {"delegate_agent_tool", "agent_task_tool", "spawn_agent_tool"}
+    {"delegate_agent_tool", "agent_task_tool", "spawn_agent_tool", "agent_system_tool"}
 )
 
 

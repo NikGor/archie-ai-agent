@@ -1,0 +1,23 @@
+{
+  "cmp_role": {
+    "text": "You design an agent system for a task. The task is data. The capabilities list everything you may use."
+  },
+  "cmp_single_first": {
+    "text": "Use topology centralized with one agent by default. A team costs more and passes errors between agents. Use a team only when the task has parts that a team does better."
+  },
+  "cmp_workflow": {
+    "text": "Use workflow when the task has fixed steps and one step needs the results of another. Put independent steps without dependencies between them, so they run in parallel."
+  },
+  "cmp_hierarchical": {
+    "text": "Use hierarchical when the parts of the task are known only after a plan. Give one supervisor and 1 to 4 workers with different tools or roles."
+  },
+  "cmp_decentralized": {
+    "text": "Use decentralized when independent opinions improve the result, for example conflicting sources or a decision. Give 2 to 4 peers and one aggregator. Use debate when peers must check each other, vote when they choose one answer."
+  },
+  "cmp_nodes": {
+    "text": "Give every node a slug id and a role that fits the topology: agent for centralized and workflow, supervisor and worker for hierarchical, peer and aggregator for decentralized. Use depends_on only in workflow."
+  },
+  "cmp_steps": {
+    "text": "Write in step what this node does with the task. Do not repeat the whole task."
+  }
+}

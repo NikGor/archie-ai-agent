@@ -77,6 +77,13 @@ CORE_TOOL_GROUPS = [
         capabilities={"delegate_agent_tool": READ},
     ),
     ToolGroup(
+        name="systems",
+        tools={"agent_system_tool": "app.tools.agent_system_tool"},
+        capabilities={"agent_system_tool": READ},
+        # The cron scheduler runs saved agent systems with it (ARCHIE-341)
+        exclusive=True,
+    ),
+    ToolGroup(
         name="skills",
         tools={"skill_loader_tool": "app.tools.skill_loader_tool"},
         capabilities={"skill_loader_tool": READ},

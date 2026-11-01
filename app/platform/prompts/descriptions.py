@@ -6,6 +6,7 @@ template hash or the rendered prompt. Key: template file stem.
 
 PROMPT_DESCRIPTIONS: dict[str, str] = {
     "configurator": "Конфигуратор агентов: решает spawn или direct и собирает AgentSpec из разрешённых tools",
+    "composer": "Композитор систем: выбирает топологию и собирает AgentSpec для каждого участника",
     "agent_base": "Агент по AgentSpec: задача и бриф как данные, только разрешённые tools, действия — через подтверждение",
     "ephemeral_base": "Одноразовый исполнитель: только чтение, факты и предложение следующего шага",
     "ephemeral_ha_diagnosis": "Диагностика HA по текущему состоянию с явными пробелами в данных",

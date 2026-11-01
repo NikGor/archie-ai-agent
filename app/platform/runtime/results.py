@@ -97,3 +97,32 @@ register_result_schema(
         turn=AnswerTurn,
     )
 )
+
+
+class Assignment(BaseModel):
+    worker: str = Field(description="Id of a listed worker")
+    task: str = Field(description="Subtask for this worker: what to find or check")
+
+
+class PlanReply(AgentReply):
+    assignments: list[Assignment] = Field(
+        max_length=4, description="One subtask per worker that the task needs"
+    )
+
+
+class PlanTurn(PlanReply):
+    tool_calls: list[ToolCall] = Field(
+        max_length=4, description="Tools needed to plan; empty when done"
+    )
+
+
+# The supervisor of a hierarchical system plans with it (ARCHIE-339)
+register_result_schema(
+    ResultSchema(
+        name="plan_v1",
+        description="Plan of a supervisor: one subtask per worker",
+        reply=PlanReply,
+        turn=PlanTurn,
+        configurable=False,
+    )
+)

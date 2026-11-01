@@ -14,6 +14,7 @@ from app.platform.policy.spawn import SpawnDeniedError, SpawnGate
 from app.platform.runtime.budget import Budget, BudgetExceededError
 from app.platform.runtime.completion import (
     Completion,
+    CompletionCall,
     InvalidOutputError,
     complete,
     estimate_call,
@@ -112,13 +113,18 @@ def chat_policy(caller: DelegationCaller) -> CallerPolicy:
     )
 
 
-def configure_delegation() -> DynamicAgents:
-    ledger = DailyBudget(
+def agent_ledger() -> DailyBudget:
+    """Daily spend of every dynamic agent: chat delegation and agent systems."""
+    return DailyBudget(
         get_async_redis(),
         "agent",
         settings.default_timezone,
         settings.agent_daily_cost_usd,
     )
+
+
+def bounded_completion(ledger: DailyBudget) -> CompletionCall:
+    """Structured LLM call that reserves its price in the daily ledger first."""
 
     async def bounded_call(
         messages: list[dict[str, str]],
@@ -144,12 +150,20 @@ def configure_delegation() -> DynamicAgents:
         await ledger.settle(reservation, result.trace.total_cost or 0.0)
         return result
 
+    return bounded_call
+
+
+def build_agents(call: CompletionCall) -> DynamicAgents:
     manager = RunManager(RedisRunStore(get_async_redis()))
-    agents = DynamicAgents(
+    register_run_manager(manager)
+    return DynamicAgents(
         manager=manager,
-        runtime=AgentRuntime(tool_registry, bounded_call),
-        configurator=AgentConfigurator(tool_registry, bounded_call),
+        runtime=AgentRuntime(tool_registry, call),
+        configurator=AgentConfigurator(tool_registry, call),
     )
+
+
+def configure_delegation(agents: DynamicAgents, ledger: DailyBudget) -> None:
     gate = SpawnGate(
         frozenset({"chat"}),
         frozenset(tool_registry.names()),
@@ -177,11 +191,10 @@ def configure_delegation() -> DynamicAgents:
         return summary
 
     register_delegate_handler(handle)
-    register_run_manager(manager)
 
     async def status() -> dict[str, JsonValue]:
         return {
-            **manager.stats(),
+            **agents.manager.stats(),
             "active_gate": gate.active,
             "daily_spend_usd": await ledger.spent(),
             "daily_limit_usd": settings.agent_daily_cost_usd,
@@ -189,4 +202,3 @@ def configure_delegation() -> DynamicAgents:
 
     register_status("agents", status)
     logger.info("delegation_001: Dynamic agents ready for chat delegation")
-    return agents

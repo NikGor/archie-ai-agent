@@ -50,6 +50,7 @@ TRACED_ROOT_NAMES = SWARM_TRACE_NAMES | {
     CHAT_TRACE_NAME,
     "ephemeral-run",
     "agent-run",
+    "agent-system",
     "temporal-run",
     "cognitive-tick",
 }

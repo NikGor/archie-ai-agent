@@ -8,13 +8,20 @@ load_dotenv()
 
 import uvicorn  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
+from app.agent_system_endpoints import router as agent_systems_router  # noqa: E402
 from app.agents.background import configure_ephemeral
-from app.agents.delegation import configure_delegation  # noqa: E402
 from app.agents.chat.service import ChatService  # noqa: E402
+from app.agents.delegation import (  # noqa: E402
+    agent_ledger,
+    bounded_completion,
+    build_agents,
+    configure_delegation,
+)
 from app.agents.registry import load_agent_kinds  # noqa: E402
 from app.agents.swarm.bridge import SwarmHubBridge  # noqa: E402
 from app.agents.swarm.endpoints import router as swarm_router  # noqa: E402
 from app.agents.swarm.service import swarm_service  # noqa: E402
+from app.agents.systems import configure_systems  # noqa: E402
 from app.backend.cron_scheduler import cron_scheduler  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.endpoints import router  # noqa: E402
@@ -40,8 +47,13 @@ init_tracing()
 # Composition root (ARCHIE-298): the supervisor starts, watches and stops the
 # long-lived services of this process
 supervisor.register(ChatService())
-# ARCHIE-324: the chat delegates to dynamic agents in this process
-configure_delegation()
+# ARCHIE-324: the chat delegates to dynamic agents in this process;
+# ARCHIE-341: the agent constructor runs agent systems on the same agents
+agent_spend = agent_ledger()
+agent_call = bounded_completion(agent_spend)
+dynamic_agents = build_agents(agent_call)
+configure_delegation(dynamic_agents, agent_spend)
+configure_systems(dynamic_agents, agent_call)
 if settings.runtime_mode == "api":
     # Swarm and cron run in the runtime process (python -m app.runtime_main);
     # this process relays swarm events and commands through Redis (ARCHIE-299)
@@ -76,6 +88,7 @@ app = FastAPI(
 )
 app.include_router(router)
 app.include_router(runtime_router)
+app.include_router(agent_systems_router)
 app.include_router(ws_docs_router)
 app.include_router(swarm_router)
 app.include_router(evals_router)

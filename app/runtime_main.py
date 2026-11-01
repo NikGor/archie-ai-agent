@@ -14,10 +14,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.agents.background import configure_ephemeral
+from app.agents.delegation import (  # noqa: E402
+    agent_ledger,
+    bounded_completion,
+    build_agents,
+)
 from app.agents.registry import load_agent_kinds  # noqa: E402
 from app.agents.swarm.bridge import SwarmHubBridge  # noqa: E402
 from app.agents.swarm.control import apply_command  # noqa: E402
 from app.agents.swarm.service import swarm_service  # noqa: E402
+from app.agents.systems import configure_systems  # noqa: E402
 from app.backend.cron_scheduler import cron_scheduler  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.platform.runtime.budget import daily_spend  # noqa: E402
@@ -57,6 +63,9 @@ async def main() -> None:
     init_tracing()
     load_agent_kinds()
     configure_ephemeral()
+    # Scheduled agent systems of the constructor run here (ARCHIE-341)
+    agent_call = bounded_completion(agent_ledger())
+    configure_systems(build_agents(agent_call), agent_call)
     supervisor = Supervisor()
     swarm_service.bridge = SwarmHubBridge(
         swarm_service.hub, role="runtime", on_command=apply_command

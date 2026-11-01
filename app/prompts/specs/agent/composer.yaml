@@ -1,0 +1,7 @@
+sections:
+  - title: Agent system composer
+    style: numbered
+    rules: [cmp_role, cmp_single_first, cmp_workflow, cmp_hierarchical, cmp_decentralized, cmp_nodes, cmp_steps]
+  - title: Each agent
+    style: numbered
+    rules: [cfg_tools, cfg_profile, cfg_criteria, cfg_brief, cfg_actions, cfg_output, cfg_limits]
