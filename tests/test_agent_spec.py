@@ -145,3 +145,17 @@ def test_effort_is_capped_with_the_profile():
     )
     assert result.spec.model.profile == "BALANCED"
     assert result.spec.model.effort == "medium"
+
+
+def test_unset_budget_limits_take_the_ceiling_without_a_cap_report():
+    """ARCHIE-344: only a limit the spec set and the validator lowered is a cap."""
+    result = validate_spec(
+        draft(budget={"max_cost_usd": 0.01}), policy(), tool_registry
+    )
+    assert result.spec.budget.max_tokens == 20000
+    assert not any(a.startswith("budget") for a in result.adjustments)
+    result = validate_spec(draft(budget={"max_cost_usd": 1.0}), policy(), tool_registry)
+    assert (
+        "budget capped: {'max_cost_usd': 1.0} -> {'max_cost_usd': 0.05}"
+        in result.adjustments
+    )

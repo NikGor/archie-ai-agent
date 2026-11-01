@@ -207,10 +207,20 @@ def _capped(spec: AgentSpec, policy: CallerPolicy) -> ValidatedSpec:
     effort = spec.model.effort
     if effort and EFFORTS.index(effort) > EFFORTS.index(policy.max_effort):
         effort = policy.max_effort
+    # An unset budget limit takes the ceiling: that is not a cap of the spec
+    lowered = {
+        name: (value, budget[name])
+        for name, value in spec.budget.model_dump().items()
+        if value is not None and value != budget[name]
+    }
     adjustments = [
         f"{label} capped: {before} -> {after}"
         for label, before, after in (
-            ("budget", spec.budget.model_dump(), budget),
+            (
+                "budget",
+                {n: v[0] for n, v in lowered.items()},
+                {n: v[1] for n, v in lowered.items()},
+            ),
             ("execution", spec.execution.model_dump(), limits),
             ("profile", spec.model.profile, profile),
             ("effort", spec.model.effort, effort),
