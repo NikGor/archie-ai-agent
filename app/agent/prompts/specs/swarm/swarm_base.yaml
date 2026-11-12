@@ -26,6 +26,7 @@ sections:
     rules: [swarm_persona_scope]
   - when: "agent.persona"
     include: "persona_{{ agent.persona }}"
+  - include: "swarm_lens_{{ agent.agent_id }}"
   - title: Other agents
     level: 2
     style: lines
