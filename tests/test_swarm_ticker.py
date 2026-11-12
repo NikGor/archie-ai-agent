@@ -6,18 +6,16 @@ from unittest.mock import AsyncMock, MagicMock
 from zoneinfo import ZoneInfo
 import pytest
 from archie_shared.swarm.models import SwarmMessage, SwarmSettings, SwarmUsage
-import app.agents.swarm.tools  # noqa: F401
-from app.agents.chat.tool_access import chat_tool_names
-from app.agents.swarm.agents import SWARM_AGENTS
-from app.agents.swarm.bus import SwarmHub
-from app.agents.swarm.council import SwarmCouncil
-from app.agents.swarm.dispatcher import SwarmDispatcher
-from app.agents.swarm.memory import DayNote
-from app.agents.swarm.messages import format_chat_line
-from app.agents.swarm.models import ConsulDecision, SwarmToolCall, SwarmWatchReply
-from app.agents.swarm.policy import check_tool_call
-from app.agents.swarm.runner import SwarmAgentRunner, SwarmWatchDraft
-from app.agents.swarm.schedule import (
+from app.models.orchestration_sgr import Parameter
+from app.swarm.agents import SWARM_AGENTS
+from app.swarm.bus import SwarmHub
+from app.swarm.council import SwarmCouncil
+from app.swarm.dispatcher import SwarmDispatcher
+from app.swarm.memory import DayNote
+from app.swarm.models import ConsulDecision, SwarmToolCall, SwarmWatchReply
+from app.swarm.policy import check_tool_call
+from app.swarm.runner import SwarmAgentRunner, SwarmWatchDraft, format_chat_line
+from app.swarm.schedule import (
     due_tasks,
     in_window,
     is_active,
@@ -28,9 +26,8 @@ from app.agents.swarm.schedule import (
     plan_wake,
     voice_allowed,
 )
-from app.agents.swarm.ticker import SwarmTicker, select_outputs
-from app.models.orchestration_sgr import Parameter
-from app.tools.catalog import tool_registry
+from app.swarm.ticker import SwarmTicker, select_outputs
+from app.tools.tool_factory import ToolFactory
 from tests.conftest import make_user_state
 
 
@@ -110,12 +107,10 @@ def test_due_tasks_skip_quiet_tasks():
 
 
 def test_football_check_uses_skill_teams_by_default():
-    runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
-    text = runner.prompts.render_task(
-        "swarm_watch", task="football", teams=[], language="ru"
-    )
+    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    text = runner.render_task("swarm_watch", task="football", teams=[], language="ru")
     assert "from your skill" in text
-    text = runner.prompts.render_task(
+    text = runner.render_task(
         "swarm_watch", task="football", teams=["Bayern"], language="ru"
     )
     assert "Teams: Bayern." in text
@@ -161,10 +156,8 @@ def test_mail_agent_reads_mail():
 
 @pytest.mark.parametrize("task", ["home", "mail", "calendar", "football"])
 def test_watch_prompt_has_task_section(task):
-    runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
-    text = runner.prompts.render_task(
-        "swarm_watch", task=task, teams=["Bayern"], language="ru"
-    )
+    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    text = runner.render_task("swarm_watch", task=task, teams=["Bayern"], language="ru")
     assert "in this language: ru" in text
     assert "## What to check" in text
     assert "today_note" in text
@@ -206,16 +199,16 @@ NOTES = [
 async def test_watcher_sees_own_notes_and_others_see_alerts():
     fact = MagicMock(text="Не сообщать про влажность")
     runner = SwarmAgentRunner(
-        tool_registry=tool_registry,
+        tool_factory=ToolFactory(),
         state_service=MagicMock(),
         memory=_memory([fact], NOTES),
     )
     state = make_user_state()
-    own = await runner.prompts.build_memory_lines(state, "mail")
+    own = await runner.build_memory_lines(state, "mail")
     assert own[:2] == ["Long-term memory:", "- Не сообщать про влажность"]
     assert "- 09:10 mail: ids a1,a2" in own
     assert all("kitchen" not in line for line in own)
-    others = await runner.prompts.build_memory_lines(state, None)
+    others = await runner.build_memory_lines(state, None)
     assert others[-2:] == ["Alerts today:", "- 09:40 mail, reported: Письмо от Анны"]
 
 
@@ -249,7 +242,7 @@ def _ticker(outcome: SwarmWatchReply, mode: str = "running") -> SwarmTicker:
     runner.get_user_state = AsyncMock(
         return_value=make_user_state(user_timezone="Europe/Berlin")
     )
-    runner.prompts.render_task = MagicMock(return_value="task")
+    runner.render_task = MagicMock(return_value="task")
     runner.watch = AsyncMock(
         return_value=SwarmWatchDraft(outcome=outcome, usage=SwarmUsage(model="m"))
     )
@@ -323,7 +316,7 @@ async def test_quiet_until_is_saved_for_the_task():
 
 async def test_check_outside_active_hours_does_nothing(monkeypatch):
     ticker = _ticker(_outcome("x"))
-    monkeypatch.setattr("app.agents.swarm.ticker.local_now", lambda _: _at(22, 7))
+    monkeypatch.setattr("app.swarm.ticker.local_now", lambda _: _at(22, 7))
     await ticker.run_check()
     ticker.runner.watch.assert_not_awaited()
 
@@ -339,7 +332,7 @@ async def test_check_picks_a_due_task(monkeypatch):
             "weather": 5.0,
         }
     )
-    monkeypatch.setattr("app.agents.swarm.ticker.local_now", lambda _: _at(22, 12))
+    monkeypatch.setattr("app.swarm.ticker.local_now", lambda _: _at(22, 12))
     await ticker.run_check()
     assert ticker.runner.watch.await_args.args[1] == "home"
 
@@ -381,7 +374,7 @@ async def test_paused_ticker_plans_no_check():
 
 async def test_running_ticker_plans_next_check(monkeypatch):
     ticker = _ticker(_outcome(""))
-    monkeypatch.setattr("app.agents.swarm.ticker.local_now", lambda _: _at(22, 12))
+    monkeypatch.setattr("app.swarm.ticker.local_now", lambda _: _at(22, 12))
     before = datetime.now(BERLIN)
     await ticker.start()
     await __import__("asyncio").sleep(0)
@@ -420,7 +413,7 @@ async def test_stopped_dispatcher_ignores_messages():
 async def test_council_saves_remembered_facts():
     runner = MagicMock()
     runner.get_user_state = AsyncMock(return_value=make_user_state(persona="bro"))
-    runner.prompts.render_task = MagicMock(return_value="t")
+    runner.render_task = MagicMock(return_value="t")
     runner.memory.add_fact = AsyncMock(return_value=MagicMock())
     decision = ConsulDecision(
         reasoning="r",
@@ -444,7 +437,7 @@ async def test_council_saves_remembered_facts():
         text="не говори мне про влажность",
     )
     # Only the consul is awake: no discussion round, one decision
-    await council.discuss(trigger, ["consul"])
+    await council.discuss(trigger, ["butler"])
     runner.memory.add_fact.assert_awaited_once_with("Не сообщать про влажность")
     council.on_memory_change.assert_awaited_once()
 
@@ -471,7 +464,7 @@ async def test_empty_note_is_not_saved():
 
 
 def test_night_check_moves_to_the_morning():
-    from app.agents.swarm.schedule import plan_delay_seconds
+    from app.swarm.schedule import plan_delay_seconds
 
     swarm_settings = SwarmSettings(interval_min_minutes=3, interval_max_minutes=5)
     night = _at(23, 0, 38)
@@ -488,7 +481,7 @@ def test_night_check_moves_to_the_morning():
 
 
 async def test_agents_do_not_get_check_lines():
-    from app.agents.swarm.bus import SwarmBus
+    from app.swarm.bus import SwarmBus
 
     bus = SwarmBus.__new__(SwarmBus)
     entries = [
@@ -555,9 +548,9 @@ async def test_all_agents_see_today_memory():
     memory = _memory()
     memory.get_today_facts = AsyncMock(return_value=["Сегодня дождь после 19:00"])
     runner = SwarmAgentRunner(
-        tool_registry=tool_registry, state_service=MagicMock(), memory=memory
+        tool_factory=ToolFactory(), state_service=MagicMock(), memory=memory
     )
-    lines = await runner.prompts.build_memory_lines(make_user_state(), None)
+    lines = await runner.build_memory_lines(make_user_state(), None)
     assert lines == ["Today's memory:", "- Сегодня дождь после 19:00"]
 
 
@@ -571,12 +564,12 @@ def test_weather_agent_reads_weather_only():
 
 
 def test_main_chat_does_not_get_the_weather_tool():
-    names = {
-        t["name"]
-        for t in tool_registry.schemas("gpt-5.6-luna", chat_tool_names("plain"))
-    }
+    factory = ToolFactory()
+    names = {t["name"] for t in factory.get_tool_schemas("gpt-5.6-luna", "plain")}
     assert "weather_tool" not in names
-    swarm = tool_registry.schemas("gpt-5.6-luna", ["weather_tool"])
+    swarm = factory.get_tool_schemas(
+        "gpt-5.6-luna", "plain", allowed_tools={"weather_tool"}
+    )
     assert [t["name"] for t in swarm] == ["weather_tool"]
 
 
@@ -652,7 +645,7 @@ async def test_due_follow_up_goes_before_the_oldest_check(monkeypatch):
         return_value={"home": 1.0, "mail": 2.0, "calendar": 3.0, "football": 9.0}
     )
     ticker.memory.get_follow_ups = AsyncMock(return_value={"football": _at(24, 18, 5)})
-    monkeypatch.setattr("app.agents.swarm.ticker.local_now", lambda _: _at(24, 18, 6))
+    monkeypatch.setattr("app.swarm.ticker.local_now", lambda _: _at(24, 18, 6))
     await ticker.run_check()
     assert ticker.runner.watch.await_args.args[1] == "football"
 
@@ -741,8 +734,7 @@ async def test_live_match_is_checked_every_few_minutes(monkeypatch):
     ticker = _ticker(_outcome(""))
     ticker.memory = memory
 
-    async def watch(_profile, task, _history, _prompt, run_id=None):
-        assert run_id
+    async def watch(_profile, task, _history, _prompt):
         live = task == "football" and kickoff <= memory.clock < final
         quiet = "18:00" if task == "football" and memory.clock < kickoff else ""
         return SwarmWatchDraft(
@@ -751,7 +743,7 @@ async def test_live_match_is_checked_every_few_minutes(monkeypatch):
         )
 
     ticker.runner.watch = AsyncMock(side_effect=watch)
-    monkeypatch.setattr("app.agents.swarm.ticker.local_now", lambda _: memory.clock)
+    monkeypatch.setattr("app.swarm.ticker.local_now", lambda _: memory.clock)
     football: list[datetime] = []
     others = 0
     while memory.clock < _at(24, 21):

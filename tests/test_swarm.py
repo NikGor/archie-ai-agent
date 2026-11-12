@@ -15,12 +15,12 @@ from archie_shared.swarm.models import (
 )
 from app.config import settings
 from app.models.orchestration_sgr import Parameter
-from app.platform.tools.models import ToolContext, ToolResult
-from app.agents.swarm.agents import SWARM_AGENTS, SwarmRoster
-from app.agents.swarm.bus import SwarmBus, SwarmHub, clip_text, parse_mentions
-from app.agents.swarm.council import CouncilPlan, SwarmCouncil
-from app.agents.swarm.dispatcher import SwarmDispatcher
-from app.agents.swarm.models import (
+from app.models.tool_models import ToolContext, ToolResult
+from app.swarm.agents import SWARM_AGENTS, SwarmRoster
+from app.swarm.bus import SwarmBus, SwarmHub, clip_text, parse_mentions
+from app.swarm.council import CouncilPlan, SwarmCouncil
+from app.swarm.dispatcher import SwarmDispatcher
+from app.swarm.models import (
     ConsulDecision,
     ConsulTurn,
     CouncilStep,
@@ -30,12 +30,9 @@ from app.agents.swarm.models import (
     SwarmWatchReply,
     SwarmWatchTurn,
 )
-from app.agents.swarm.policy import check_tool_call
-from app.agents.swarm.messages import format_chat_line
-from app.agents.swarm.runner import SwarmAgentRunner, SwarmDraft
-import app.agents.swarm.tools  # noqa: F401
-from app.agents.chat.tool_access import chat_tool_names
-from app.tools.catalog import tool_registry
+from app.swarm.policy import READ_ONLY_TOOLS, check_tool_call
+from app.swarm.runner import SwarmAgentRunner, SwarmDraft, format_chat_line
+from app.tools.tool_factory import ToolFactory
 from tests.conftest import make_user_state
 
 
@@ -106,7 +103,7 @@ def test_read_only_tool_in_profile_is_allowed():
 async def test_bus_round_trips_message_through_stream():
     redis = AsyncMock()
     redis.xadd = AsyncMock(return_value="5-0")
-    with patch("app.agents.swarm.bus.get_async_redis", return_value=redis):
+    with patch("app.swarm.bus.get_async_redis", return_value=redis):
         bus = SwarmBus(SwarmHub())
     queue = bus.hub.subscribe()
     posted = await bus.post(
@@ -135,7 +132,7 @@ def test_clip_text_limits_length():
 
 
 ALL_AGENTS = set(SWARM_AGENTS)
-COUNCIL = ["consul", "butler", "business", "bro", "flirty", "marcus"]
+COUNCIL = ["butler", "business", "bro", "flirty", "marcus"]
 
 
 def _dispatcher() -> SwarmDispatcher:
@@ -207,7 +204,7 @@ def test_disabled_and_running_agents_are_skipped():
 def test_cooldown_applies_only_to_agent_triggers():
     dispatcher = _dispatcher()
     dispatcher._last_run["climate"] = 10**12
-    with patch("app.agents.swarm.dispatcher.time.monotonic", return_value=10**12 + 1):
+    with patch("app.swarm.dispatcher.time.monotonic", return_value=10**12 + 1):
         agent_message = _message(sender="light", text="@climate")
         assert dispatcher.select_targets(agent_message, ALL_AGENTS) == []
         user_message = _message(text="@climate")
@@ -219,15 +216,15 @@ async def test_council_runs_with_enabled_members():
     await dispatcher._start_council(_message(text="@council?"), ALL_AGENTS - {"bro"})
     await asyncio.gather(*dispatcher._tasks)
     args = dispatcher.council.discuss.await_args.args
-    assert args[1] == ["consul", "butler", "business", "flirty", "marcus"]
+    assert args[1] == ["butler", "business", "flirty", "marcus"]
     assert not dispatcher._running
 
 
 async def test_plan_runs_after_the_council_is_free():
     dispatcher = _dispatcher()
     plan = CouncilPlan(
-        consul="consul",
-        decision=_message(sender="consul", text="d"),
+        consul="butler",
+        decision=_message(sender="butler", text="d"),
         steps=[CouncilStep(agent_id="light", task="выключи", wait=False)],
     )
     dispatcher.council.discuss = AsyncMock(return_value=plan)
@@ -352,9 +349,9 @@ async def test_agent_turn_trace_uses_the_owner_day(monkeypatch):
         days.append(day)
         yield MagicMock()
 
-    monkeypatch.setattr("app.agents.swarm.dispatcher.trace_swarm_run", fake_trace)
+    monkeypatch.setattr("app.swarm.dispatcher.trace_swarm_run", fake_trace)
     monkeypatch.setattr(
-        "app.agents.swarm.dispatcher.local_now",
+        "app.swarm.dispatcher.local_now",
         lambda tz: datetime(2026, 10, 25, 0, 1),
     )
     dispatcher = _dispatcher()
@@ -377,7 +374,7 @@ async def test_failed_agent_note_keeps_the_run():
 async def test_bus_starts_a_run_or_keeps_the_given_one():
     redis = AsyncMock()
     redis.xadd = AsyncMock(return_value="5-0")
-    with patch("app.agents.swarm.bus.get_async_redis", return_value=redis):
+    with patch("app.swarm.bus.get_async_redis", return_value=redis):
         bus = SwarmBus(SwarmHub())
     first = await bus.post(sender="user", kind="user", text="привет")
     second = await bus.post(sender="system", kind="system", text="x", run_id="run-1")
@@ -392,7 +389,7 @@ def _council(answers: dict[str, list]) -> SwarmCouncil:
     """Each agent ID gets its own queue of answers: members run in parallel."""
     runner = MagicMock()
     runner.get_user_state = AsyncMock(return_value=make_user_state())
-    runner.prompts.render_task = MagicMock(side_effect=lambda template, **_: template)
+    runner.render_task = MagicMock(side_effect=lambda template, **_: template)
     usage = SwarmUsage(model="m", input_tokens=10, output_tokens=2, total_cost=0.001)
     queues = {agent_id: list(items) for agent_id, items in answers.items()}
 
@@ -401,7 +398,7 @@ def _council(answers: dict[str, list]) -> SwarmCouncil:
 
     runner.ask = AsyncMock(side_effect=ask)
     bus = MagicMock(
-        post=AsyncMock(return_value=_message(sender="consul", text="d")),
+        post=AsyncMock(return_value=_message(sender="butler", text="d")),
         get_history=AsyncMock(return_value=[]),
     )
     return SwarmCouncil(hub=SwarmHub(), bus=bus, runner=runner)
@@ -441,7 +438,7 @@ def _done(reply: str, steps=None) -> ConsulTurn:
     )
 
 
-MEMBERS = ["butler", "business", "bro", "flirty", "marcus"]
+MEMBERS = ["business", "bro", "flirty", "marcus"]
 
 
 def _opinions(*rounds: str) -> dict[str, list]:
@@ -470,7 +467,7 @@ async def test_reply_to_a_plan_step_wakes_nobody():
         )
     )
     dispatcher.bus.get_history = AsyncMock(return_value=[])
-    task = _message(sender="consul", text="1/2 @weather: погода").model_copy(
+    task = _message(sender="butler", text="1/2 @weather: погода").model_copy(
         update={"kind": "task"}
     )
     await dispatcher._run_agent("weather", task)
@@ -478,12 +475,12 @@ async def test_reply_to_a_plan_step_wakes_nobody():
 
 
 def test_consul_is_the_chair_or_the_first_awake_member():
-    assert SwarmCouncil.choose_consul(COUNCIL) == "consul"
+    assert SwarmCouncil.choose_consul(COUNCIL) == "butler"
     assert SwarmCouncil.choose_consul(["bro", "flirty"]) == "bro"
 
 
 async def test_first_round_runs_in_parallel_on_one_chat_snapshot():
-    council = _council({**_opinions("1"), "consul": [_done("Решено.")]})
+    council = _council({**_opinions("1"), "butler": [_done("Решено.")]})
     active, peak = 0, 0
     ask = council.runner.ask.side_effect
 
@@ -500,44 +497,44 @@ async def test_first_round_runs_in_parallel_on_one_chat_snapshot():
     assert peak == len(MEMBERS)
     calls = council.runner.ask.await_args_list
     assert len({id(c.args[2]) for c in calls[: len(MEMBERS)]}) == 1
-    assert _asked(council)[-1] == ("consul", "swarm_consul")
+    assert _asked(council)[-1] == ("butler", "swarm_consul")
     posted = _posted(council)
     assert sorted(posted[:-1]) == sorted((m, "opinion", f"{m} 1") for m in MEMBERS)
-    assert posted[-1] == ("consul", "decision", "Решено.")
+    assert posted[-1] == ("butler", "decision", "Решено.")
     rounds = {c.kwargs["round_number"] for c in council.bus.post.await_args_list[:-1]}
     assert rounds == {1}
 
 
 async def test_consul_starts_another_round_with_a_remark():
     council = _council(
-        {**_opinions("1", "2"), "consul": [_more("А соседи?"), _done("Итог.")]}
+        {**_opinions("1", "2"), "butler": [_more("А соседи?"), _done("Итог.")]}
     )
     await council.discuss(_message(text="вечеринка в воскресенье?"), COUNCIL)
     posted = _posted(council)
-    assert posted[len(MEMBERS)] == ("consul", "opinion", "А соседи?")
+    assert posted[len(MEMBERS)] == ("butler", "opinion", "А соседи?")
     assert {p[2] for p in posted[len(MEMBERS) + 1 : -1]} == {f"{m} 2" for m in MEMBERS}
-    assert posted[-1] == ("consul", "decision", "Итог.")
+    assert posted[-1] == ("butler", "decision", "Итог.")
     decision_usage = council.bus.post.await_args_list[-1].kwargs["usage"]
     assert decision_usage.input_tokens == 20
 
 
 async def test_last_round_asks_for_the_decision_only(monkeypatch):
-    monkeypatch.setattr("app.agents.swarm.council.settings.swarm_council_max_rounds", 1)
-    council = _council({**_opinions("1"), "consul": [_decision("Итог.")]})
+    monkeypatch.setattr("app.swarm.council.settings.swarm_council_max_rounds", 1)
+    council = _council({**_opinions("1"), "butler": [_decision("Итог.")]})
     await council.discuss(_message(text="?"), COUNCIL)
     schema = council.runner.ask.await_args_list[-1].args[4]
     assert schema is ConsulDecision
 
 
 async def test_silent_or_failed_member_does_not_stop_the_discussion():
-    answers = {**_opinions("1"), "consul": [_done("Итог.")]}
+    answers = {**_opinions("1"), "butler": [_done("Итог.")]}
     answers["marcus"] = [SwarmReply(reply="")]
     answers["bro"] = []  # pop from an empty list fails
     council = _council(answers)
     await council.discuss(_message(text="?"), COUNCIL)
     senders = [p[0] for p in _posted(council)]
     assert "marcus" not in senders and "bro" not in senders
-    assert senders[-1] == "consul"
+    assert senders[-1] == "butler"
 
 
 async def test_decision_shows_the_plan_and_wakes_nobody():
@@ -547,7 +544,7 @@ async def test_decision_shows_the_plan_and_wakes_nobody():
         CouncilStep(agent_id="nobody", task="x", wait=False),
     ]
     council = _council(
-        {**_opinions("1"), "consul": [_done("Прошу @light приглушить.", steps)]}
+        {**_opinions("1"), "butler": [_done("Прошу @light приглушить.", steps)]}
     )
     plan = await council.discuss(_message(text="приглуши свет"), COUNCIL)
     kwargs = council.bus.post.await_args.kwargs
@@ -558,15 +555,15 @@ async def test_decision_shows_the_plan_and_wakes_nobody():
 
 async def test_alert_that_needs_nothing_posts_no_decision():
     alert = _alert("Письмо от банка")
-    council = _council({**_opinions("1"), "consul": [_done("")]})
+    council = _council({**_opinions("1"), "butler": [_done("")]})
     assert await council.discuss(alert, COUNCIL) is None
     assert [p[1] for p in _posted(council)] == ["opinion"] * len(MEMBERS)
 
 
 def _plan(*steps: CouncilStep, delivered=None) -> CouncilPlan:
     return CouncilPlan(
-        consul="consul",
-        decision=_message(sender="consul", text="d").model_copy(
+        consul="butler",
+        decision=_message(sender="butler", text="d").model_copy(
             update={"run_id": "run-d"}
         ),
         steps=list(steps),
@@ -619,7 +616,7 @@ async def test_steps_run_one_by_one_and_wait_for_the_data():
 
 
 async def test_step_without_reply_times_out_and_the_plan_goes_on(monkeypatch):
-    monkeypatch.setattr("app.agents.swarm.council.settings.swarm_step_timeout_seconds", 0.01)
+    monkeypatch.setattr("app.swarm.council.settings.swarm_step_timeout_seconds", 0.01)
     council = _council({})
     await council.execute(
         _plan(
@@ -635,7 +632,7 @@ async def test_alert_output_is_not_delivered_twice():
     council = _council(
         {
             **_opinions("1"),
-            "consul": [
+            "butler": [
                 _done(
                     "Открою чат.",
                     [
@@ -656,20 +653,20 @@ async def test_alert_output_is_not_delivered_twice():
     assert council.bus.post.await_args.kwargs["mentions"] == ["chat"]
 
 
-def test_council_members_think_on_models_of_five_providers():
+def test_council_members_think_on_models_of_four_providers():
     models = {m: SWARM_AGENTS[m].default_model for m in MEMBERS}
     providers = {
         "openai" if "/" not in model else model.split("/")[0]
         for model in models.values()
     }
-    assert providers == {"openai", "x-ai", "google", "anthropic", "mistralai"}
-    assert SWARM_AGENTS["consul"].default_model == settings.swarm_consul_model
+    assert providers == {"openai", "x-ai", "google", "anthropic"}
+    assert SWARM_AGENTS["butler"].default_model == settings.swarm_consul_model
     assert SWARM_AGENTS["light"].default_model == settings.swarm_model
 
 
 async def test_roster_stores_only_a_known_non_default_model():
     redis = AsyncMock()
-    with patch("app.agents.swarm.agents.get_async_redis", return_value=redis):
+    with patch("app.swarm.agents.get_async_redis", return_value=redis):
         roster = SwarmRoster()
     await roster.set_model("bro", "gpt-4.1")
     redis.hset.assert_awaited_once_with("archie:swarm:models", "bro", "gpt-4.1")
@@ -680,11 +677,11 @@ async def test_roster_stores_only_a_known_non_default_model():
 
 
 def test_marcus_prompt_has_germany_rules_and_persona():
-    runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
-    prompt = runner.prompts.build_system_prompt(SWARM_AGENTS["marcus"], "gpt-5.4-nano")
+    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    prompt = runner.build_system_prompt(SWARM_AGENTS["marcus"], "gpt-5.4-nano")
     assert "## Your job: Germany" in prompt
     assert "# Persona: Marcus" in prompt
-    assert "@consul (consul)" in prompt
+    assert "@butler (consul)" in prompt
 
 
 # --- runner ---
@@ -706,12 +703,12 @@ def _runner() -> SwarmAgentRunner:
         get_model=AsyncMock(side_effect=lambda profile: profile.default_model),
     )
     runner = SwarmAgentRunner(
-        tool_registry=tool_registry,
+        tool_factory=ToolFactory(),
         state_service=state_service,
         roster=roster,
         memory=_memory(),
     )
-    runner.prompts.build_system_prompt = MagicMock(return_value="system")
+    runner.build_system_prompt = MagicMock(return_value="system")
     return runner
 
 
@@ -739,11 +736,11 @@ async def test_runner_executes_allowed_and_blocks_other_calls():
     )
     with (
         patch(
-            "app.agents.swarm.runner.get_client",
+            "app.swarm.runner.get_client",
             return_value=MagicMock(create_completion=AsyncMock()),
         ),
         patch(
-            "app.agents.swarm.runner.parse_llm_response",
+            "app.swarm.runner.parse_llm_response",
             side_effect=[
                 _parsed(turn),
                 _parsed(
@@ -753,7 +750,7 @@ async def test_runner_executes_allowed_and_blocks_other_calls():
                 ),
             ],
         ),
-        patch("app.agents.swarm.runner.execute_tool_calls", executed),
+        patch("app.swarm.runner.execute_tool_calls", executed),
     ):
         draft = await runner.run(SWARM_AGENTS["light"], _message(text="@light"), [])
     assert len(executed.await_args.kwargs["tool_calls"]) == 1
@@ -766,11 +763,11 @@ async def test_runner_stays_silent_on_empty_reply():
     runner = _runner()
     with (
         patch(
-            "app.agents.swarm.runner.get_client",
+            "app.swarm.runner.get_client",
             return_value=MagicMock(create_completion=AsyncMock()),
         ),
         patch(
-            "app.agents.swarm.runner.parse_llm_response",
+            "app.swarm.runner.parse_llm_response",
             return_value=_parsed(SwarmTurn(reasoning="r", tool_calls=[], reply="")),
         ),
     ):
@@ -781,8 +778,8 @@ async def test_runner_stays_silent_on_empty_reply():
 
 
 def test_system_prompt_lists_only_profile_tools():
-    runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
-    prompt = runner.prompts.build_system_prompt(SWARM_AGENTS["football"], "gpt-5.4-nano")
+    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    prompt = runner.build_system_prompt(SWARM_AGENTS["football"], "gpt-5.4-nano")
     assert "google_search_tool" in prompt
     assert "smarthome_control_tool" not in prompt
     assert "@light" in prompt
@@ -791,28 +788,30 @@ def test_system_prompt_lists_only_profile_tools():
 
 @pytest.mark.parametrize("agent_id", list(SWARM_AGENTS))
 def test_every_profile_tool_is_configured(agent_id):
-    schemas = tool_registry.schemas("gpt-5.4-nano", SWARM_AGENTS[agent_id].tools)
+    schemas = ToolFactory().get_tool_schemas(
+        "gpt-5.4-nano", "plain", allowed_tools=set(SWARM_AGENTS[agent_id].tools)
+    )
     assert {s["name"] for s in schemas} == set(SWARM_AGENTS[agent_id].tools)
 
 
 def test_system_prompt_preloads_skill_references():
-    runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
-    prompt = runner.prompts.build_system_prompt(SWARM_AGENTS["light"], "gpt-5.4-nano")
+    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    prompt = runner.build_system_prompt(SWARM_AGENTS["light"], "gpt-5.4-nano")
     assert "## Reference: apartment_map" in prompt
     assert "Гостиная" in prompt
 
 
 def test_council_prompt_has_persona_and_group_rules():
-    runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
-    prompt = runner.prompts.build_system_prompt(SWARM_AGENTS["bro"], "gpt-5.4-nano")
+    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    prompt = runner.build_system_prompt(SWARM_AGENTS["bro"], "gpt-5.4-nano")
     assert "council member" in prompt
     assert "# Persona: Bro" in prompt
     assert "@council (group)" in prompt
 
 
 def test_voice_prompt_has_job_rules_and_may_announce():
-    runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
-    prompt = runner.prompts.build_system_prompt(SWARM_AGENTS["voice"], "gpt-5.4-nano")
+    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    prompt = runner.build_system_prompt(SWARM_AGENTS["voice"], "gpt-5.4-nano")
     assert "voice announcements" in prompt
     assert "announce_tool" in prompt
     call = _call("announce_tool", text="Матч начинается")
@@ -821,8 +820,8 @@ def test_voice_prompt_has_job_rules_and_may_announce():
 
 
 def test_display_prompt_has_job_rules_and_may_only_notify():
-    runner = SwarmAgentRunner(tool_registry=tool_registry, state_service=MagicMock())
-    prompt = runner.prompts.build_system_prompt(SWARM_AGENTS["display"], "gpt-5.4-nano")
+    runner = SwarmAgentRunner(tool_factory=ToolFactory(), state_service=MagicMock())
+    prompt = runner.build_system_prompt(SWARM_AGENTS["display"], "gpt-5.4-nano")
     assert "LED display" in prompt
     assert "awtrix_tool" in prompt
     display = SWARM_AGENTS["display"]
@@ -852,7 +851,7 @@ def test_decision_ignores_cooldown():
     dispatcher._last_run["light"] = 10**12
     decision = _message(sender="business", text="@light приглуши", depth=1)
     decision = decision.model_copy(update={"kind": "decision"})
-    with patch("app.agents.swarm.dispatcher.time.monotonic", return_value=10**12 + 1):
+    with patch("app.swarm.dispatcher.time.monotonic", return_value=10**12 + 1):
         assert dispatcher.select_targets(decision, ALL_AGENTS) == ["light"]
 
 
@@ -876,7 +875,7 @@ async def test_started_target_is_not_queued_twice():
 
 async def test_runner_uses_the_swarm_owner_state():
     runner = _runner()
-    with patch("app.agents.swarm.runner.settings.swarm_user_name", None):
+    with patch("app.swarm.runner.settings.swarm_user_name", None):
         await runner.get_user_state()
     runner.state_service.get_user_state.assert_awaited_with(user_name="Niko")
 
@@ -904,14 +903,14 @@ async def test_runner_reads_state_then_acts_in_two_rounds():
     )
     with (
         patch(
-            "app.agents.swarm.runner.get_client",
+            "app.swarm.runner.get_client",
             return_value=MagicMock(create_completion=AsyncMock()),
         ),
         patch(
-            "app.agents.swarm.runner.parse_llm_response",
+            "app.swarm.runner.parse_llm_response",
             side_effect=[_parsed(read), _parsed(act), _parsed(done)],
         ),
-        patch("app.agents.swarm.runner.execute_tool_calls", executed),
+        patch("app.swarm.runner.execute_tool_calls", executed),
     ):
         draft = await runner.run(SWARM_AGENTS["light"], _message(text="@light"), [])
     assert executed.await_count == 2
@@ -927,13 +926,13 @@ async def test_runner_stops_tools_after_max_rounds():
         reply="",
     )
     with (
-        patch("app.agents.swarm.runner.settings.swarm_max_tool_rounds", 2),
+        patch("app.swarm.runner.settings.swarm_max_tool_rounds", 2),
         patch(
-            "app.agents.swarm.runner.get_client",
+            "app.swarm.runner.get_client",
             return_value=MagicMock(create_completion=AsyncMock()),
         ),
         patch(
-            "app.agents.swarm.runner.parse_llm_response",
+            "app.swarm.runner.parse_llm_response",
             side_effect=[
                 _parsed(loop),
                 _parsed(
@@ -947,7 +946,7 @@ async def test_runner_stops_tools_after_max_rounds():
             ],
         ),
         patch(
-            "app.agents.swarm.runner.execute_tool_calls",
+            "app.swarm.runner.execute_tool_calls",
             AsyncMock(
                 return_value=[ToolResult(tool_name="smarthome_status_tool", output={})]
             ),
@@ -959,7 +958,7 @@ async def test_runner_stops_tools_after_max_rounds():
 
 
 def test_blocked_call_explains_allowed_arguments():
-    from app.agents.swarm.policy import block_reason
+    from app.swarm.policy import block_reason
 
     display = SWARM_AGENTS["display"]
     assert block_reason(display, _call("awtrix_tool")) == (
@@ -972,23 +971,24 @@ def test_blocked_call_explains_allowed_arguments():
 
 def test_light_prompt_reads_state_before_relative_change():
     runner = SwarmAgentRunner(
-        tool_registry=tool_registry, state_service=MagicMock(), roster=MagicMock()
+        tool_factory=ToolFactory(), state_service=MagicMock(), roster=MagicMock()
     )
-    prompt = runner.prompts.build_system_prompt(SWARM_AGENTS["light"], "gpt-5.4-nano")
+    prompt = runner.build_system_prompt(SWARM_AGENTS["light"], "gpt-5.4-nano")
     assert "first read the current state" in prompt
 
 
 async def test_dry_run_simulates_actions_but_reads_real_state():
-    runner = _runner()
+    with patch("app.swarm.runner.settings.swarm_dry_run", True):
+        runner = _runner()
+    assert runner.action_factory.demo_mode is True
+    assert runner.tool_factory.demo_mode is False
+    assert runner.action_factory.tools is runner.tool_factory.tools
     executed = AsyncMock(
         side_effect=lambda tool_calls, **_: [
             ToolResult(tool_name=c.tool_name, output={}) for c in tool_calls
         ]
     )
-    with (
-        patch("app.agents.swarm.runner.settings.swarm_dry_run", True),
-        patch("app.agents.swarm.runner.execute_tool_calls", executed),
-    ):
+    with patch("app.swarm.runner.execute_tool_calls", executed):
         await runner._execute(
             SWARM_AGENTS["light"],
             [
@@ -1001,23 +1001,22 @@ async def test_dry_run_simulates_actions_but_reads_real_state():
     assert {c.kwargs["context"].user_timezone for c in executed.await_args_list} == {
         "Europe/Berlin"
     }
-    # Dry run (ARCHIE-292): the action runs in demo mode, the read stays real
-    demo = {
-        c.kwargs["tool_calls"][0].tool_name: c.kwargs["context"].demo_mode
+    factories = {
+        c.kwargs["tool_calls"][0].tool_name: c.kwargs["tool_factory"]
         for c in executed.await_args_list
     }
-    assert demo == {"smarthome_status_tool": False, "smarthome_control_tool": True}
-    assert all(c.kwargs["registry"] is tool_registry for c in executed.await_args_list)
+    assert factories["smarthome_status_tool"] is runner.tool_factory
+    assert factories["smarthome_control_tool"] is runner.action_factory
 
 
 def test_search_agent_can_be_delegated_and_only_reads():
     profile = SWARM_AGENTS["search"]
     assert profile.role == "state" and not profile.groups
-    assert all(tool_registry.capability(tool).effect == "read" for tool in profile.tools)
+    assert all(tool in READ_ONLY_TOOLS for tool in profile.tools)
     runner = SwarmAgentRunner(
-        tool_registry=tool_registry, state_service=MagicMock(), roster=MagicMock()
+        tool_factory=ToolFactory(), state_service=MagicMock(), roster=MagicMock()
     )
-    council_prompt = runner.prompts.build_system_prompt(SWARM_AGENTS["bro"], "gpt-5.4-mini")
+    council_prompt = runner.build_system_prompt(SWARM_AGENTS["bro"], "gpt-5.4-mini")
     assert "@search" in council_prompt
 
 
@@ -1048,7 +1047,7 @@ async def test_depth_skip_is_reported_without_mentions():
 async def test_cooldown_skip_is_reported():
     dispatcher = _dispatcher()
     dispatcher._last_run["light"] = 10**12
-    with patch("app.agents.swarm.dispatcher.time.monotonic", return_value=10**12 + 1):
+    with patch("app.swarm.dispatcher.time.monotonic", return_value=10**12 + 1):
         await dispatcher.handle(_message(sender="voice", text="@light статус", depth=1))
     assert _skip_notes(dispatcher) == [
         "light skipped: asked again too soon by an agent"
@@ -1074,15 +1073,15 @@ async def test_runner_stops_tool_rounds_after_successful_action():
     )
     with (
         patch(
-            "app.agents.swarm.runner.get_client",
+            "app.swarm.runner.get_client",
             return_value=MagicMock(create_completion=AsyncMock()),
         ),
         patch(
-            "app.agents.swarm.runner.parse_llm_response",
+            "app.swarm.runner.parse_llm_response",
             side_effect=[_parsed(speak), _parsed(SwarmReply(reply="🔊 Ужин готов"))],
         ),
         patch(
-            "app.agents.swarm.runner.execute_tool_calls",
+            "app.swarm.runner.execute_tool_calls",
             AsyncMock(return_value=[ToolResult(tool_name="announce_tool", output={})]),
         ) as executed,
     ):
@@ -1127,13 +1126,13 @@ def test_context_after_midnight_names_yesterday(monkeypatch):
 
     runner = _runner()
     night = datetime(2026, 10, 23, 0, 40, tzinfo=ZoneInfo("Europe/Berlin"))
-    monkeypatch.setattr("app.agents.swarm.messages.local_now", lambda _: night)
-    context = runner.prompts.build_context(make_user_state(), [], None, [])
+    monkeypatch.setattr("app.swarm.runner.local_now", lambda _: night)
+    context = runner.build_context(make_user_state(), [], None, [])
     assert "usually means 22.10.2026" in context
     assert '"tomorrow" means 23.10.2026' in context
     noon = night.replace(hour=12)
-    monkeypatch.setattr("app.agents.swarm.messages.local_now", lambda _: noon)
-    assert "after midnight" not in runner.prompts.build_context(make_user_state(), [], None, [])
+    monkeypatch.setattr("app.swarm.runner.local_now", lambda _: noon)
+    assert "after midnight" not in runner.build_context(make_user_state(), [], None, [])
 
 
 async def test_mention_of_sleeping_agent_is_reported():
@@ -1177,7 +1176,7 @@ async def test_alert_does_not_push_out_a_waiting_user_message():
 
 
 def test_voice_mention_also_wakes_the_display():
-    from app.agents.swarm.agents import add_paired_outputs
+    from app.swarm.agents import add_paired_outputs
 
     assert add_paired_outputs(["voice"]) == ["voice", "display"]
     assert add_paired_outputs(["light", "voice", "chat"]) == [
@@ -1194,7 +1193,7 @@ def test_voice_mention_also_wakes_the_display():
 async def test_bus_adds_display_to_a_voice_mention():
     redis = AsyncMock()
     redis.xadd = AsyncMock(return_value="6-0")
-    with patch("app.agents.swarm.bus.get_async_redis", return_value=redis):
+    with patch("app.swarm.bus.get_async_redis", return_value=redis):
         bus = SwarmBus(SwarmHub())
     posted = await bus.post(sender="user", kind="user", text="@voice скажи тест")
     assert posted.mentions == ["voice", "display"]
@@ -1210,7 +1209,7 @@ def test_chat_agent_may_open_a_chat_but_not_control_devices():
 
 
 async def test_alert_chat_tool_creates_the_chat_in_django(monkeypatch):
-    from app.agents.swarm.tools import alert_chat_tool as module
+    from app.tools import alert_chat_tool as module
 
     client = AsyncMock()
     client.__aenter__.return_value = client
@@ -1238,7 +1237,7 @@ async def test_alert_chat_tool_creates_the_chat_in_django(monkeypatch):
 
 
 def test_main_chat_does_not_get_the_alert_chat_tool():
-    names = [t["name"] for t in tool_registry.schemas("gpt-5.6-luna", chat_tool_names("plain"))]
+    names = [t["name"] for t in ToolFactory().get_tool_schemas("gpt-5.6-luna", "plain")]
     assert "alert_chat_tool" not in names
 
 
@@ -1269,7 +1268,7 @@ def test_cron_agent_plans_only_swarm_alerts():
 
 
 async def test_swarm_alert_tool_posts_an_alert_of_cron(monkeypatch):
-    from app.agents.swarm.tools import swarm_alert_tool as module
+    from app.tools import swarm_alert_tool as module
 
     service = MagicMock()
     service.memory.get_mode = AsyncMock(return_value="paused")
@@ -1285,14 +1284,14 @@ async def test_swarm_alert_tool_posts_an_alert_of_cron(monkeypatch):
 
 
 async def test_post_alert_picks_outputs_by_importance(monkeypatch):
-    from app.agents.swarm.ticker import SwarmTicker
+    from app.swarm.ticker import SwarmTicker
 
     ticker = SwarmTicker.__new__(SwarmTicker)
     ticker.memory = MagicMock(get_settings=AsyncMock(return_value=SwarmSettings()))
     ticker.runner = MagicMock(get_user_state=AsyncMock(return_value=make_user_state()))
     ticker.roster = MagicMock(get_enabled_ids=AsyncMock(return_value=ALL_AGENTS))
     ticker.bus = MagicMock(post=AsyncMock())
-    monkeypatch.setattr("app.agents.swarm.ticker.voice_allowed", lambda now, s: True)
+    monkeypatch.setattr("app.swarm.ticker.voice_allowed", lambda now, s: True)
     await ticker.post_alert("cron", "Матч", "high")
     kwargs = ticker.bus.post.await_args.kwargs
     assert kwargs["kind"] == "alert"

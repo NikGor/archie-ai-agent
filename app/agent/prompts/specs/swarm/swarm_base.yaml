@@ -1,0 +1,38 @@
+# System prompt of every swarm agent (ARCHIE-285). Rule texts: rules/swarm.json
+sections:
+  - style: lines
+    rules: [swarm_identity, swarm_area, swarm_role]
+  - title: Swarm chat rules
+    level: 2
+    style: numbered
+    rules:
+      - swarm_chat_input
+      - swarm_reply_short
+      - swarm_reply_language
+      - swarm_own_area
+      - swarm_mention_to_act
+      - swarm_empty_reply
+      - swarm_no_repeat
+      - swarm_no_invented_facts
+      - swarm_tools_then_reply
+      - swarm_no_raw_numbers
+      - swarm_plan_step_is_task
+  - include: "swarm_group_{{ agent.groups[0] if agent.groups else 'none' }}"
+  - include: "swarm_agent_{{ agent.agent_id }}"
+  - title: Your character
+    level: 2
+    style: lines
+    when: "agent.persona"
+    rules: [swarm_persona_scope]
+  - when: "agent.persona"
+    include: "persona_{{ agent.persona }}"
+  - title: Other agents
+    level: 2
+    style: lines
+    rules: [swarm_roster]
+  - title: Your tools
+    level: 2
+    style: lines
+    rules: [swarm_tools]
+  - style: paragraphs
+    rules: [swarm_skill, swarm_references]

@@ -1,7 +1,7 @@
 """Configuration constants and centralized settings for the application."""
 
-from typing import Annotated, Literal
-from pydantic import Field, field_validator
+from typing import Annotated
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -40,45 +40,12 @@ class Settings(BaseSettings):
 
     # Agent swarm chat (ARCHIE-199)
     swarm_enabled: bool = True
-    # embedded: one process; api: chat and /ws_swarm only; runtime: swarm and
-    # cron only, events and commands via Redis (ARCHIE-299)
-    runtime_mode: Literal["embedded", "api", "runtime"] = "embedded"
-    ephemeral_model: str = "gpt-4.1"
-    ephemeral_daily_cost_usd: float = Field(default=1.0, ge=0)
-    # Model profiles of AgentSpec runs (ARCHIE-322): profile -> ordered
-    # "model:effort" candidates; the first priced model with agent support wins.
-    # ARCHIE-345 (01.11.2026): current generation. Order inside a profile =
-    # quality (Artificial Analysis index on OpenRouter) x price x latency; every
-    # model passed the agent probe (findings_v1, tool round, conflicting sources).
-    # FAST: GPT-6 Luna (AA 28, $0.1/0.5, native strict output) -> Claude Haiku 5.5 (AA 36)
-    # BALANCED: GPT-6.1 Terra (AA 51, $1/5) -> GPT-6 Luna
-    # DEEP: Claude Sonnet 5.5 (AA 54, $2/10, 7 s) -> GPT-6.1 Sol (AA 55, 19 s) -> Gemini 4 Argon
-    # MAXIMUM: Claude Opus 5.5 (AA 58, $4/20) -> GPT-6 Astra (AA 57, $10/50)
-    # GPT-5.4 left MAXIMUM: it hit the budget in the ARCHIE-326 benchmark.
-    agent_profiles: dict[str, list[str]] = {
-        "FAST": ["gpt-6-luna:low", "anthropic/claude-haiku-5.5:low"],
-        "BALANCED": ["openai/gpt-6.1-terra:medium", "gpt-6-luna:medium"],
-        "DEEP": [
-            "anthropic/claude-sonnet-5.5:high",
-            "openai/gpt-6.1-sol:high",
-            "google/gemini-4-argon:high",
-        ],
-        "MAXIMUM": ["anthropic/claude-opus-5.5:high", "openai/gpt-6-astra:high"],
-    }
-    # Profile of the AgentConfigurator call (ARCHIE-323)
-    agent_configurator_profile: Literal["FAST", "BALANCED"] = "BALANCED"
-    # ARCHIE-345: the configurator and the composer keep the model their eval
-    # cases passed on (24/24); GPT-6.1 Terra chose "direct" for a multi-source
-    # comparison. Change it only after the configurator eval on the new model.
-    agent_configurator_model: str = "gpt-5.6-luna"
-    # Daily LLM spend of delegated chat agents (ARCHIE-324)
-    agent_daily_cost_usd: float = Field(default=2.0, ge=0)
     # DeepSeek V4.1 Flash broke tool calls and looped to 131k output tokens
     # (ARCHIE-241); GPT-6 Luna via OpenRouter returned several JSON objects in one
     # answer and made up tool results (ARCHIE-243). GPT-5.6 Luna runs on the
     # OpenAI API with strict structured output.
     swarm_model: str = "gpt-5.6-luna"
-    # The consul leads the council discussion on a flagship model (ARCHIE-249)
+    # The consul (butler) leads the council discussion on a flagship model (ARCHIE-249)
     swarm_consul_model: str = "anthropic/claude-opus-5.5"
     swarm_council_max_rounds: int = 3
     # How long a plan step waits for the agent's reply before the next step
@@ -90,10 +57,6 @@ class Settings(BaseSettings):
     swarm_stream_max_length: int = 500
     swarm_tool_result_max_chars: int = 1000
     swarm_max_tool_rounds: int = 3
-    # Budget of one swarm agent turn and the daily LLM spend of the swarm (ARCHIE-298)
-    swarm_turn_max_cost_usd: float = 0.10
-    swarm_turn_max_seconds: float = 180
-    swarm_daily_cost_usd: float | None = 3.0
     # A check that follows a live event (a match) runs again after this pause (ARCHIE-286)
     swarm_follow_up_minutes: int = 5
     swarm_user_name: str | None = None
@@ -198,3 +161,420 @@ DEFAULT_STATE_CONFIG = {
     "transport_preferences": settings.default_transport,
     "cuisine_preferences": settings.default_cuisine,
 }
+
+MODEL_PROVIDERS = {
+    "openai": [
+        "gpt-6-luna",
+        "gpt-6",
+        "gpt-6.1",
+        "gpt-5.6-luna",
+        "gpt-4.1",
+        "gpt-4.1-mini",
+        "gpt-4.1-nano",
+        "gpt-5.4",
+        "gpt-5.4-pro",
+        "gpt-5.4-mini",
+        "gpt-5.4-nano",
+    ],
+    "openrouter": [
+        "google/gemini-3.1-pro-preview",
+        "google/gemini-3-flash-preview",
+        "google/gemini-3.1-flash-lite-preview",
+        "google/gemini-3-pro-image-preview",
+        "anthropic/claude-opus-4.6",
+        "anthropic/claude-sonnet-4.6",
+        "anthropic/claude-opus-4.5",
+        "anthropic/claude-sonnet-4.5",
+        "anthropic/claude-haiku-4.5",
+        "openai/gpt-6.1-sol",
+        "openai/gpt-6-luna",
+        "openai/gpt-6-astra",
+        "openai/gpt-5.6-terra",
+        "anthropic/claude-haiku-5.5",
+        "anthropic/claude-sonnet-5.5",
+        "anthropic/claude-opus-5.5",
+        "google/gemini-4-argon",
+        "google/gemini-3.8-flash",
+        "google/gemini-3.5-flash-lite",
+        "x-ai/grok-4.7",
+        "deepseek/deepseek-v4.1-flash-1017",
+        "deepseek/deepseek-v4-pro-0813",
+        "qwen/qwen3.8-max-prime",
+        "qwen/qwen3.8-flash",
+        "qwen/qwen3.8-27b",
+        "z-ai/glm-5.3",
+        "z-ai/glm-5.3-flash",
+        "moonshotai/kimi-k3",
+        "minimax/minimax-m3",
+        "mistralai/mistral-large-4-0",
+        "meta/muse-spark-open",
+        "meta/muse-wonder",
+        "stepfun/step-5-preview",
+        "reflection/beam-1.0-501b-a23b",
+        "elorian/glimpse",
+        "inclusionai/ling-3.1-flash",
+        "inference-net/schematron-v2-turbo",
+        "inference-net/schematron-v2-small",
+        "inception/mercury-2.5",
+        "nex-agi/nex-n2.5-mini",
+        "nex-agi/nex-n2.5-pro",
+        "cohere/command-a-plus",
+        "upstage/solar-mini4",
+        "xiaomi/mimo-v2.6-flash",
+        "xiaomi/mimo-v2.6-pro",
+        "google/gemma-4-31b-it",
+        "google/gemma-4-26b-a4b-it",
+        "mistralai/mistral-medium-3-5",
+        "tencent/hy4-preview",
+        "prism-ml/ternary-bonsai-2-27b",
+        "fireworks/ember-1",
+        "arcee-ai/trinity-large-thinking",
+    ],
+}
+
+# Models that accept image input (mirrored in frontend model-catalog.js)
+VISION_MODELS: frozenset[str] = frozenset(
+    [
+        "anthropic/claude-haiku-4.5",
+        "anthropic/claude-haiku-5.5",
+        "anthropic/claude-opus-4.5",
+        "anthropic/claude-opus-4.6",
+        "anthropic/claude-sonnet-4.5",
+        "anthropic/claude-sonnet-4.6",
+        "cohere/command-a-plus",
+        "deepseek/deepseek-v4.1-flash-1017",
+        "elorian/glimpse",
+        "fireworks/ember-1",
+        "google/gemini-3-flash-preview",
+        "google/gemini-3.1-flash-lite-preview",
+        "google/gemini-3.1-pro-preview",
+        "google/gemini-3.5-flash-lite",
+        "google/gemini-3.8-flash",
+        "google/gemini-4-argon",
+        "google/gemma-4-26b-a4b-it",
+        "google/gemma-4-31b-it",
+        "gpt-4.1",
+        "gpt-4.1-mini",
+        "gpt-4.1-nano",
+        "gpt-5.4",
+        "gpt-5.4-mini",
+        "gpt-5.4-nano",
+        "gpt-5.4-pro",
+        "gpt-5.6-luna",
+        "gpt-6",
+        "gpt-6-luna",
+        "gpt-6.1",
+        "meta/muse-spark-open",
+        "meta/muse-wonder",
+        "minimax/minimax-m3",
+        "mistralai/mistral-large-4-0",
+        "mistralai/mistral-medium-3-5",
+        "moonshotai/kimi-k3",
+        "nex-agi/nex-n2.5-mini",
+        "nex-agi/nex-n2.5-pro",
+        "openai/gpt-5.6-terra",
+        "openai/gpt-6-astra",
+        "openai/gpt-6-luna",
+        "openai/gpt-6.1-sol",
+        "prism-ml/ternary-bonsai-2-27b",
+        "qwen/qwen3.8-27b",
+        "qwen/qwen3.8-flash",
+        "qwen/qwen3.8-max-prime",
+        "stepfun/step-5-preview",
+        "x-ai/grok-4.7",
+        "xiaomi/mimo-v2.6-flash",
+        "xiaomi/mimo-v2.6-pro",
+        "z-ai/glm-5.3-flash",
+    ]
+)
+
+# Token prices in USD per 1M tokens: {"input": price, "output": price}
+# OpenRouter base rates: https://openrouter.ai/api/v1/models (2026-10-17).
+# Native OpenAI rates retain their previous provider-specific values.
+# Time-based/provider overrides are preserved in docs/model-catalog; estimates use base rates.
+# Models not listed return 0.0 from calculate_token_cost() in llm_parser.py
+MODEL_TOKEN_PRICES: dict[str, dict[str, float]] = {
+    # OpenAI cut the Luna price by 80% on 30.07.2026
+    "gpt-5.6-luna": {"input": 0.2, "output": 1.2},
+    # OpenRouter rate of openai/gpt-6-luna
+    "gpt-6-luna": {"input": 0.1, "output": 0.5},
+    "gpt-4.1": {"input": 2.0, "output": 8.0},
+    "gpt-4.1-mini": {"input": 0.4, "output": 1.6},
+    "gpt-4.1-nano": {"input": 0.1, "output": 0.4},
+    "gpt-5.4": {"input": 2.5, "output": 15.0},
+    "gpt-5.4-pro": {"input": 30.0, "output": 180.0},
+    "gpt-5.4-mini": {"input": 0.75, "output": 4.5},
+    "gpt-5.4-nano": {"input": 0.2, "output": 1.25},
+    "google/gemini-3.1-pro-preview": {"input": 2.0, "output": 12.0, "cached": 0.2},
+    "google/gemini-3-flash-preview": {"input": 0.5, "output": 3.0, "cached": 0.05},
+    "google/gemini-3.1-flash-lite-preview": {
+        "input": 0.25,
+        "output": 1.5,
+        "cached": 0.025,
+    },
+    "google/gemini-3-pro-image-preview": {"input": 2.0, "output": 12.0, "cached": 0.2},
+    "anthropic/claude-opus-4.6": {"input": 5.0, "output": 25.0, "cached": 0.5},
+    "anthropic/claude-sonnet-4.6": {"input": 3.0, "output": 15.0, "cached": 0.3},
+    "anthropic/claude-opus-4.5": {"input": 5.0, "output": 25.0, "cached": 0.5},
+    "anthropic/claude-sonnet-4.5": {"input": 3.0, "output": 15.0, "cached": 0.3},
+    "anthropic/claude-haiku-4.5": {"input": 1.0, "output": 5.0, "cached": 0.1},
+    "x-ai/grok-4.20-beta": {"input": 2.0, "output": 6.0},
+    "x-ai/grok-4.1-fast": {"input": 0.2, "output": 0.5},
+    "inference-net/schematron-v2-small": {
+        "input": 0.05,
+        "output": 0.23,
+        "cached": 0.05,
+    },
+    "meta/muse-spark-open": {"input": 1.25, "output": 4.25, "cached": 0.15},
+    "deepseek/deepseek-v4-pro-0813": {"input": 0.66, "output": 1.98, "cached": 0.022},
+    "reflection/beam-1.0-501b-a23b": {"input": 1.0, "output": 3.0, "cached": 0.1},
+    "qwen/qwen3.8-flash": {"input": 0.15, "output": 0.47, "cached": 0.016},
+    "inception/mercury-2.5": {"input": 0.04, "output": 0.15, "cached": 0.004},
+    "sakana/fugu-max": {"input": 2.0, "output": 6.0, "cached": 0.25},
+    "prism-ml/ternary-bonsai-2-27b": {"input": 0.075, "output": 0.5, "cached": 0.0375},
+    "z-ai/glm-5.3": {"input": 0.079, "output": 4.8, "cached": 0.078},
+    "nex-agi/nex-n2.5-mini": {"input": 0.025, "output": 0.1, "cached": 0.0025},
+    "x-ai/grok-4.7": {"input": 2.0, "output": 6.0, "cached": 0.5},
+    "openai/gpt-6-luna": {"input": 0.1, "output": 0.5, "cached": 0.01},
+    "anthropic/claude-fable-5.1": {"input": 10.0, "output": 50.0, "cached": 0.25},
+    "anthropic/claude-haiku-5.5": {"input": 0.1, "output": 0.5, "cached": 0.01},
+    "nvidia/nemotron-3.5-lightning": {"input": 0.07, "output": 0.2, "cached": 0.04},
+    "inclusionai/ling-3.1-flash": {"input": 0.075, "output": 0.225, "cached": 0.015},
+    "cohere/command-a-plus": {"input": 0.3, "output": 1.5, "cached": 0.15},
+    "fireworks/ember-1": {"input": 3.0, "output": 15.0, "cached": 0.3},
+    "mistralai/mistral-medium-3-5": {"input": 1.5, "output": 7.5},
+    "sakana/fugu-ultra-v2": {"input": 5.0, "output": 30.0, "cached": 0.5},
+    "deepseek/deepseek-v4.1-flash-1017": {
+        "input": 0.15,
+        "output": 0.6,
+        "cached": 0.003,
+    },
+    "qwen/qwen3.8-27b": {"input": 0.24, "output": 2.2, "cached": 0.05},
+    "meta/muse-wonder": {"input": 4.0, "output": 20.0, "cached": 0.2},
+    "google/gemma-4-31b-it": {"input": 0.2, "output": 0.4},
+    "liquid/lfm-2.5-24b-a2b": {"input": 0.05, "output": 0.7, "cached": 0.025},
+    "aion-labs/aion-3.5-mini": {"input": 0.7, "output": 1.4, "cached": 0.18},
+    "nvidia/nemotron-3.5-super-vl": {"input": 0.1, "output": 0.4, "cached": 0.08},
+    "google/gemini-3.8-flash": {"input": 0.825, "output": 4.125, "cached": 0.0825},
+    "elorian/glimpse": {"input": 0.6, "output": 3.0, "cached": 0.06},
+    "anthropic/claude-sonnet-5.5": {"input": 2.0, "output": 10.0, "cached": 0.1},
+    "openai/gpt-5.6-terra": {"input": 2.0, "output": 12.0, "cached": 0.2},
+    "upstage/solar-mini4": {"input": 0.05, "output": 0.2, "cached": 0.005},
+    "xiaomi/mimo-v2.6-flash": {"input": 0.14, "output": 0.28, "cached": 0.0028},
+    "tencent/hy4-preview": {"input": 0.7506, "output": 2.2509, "cached": 0.0378},
+    "inference-net/schematron-v2-turbo": {
+        "input": 0.03,
+        "output": 0.15,
+        "cached": 0.03,
+    },
+    "ibm-granite/granite-4.2-8b": {"input": 0.06, "output": 0.25, "cached": 0.015},
+    "arcee-ai/trinity-large-thinking": {"input": 0.25, "output": 0.8, "cached": 0.06},
+    "minimax/minimax-m3": {"input": 0.3, "output": 1.2, "cached": 0.06},
+    "mistralai/mistral-large-4-0": {"input": 0.68, "output": 2.09, "cached": 0.07},
+    "google/gemini-3.5-flash-lite": {"input": 0.3, "output": 2.5, "cached": 0.03},
+    "xiaomi/mimo-v2.6-pro": {"input": 0.435, "output": 0.87, "cached": 0.0036},
+    "qwen/qwen3.8-max-prime": {"input": 4.0, "output": 12.0, "cached": 0.5},
+    "moonshotai/kimi-k3": {"input": 0.304, "output": 11.936, "cached": 0.21},
+    "anthropic/claude-opus-5.5": {"input": 4.0, "output": 20.0, "cached": 0.2},
+    "nex-agi/nex-n2.5-pro": {"input": 0.075, "output": 0.25, "cached": 0.015},
+    "aion-labs/aion-3.5": {"input": 3.0, "output": 6.0, "cached": 0.75},
+    "openai/gpt-6.1-sol": {"input": 2.0, "output": 10.0, "cached": 0.1},
+    "z-ai/glm-5.3-flash": {"input": 0.15, "output": 0.5, "cached": 0.03},
+    "google/gemini-4-argon": {"input": 2.0, "output": 10.0, "cached": 0.1},
+    "openai/gpt-6-astra": {"input": 10.0, "output": 50.0, "cached": 1.0},
+    "google/gemma-4-26b-a4b-it": {"input": 0.0675, "output": 0.225, "cached": 0.0375},
+    "upstage/solar-pro4": {"input": 0.09, "output": 0.36, "cached": 0.018},
+    "stepfun/step-5-preview": {"input": 1.0, "output": 2.7, "cached": 0.1},
+}
+
+# ARCHIE-227: one smoke per case; see docs/model-catalog/openrouter-2026-10-17.md.
+# "swarm": small structured council schemas pass (ARCHIE-249 probe, 23.10.2026).
+MODEL_STAGE_SUPPORT: dict[str, dict[str, bool]] = {
+    "openai/gpt-6.1-sol": {"command": True, "final_plain": True, "final_ui": True},
+    "openai/gpt-6-luna": {"command": True, "final_plain": True, "final_ui": True},
+    "openai/gpt-6-astra": {"command": True, "final_plain": True, "final_ui": True},
+    "openai/gpt-5.6-terra": {"command": True, "final_plain": True, "final_ui": True},
+    "anthropic/claude-haiku-5.5": {
+        "command": True,
+        "final_plain": True,
+        "final_ui": False,
+    },
+    "anthropic/claude-sonnet-5.5": {
+        "command": False,
+        "final_plain": False,
+        "final_ui": False,
+        "swarm": True,
+    },
+    "anthropic/claude-opus-5.5": {
+        "command": False,
+        "final_plain": False,
+        "final_ui": False,
+        "swarm": True,
+    },
+    "anthropic/claude-fable-5.1": {
+        "command": False,
+        "final_plain": False,
+        "final_ui": False,
+    },
+    "google/gemini-4-argon": {"command": True, "final_plain": True, "final_ui": True},
+    "google/gemini-3.8-flash": {
+        "command": True,
+        "final_plain": True,
+        "final_ui": False,
+    },
+    "google/gemini-3.5-flash-lite": {
+        "command": True,
+        "final_plain": True,
+        "final_ui": False,
+    },
+    "x-ai/grok-4.7": {"command": True, "final_plain": True, "final_ui": True},
+    "deepseek/deepseek-v4.1-flash-1017": {
+        "command": True,
+        "final_plain": True,
+        "final_ui": False,
+    },
+    "deepseek/deepseek-v4-pro-0813": {
+        "command": False,
+        "final_plain": True,
+        "final_ui": True,
+    },
+    "qwen/qwen3.8-max-prime": {"command": True, "final_plain": True, "final_ui": True},
+    "qwen/qwen3.8-flash": {"command": True, "final_plain": True, "final_ui": False},
+    "qwen/qwen3.8-27b": {"command": True, "final_plain": False, "final_ui": False},
+    "z-ai/glm-5.3": {"command": True, "final_plain": True, "final_ui": False},
+    "z-ai/glm-5.3-flash": {"command": False, "final_plain": True, "final_ui": False},
+    "moonshotai/kimi-k3": {"command": True, "final_plain": True, "final_ui": True},
+    "minimax/minimax-m3": {"command": True, "final_plain": True, "final_ui": False},
+    "mistralai/mistral-large-4-0": {
+        "command": True,
+        "final_plain": True,
+        "final_ui": True,
+    },
+    "nvidia/nemotron-3.5-super-vl": {
+        "command": False,
+        "final_plain": False,
+        "final_ui": False,
+    },
+    "nvidia/nemotron-3.5-lightning": {
+        "command": False,
+        "final_plain": False,
+        "final_ui": False,
+    },
+    "meta/muse-spark-open": {"command": True, "final_plain": True, "final_ui": True},
+    "meta/muse-wonder": {"command": False, "final_plain": True, "final_ui": False},
+    "stepfun/step-5-preview": {"command": True, "final_plain": True, "final_ui": False},
+    "reflection/beam-1.0-501b-a23b": {
+        "command": False,
+        "final_plain": True,
+        "final_ui": False,
+    },
+    "elorian/glimpse": {"command": False, "final_plain": True, "final_ui": False},
+    "liquid/lfm-2.5-24b-a2b": {
+        "command": False,
+        "final_plain": False,
+        "final_ui": False,
+    },
+    "inclusionai/ling-3.1-flash": {
+        "command": False,
+        "final_plain": True,
+        "final_ui": False,
+    },
+    "inference-net/schematron-v2-turbo": {
+        "command": False,
+        "final_plain": True,
+        "final_ui": False,
+    },
+    "inference-net/schematron-v2-small": {
+        "command": False,
+        "final_plain": True,
+        "final_ui": False,
+    },
+    "inception/mercury-2.5": {"command": True, "final_plain": True, "final_ui": True},
+    "nex-agi/nex-n2.5-mini": {"command": False, "final_plain": True, "final_ui": False},
+    "nex-agi/nex-n2.5-pro": {"command": False, "final_plain": True, "final_ui": False},
+    "cohere/command-a-plus": {"command": False, "final_plain": True, "final_ui": True},
+    "upstage/solar-mini4": {"command": False, "final_plain": True, "final_ui": False},
+    "xiaomi/mimo-v2.6-flash": {
+        "command": False,
+        "final_plain": True,
+        "final_ui": False,
+    },
+    "xiaomi/mimo-v2.6-pro": {"command": True, "final_plain": True, "final_ui": False},
+    "google/gemma-4-31b-it": {"command": False, "final_plain": True, "final_ui": False},
+    "google/gemma-4-26b-a4b-it": {
+        "command": False,
+        "final_plain": True,
+        "final_ui": False,
+    },
+    "mistralai/mistral-medium-3-5": {
+        "command": True,
+        "final_plain": True,
+        "final_ui": True,
+    },
+    "upstage/solar-pro4": {"command": False, "final_plain": False, "final_ui": False},
+    "ibm-granite/granite-4.2-8b": {
+        "command": False,
+        "final_plain": False,
+        "final_ui": False,
+    },
+    "sakana/fugu-ultra-v2": {"command": False, "final_plain": False, "final_ui": False},
+    "sakana/fugu-max": {"command": False, "final_plain": False, "final_ui": False},
+    "tencent/hy4-preview": {"command": False, "final_plain": True, "final_ui": False},
+    "prism-ml/ternary-bonsai-2-27b": {
+        "command": False,
+        "final_plain": True,
+        "final_ui": True,
+    },
+    "fireworks/ember-1": {"command": True, "final_plain": True, "final_ui": True},
+    "aion-labs/aion-3.5-mini": {
+        "command": False,
+        "final_plain": False,
+        "final_ui": False,
+    },
+    "aion-labs/aion-3.5": {"command": False, "final_plain": False, "final_ui": False},
+    "arcee-ai/trinity-large-thinking": {
+        "command": False,
+        "final_plain": True,
+        "final_ui": False,
+    },
+}
+
+TOOLS_CONFIG = {
+    "smarthome": {
+        "smarthome_control_tool": "app.tools.smarthome_control_tool",
+        "smarthome_status_tool": "app.tools.smarthome_status_tool",
+        "spotify_tool": "app.tools.spotify_tool",
+    },
+    "tv": {
+        "tv_tool": "app.tools.tv_tool",
+    },
+    "internet_search": {
+        "google_search_tool": "app.tools.google_search_tool",
+        "google_places_search_tool": "app.tools.google_places_search_tool",
+    },
+    "productivity": {
+        "task_tool": "app.tools.task_tool",
+        "notes_tool": "app.tools.notes_tool",
+        "events_tool": "app.tools.events_tool",
+        "gmail_tool": "app.tools.gmail_tool",
+        "cron_tool": "app.tools.cron_tool",
+        "announce_tool": "app.tools.announce_tool",
+        "awtrix_tool": "app.tools.awtrix_tool",
+        "agent_task_tool": "app.tools.agent_task_tool",
+    },
+    "knowledge": {
+        "document_search_tool": "app.tools.document_search_tool",
+    },
+    "skills": {
+        "skill_loader_tool": "app.tools.skill_loader_tool",
+    },
+    # Only swarm agents get these tools; the main chat does not (ARCHIE-246)
+    "swarm": {
+        "weather_tool": "app.tools.weather_tool",
+        "alert_chat_tool": "app.tools.alert_chat_tool",
+        "swarm_alert_tool": "app.tools.swarm_alert_tool",
+    },
+}
+
+# Tool groups the main chat pipeline does not load
+SWARM_ONLY_TOOL_GROUPS: frozenset[str] = frozenset({"swarm"})

@@ -14,7 +14,7 @@ from archie_shared.ui.models import (
     UIAnswer,
     Widget,
 )
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 
 class FactCheck(BaseModel):
@@ -29,23 +29,18 @@ class FactCheck(BaseModel):
 
 
 class SGROutput(BaseModel):
-    """Notes of the final response stage"""
+    """SGR trace for final response generation phase"""
 
-    # Schema names "rationale" / "ui_rationale": Claude 5.5 refuses "reasoning"
-    # fields as output extraction (content_filter); Python keeps the old names
-    model_config = ConfigDict(populate_by_name=True)
-
-    # rationale is first so the LLM generates it before the main content,
-    # enabling streaming of it to the frontend.
+    # reasoning is first so the LLM generates it before the main content,
+    # enabling streaming of the reasoning to the frontend.
     reasoning: str = Field(
-        alias="rationale", description="Why the final response is built this way"
+        description="Step-by-step reasoning for constructing this final response"
     )
     fact_checks: list[FactCheck] = Field(
         description="List of factual statements verified during response generation"
     )
     ui_reasoning: str = Field(
-        alias="ui_rationale",
-        description="Why this UI format and these components (cards, buttons, tables, etc.)",
+        description="Reasoning behind chosen UI format and components (cards, buttons, tables, etc.)"
     )
     orchestration_summary: str | None = Field(
         default=None,
@@ -141,3 +136,22 @@ class WidgetResponse(BaseModel):
 
     sgr: SGROutput = Field(description="Output reasoning trace")
     widget: WidgetType = Field(description="Standalone widget content")
+
+
+# Mapping from response_format to LLM response model
+FORMAT_TO_MODEL: dict[str, type[BaseModel]] = {
+    "plain": PlainResponse,
+    "voice": PlainResponse,
+    "gemini_tts": PlainResponse,
+    "formatted_text": PlainResponse,
+    "level2_answer": Level2Response,
+    "level3_answer": Level3Response,
+    "ui_answer": UIResponse,
+    "dashboard": DashboardResponse,
+    "widget": WidgetResponse,
+}
+
+
+def get_response_model_for_format(response_format: str) -> type[BaseModel]:
+    """Get the appropriate LLM response model for the given format."""
+    return FORMAT_TO_MODEL.get(response_format, PlainResponse)

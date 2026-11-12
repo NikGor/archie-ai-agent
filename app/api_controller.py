@@ -1,17 +1,14 @@
 """API controller for handling chat requests."""
 
-import functools
 import logging
 from collections.abc import Awaitable, Callable
 from archie_shared.chat.models import ChatMessage, ChatRequest
-from app.agents.chat.requests import ChatRunRequest
-from .agents.chat.pipeline import ChatPipeline
-from .agents.chat.quality.rules import spec_versions
+from .agent.agent_factory import AgentFactory
 from .config import DEFAULT_MODEL
 from .models.ws_models import StatusUpdate, StreamCallback, StreamEventCallback
-from .platform.llm.catalog import supports_vision
 from .utils.file_utils import build_input_with_files
 from .utils.general_utils import generate_message_id
+from .utils.provider_utils import supports_vision
 from .utils.tracing import trace_chat_turn
 
 
@@ -20,12 +17,7 @@ logger = logging.getLogger(__name__)
 StatusCallback = Callable[[StatusUpdate], Awaitable[None]] | None
 
 
-@functools.cache
-def get_chat_pipeline() -> ChatPipeline:
-    """The chat pipeline of this process, built on first use (ARCHIE-171)."""
-    return ChatPipeline()
-
-
+@trace_chat_turn
 async def handle_chat(
     user_request: ChatRequest,
     on_status: StatusCallback = None,
@@ -53,26 +45,24 @@ async def handle_chat(
             f"dropping \033[33m{len(images)}\033[0m image(s)"
         )
         images = None
-    agent_response = await get_chat_pipeline().arun(
-        ChatRunRequest(
-            messages=current_messages,
-            command_model=command_model,
-            final_output_model=final_output_model,
-            command_effort=user_request.command_effort,
-            final_output_effort=user_request.final_output_effort,
-            response_format=user_request.response_format,
-            previous_response_id=user_request.previous_message_id,
-            chat_history=user_request.chat_history,
-            user_name=user_request.user_name,
-            conversation_id=user_request.conversation_id,
-            no_image=no_image,
-            images=images,
-            max_command_iterations=max_command_iterations,
-            on_status=on_status,
-            on_stream=on_stream,
-            on_stream_event=on_stream_event,
-            demo_mode=bool(user_request.demo_mode),
-        )
+    agent_factory = AgentFactory(demo_mode=user_request.demo_mode)
+    agent_response = await agent_factory.arun(
+        messages=current_messages,
+        command_model=command_model,
+        final_output_model=final_output_model,
+        command_effort=user_request.command_effort,
+        final_output_effort=user_request.final_output_effort,
+        response_format=user_request.response_format,
+        previous_response_id=user_request.previous_message_id,
+        chat_history=user_request.chat_history,
+        user_name=user_request.user_name,
+        conversation_id=user_request.conversation_id,
+        no_image=no_image,
+        images=images,
+        max_command_iterations=max_command_iterations,
+        on_status=on_status,
+        on_stream=on_stream,
+        on_stream_event=on_stream_event,
     )
 
     # Create response message
@@ -96,11 +86,3 @@ async def handle_chat(
     logger.info("=== STEP 4: Response Ready ===")
 
     return assistant_message
-
-
-def _chat_spec_versions(response_format: str) -> dict[str, str]:
-    return spec_versions(response_format, trace_found=True)
-
-
-# One Langfuse trace per chat turn, with the spec versions that produced it
-handle_chat = trace_chat_turn(handle_chat, spec_versions=_chat_spec_versions)

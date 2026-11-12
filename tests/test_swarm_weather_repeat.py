@@ -11,12 +11,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
 import pytest
 from app.config import settings
-from app.platform.tools.models import ToolResult
-from app.agents.swarm.agents import SWARM_AGENTS
-from app.agents.swarm.memory import DayNote
-from app.agents.swarm.runner import SwarmAgentRunner
-import app.agents.swarm.tools  # noqa: F401
-from app.tools.catalog import tool_registry
+from app.models.tool_models import ToolResult
+from app.swarm.agents import SWARM_AGENTS
+from app.swarm.memory import DayNote
+from app.swarm.runner import SwarmAgentRunner
+from app.tools.tool_factory import ToolFactory
 from tests.conftest import make_user_state
 
 pytestmark = pytest.mark.llm
@@ -211,7 +210,7 @@ def _runner(notes: list[DayNote], facts: list[str]) -> SwarmAgentRunner:
         get_model=AsyncMock(return_value=settings.swarm_model),
     )
     return SwarmAgentRunner(
-        tool_registry=tool_registry,
+        tool_factory=ToolFactory(),
         state_service=state_service,
         roster=roster,
         memory=memory,
@@ -223,18 +222,20 @@ async def test_weather_check_reports_only_a_real_change(case: str):
     time, notes, facts, weather = CASES[case]
     now = datetime(2026, 10, 24, *map(int, time.split(":")), tzinfo=ZONE)
     runner = _runner(notes, facts)
-    runner.prompts.datetime_note = MagicMock(
-        return_value=f"Current date/time: Saturday, 24.10.2026, {time} (Europe/Berlin)"
+    runner.prompt_builder = MagicMock(
+        build_datetime_note=MagicMock(
+            return_value=f"Current date/time: Saturday, 24.10.2026, {time} (Europe/Berlin)"
+        )
     )
     tools = AsyncMock(
         side_effect=lambda tool_calls, **_: [
             ToolResult(tool_name=c.tool_name, output=weather) for c in tool_calls
         ]
     )
-    task = runner.prompts.render_task("swarm_watch", task="weather", teams=[], language="ru")
+    task = runner.render_task("swarm_watch", task="weather", teams=[], language="ru")
     with (
-        patch("app.agents.swarm.messages.local_now", return_value=now),
-        patch("app.agents.swarm.runner.execute_tool_calls", tools),
+        patch("app.swarm.runner.local_now", return_value=now),
+        patch("app.swarm.runner.execute_tool_calls", tools),
     ):
         draft = await runner.watch(SWARM_AGENTS["weather"], "weather", [], task)
     outcome = draft.outcome

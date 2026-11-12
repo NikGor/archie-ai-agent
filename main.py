@@ -8,28 +8,14 @@ load_dotenv()
 
 import uvicorn  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
-from app.agent_system_endpoints import router as agent_systems_router  # noqa: E402
-from app.agents.background import configure_ephemeral
-from app.agents.chat.service import ChatService  # noqa: E402
-from app.agents.delegation import (  # noqa: E402
-    agent_ledger,
-    bounded_completion,
-    build_agents,
-    configure_delegation,
-)
-from app.agents.registry import load_agent_kinds  # noqa: E402
-from app.agents.swarm.bridge import SwarmHubBridge  # noqa: E402
-from app.agents.swarm.endpoints import router as swarm_router  # noqa: E402
-from app.agents.swarm.service import swarm_service  # noqa: E402
-from app.agents.systems import configure_systems  # noqa: E402
 from app.backend.cron_scheduler import cron_scheduler  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.endpoints import router  # noqa: E402
 from app.evals.endpoints import router as evals_router  # noqa: E402
 from app.evals.endpoints import ws_router as evals_ws_router  # noqa: E402
 from app.monitoring.endpoints import router as monitoring_router  # noqa: E402
-from app.runtime_endpoints import router as runtime_router  # noqa: E402
-from app.runtime_endpoints import supervisor  # noqa: E402
+from app.swarm.endpoints import router as swarm_router  # noqa: E402
+from app.swarm.service import swarm_service  # noqa: E402
 from app.utils.tracing import init_tracing, shutdown_tracing  # noqa: E402
 from app.ws_docs import router as ws_docs_router  # noqa: E402
 
@@ -44,39 +30,17 @@ logger.info("=== STEP 1: App Init ===")
 init_tracing()
 
 
-# Composition root (ARCHIE-298): the supervisor starts, watches and stops the
-# long-lived services of this process
-supervisor.register(ChatService())
-# ARCHIE-324: the chat delegates to dynamic agents in this process;
-# ARCHIE-341: the agent constructor runs agent systems on the same agents
-agent_spend = agent_ledger()
-agent_call = bounded_completion(agent_spend)
-dynamic_agents = build_agents(agent_call)
-configure_delegation(dynamic_agents, agent_spend)
-configure_systems(dynamic_agents, agent_call)
-if settings.runtime_mode == "api":
-    # Swarm and cron run in the runtime process (python -m app.runtime_main);
-    # this process relays swarm events and commands through Redis (ARCHIE-299)
-    swarm_service.bridge = SwarmHubBridge(swarm_service.hub, role="api")
-    supervisor.register(swarm_service.bridge)
-else:
-    configure_ephemeral()
-    supervisor.register(cron_scheduler)
-    if settings.swarm_enabled:
-        supervisor.register(swarm_service)
-
-
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    load_agent_kinds()
-    await supervisor.start()
+    await cron_scheduler.start()
+    if settings.swarm_enabled:
+        await swarm_service.start()
     try:
         yield
     finally:
-        await supervisor.stop()
-        if settings.swarm_enabled or settings.runtime_mode == "api":
-            await swarm_service.close()
-        await cron_scheduler.close()
+        if settings.swarm_enabled:
+            await swarm_service.stop()
+        await cron_scheduler.stop()
         shutdown_tracing()
 
 
@@ -87,8 +51,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(router)
-app.include_router(runtime_router)
-app.include_router(agent_systems_router)
 app.include_router(ws_docs_router)
 app.include_router(swarm_router)
 app.include_router(evals_router)

@@ -146,10 +146,6 @@ def _agent_task_detail(_args: dict[str, Any]) -> str:
     return "Running a scheduled task"
 
 
-def _delegate_detail(args: dict[str, Any]) -> str:
-    return f"Agent: {str(args.get('task', ''))[:60]}"
-
-
 def _weather_detail(args: dict[str, Any]) -> str:
     return f"Weather: {args.get('city', '')}".strip(": ")
 
@@ -187,11 +183,9 @@ _TOOL_DETAIL_MAP: dict[str, Any] = {
     "announce_tool": _announce_detail,
     "awtrix_tool": _awtrix_detail,
     "weather_tool": _weather_detail,
-    "spawn_agent_tool": lambda _args: "Running a read-only diagnosis",
     "alert_chat_tool": _alert_chat_detail,
     "swarm_alert_tool": _swarm_alert_detail,
     "agent_task_tool": _agent_task_detail,
-    "delegate_agent_tool": _delegate_detail,
 }
 
 

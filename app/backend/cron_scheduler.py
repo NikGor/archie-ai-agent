@@ -13,8 +13,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from croniter import CroniterBadCronError, croniter  # type: ignore[import-untyped]
 from redis.exceptions import RedisError
 from app.backend.redis_factory import get_async_redis
-from app.config import settings
-from app.tools.catalog import tool_registry
+from app.config import TOOLS_CONFIG, settings
 
 
 logger = logging.getLogger(__name__)
@@ -34,7 +33,11 @@ def _iso(value: datetime) -> str:
 
 
 def _configured_tools() -> dict[str, str]:
-    return {name: tool_registry.module_path(name) for name in tool_registry.names()}
+    return {
+        name: module_path
+        for tools in TOOLS_CONFIG.values()
+        for name, module_path in tools.items()
+    }
 
 
 def _timezone(name: str) -> ZoneInfo:
@@ -213,8 +216,6 @@ class CronScheduler:
         self._worker = asyncio.create_task(self._run_loop(), name="archie-cron")
         logger.info("cron_scheduler_001: Scheduler started")
 
-    name = "cron"
-
     async def stop(self) -> None:
         self._stopping.set()
         if self._worker:
@@ -222,15 +223,8 @@ class CronScheduler:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._worker
             self._worker = None
-        logger.info("cron_scheduler_002: Scheduler stopped")
-
-    def healthy(self) -> bool:
-        """The worker loop is alive (the supervisor restarts a dead one, ARCHIE-298)."""
-        return self._worker is not None and not self._worker.done()
-
-    async def close(self) -> None:
-        """Close Redis at process exit; stop() keeps it for a restart."""
         await self.redis.aclose()
+        logger.info("cron_scheduler_002: Scheduler stopped")
 
     async def _run_loop(self) -> None:
         recovered = False

@@ -1,0 +1,61 @@
+# Stage 1: routing, tool selection and UI intents. Rule texts: rules/command.json, rules/context.json
+sections:
+  - title: Orchestration Stage
+    style: lines
+    rules: [command_role]
+
+  - title: User Context
+    rules:
+      - cmd_fact_user
+      - cmd_fact_timezone
+      - cmd_fact_location
+      - cmd_respond_in_message_language
+      - cmd_fact_measurement_units
+      - cmd_fact_currency
+      - {rule: cmd_fact_spotify, when: state.spotify}
+
+  - title: Your Task
+    style: lines
+    rules: [decide_next_action]
+
+  - title: Decision Types
+    rules:
+      - action_function_call
+      - action_parameters_request
+      - action_final_response
+  - style: lines
+    rules: [never_offer_search]
+
+  - title: When to use tools vs internal knowledge
+    style: paragraphs
+    rules:
+      - search_for_live_data
+      - answer_from_knowledge_cases
+      - search_when_in_doubt
+
+  - title: Guidelines
+    rules:
+      - explain_reasoning
+      - run_tools_in_parallel
+      - request_only_required_parameters
+      - ask_when_uncertain
+      - confirm_important_operations
+      - watch_current_date
+      - defer_actions_with_cron
+      - smarthome_act_without_confirmation
+      - smarthome_infer_parameters
+      - stop_when_results_complete
+      - gmail_read_only
+      - {rule: form_before_create, when: "response_format == 'ui_answer'"}
+      - load_matching_skill
+
+  - title: UI Intents (for response_format=ui_answer only)
+    style: lines
+    rules:
+      - fill_ui_intents
+      - required_ui_intents
+      - other_ui_intents
+      - ui_intents_scope
+
+  - style: lines
+    rules: [follow_decision_schema]

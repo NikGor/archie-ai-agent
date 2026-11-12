@@ -1,13 +1,9 @@
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field
-from ..platform.tools.models import Parameter, ToolCall
+from pydantic import BaseModel, Field
 from ..utils.intent_config import IntentType
 
 
-# Tools the chat may call. Swarm-only tools stay out of the Stage 1 schema, so
-# the LLM cannot pick a tool it has no description of (ARCHIE-305). Kept equal
-# to the non-exclusive groups of the tool registry by a drift test.
-ChatToolName = Literal[
+ToolName = Literal[
     "smarthome_control_tool",
     "smarthome_status_tool",
     "spotify_tool",
@@ -21,8 +17,10 @@ ChatToolName = Literal[
     "cron_tool",
     "announce_tool",
     "awtrix_tool",
+    "weather_tool",
+    "alert_chat_tool",
+    "swarm_alert_tool",
     "agent_task_tool",
-    "delegate_agent_tool",
     "document_search_tool",
     "skill_loader_tool",
 ]
@@ -30,15 +28,16 @@ ChatToolName = Literal[
 
 class ActionType(BaseModel):
     type: Literal["function_call", "parameters_request", "final_response"]
-    # Schema name "rationale": Claude 5.5 refuses a "reasoning" field as output
-    # extraction (content_filter); Python keeps .reasoning
-    model_config = ConfigDict(populate_by_name=True)
+    reasoning: str = Field(description="Why this action type was chosen")
 
-    reasoning: str = Field(alias="rationale", description="Why this action type was chosen")
+
+class Parameter(BaseModel):
+    name: str = Field(description="Parameter name")
+    value: str = Field(description="Parameter value")
 
 
 class ToolCallRequest(BaseModel):
-    tool_name: ChatToolName = Field(description="Name of the tool to call")
+    tool_name: ToolName = Field(description="Name of the tool to call")
     arguments: list[Parameter] = Field(
         description="Arguments to pass to the tool with their values, which can be found from context",
     )
@@ -51,23 +50,17 @@ class ToolCallRequest(BaseModel):
     )
     reason: str = Field(description="Why this tool is needed")
 
-    def to_call(self) -> ToolCall:
-        """The neutral call the executor runs (ARCHIE-292)."""
-        return ToolCall(
-            tool_name=self.tool_name, arguments=self.arguments, reason=self.reason
-        )
-
 
 class SGROrchestration(BaseModel):
-    """Decision of the command stage"""
-
-    model_config = ConfigDict(populate_by_name=True)
+    """SGR trace for orchestration and decision-making phase"""
 
     action: ActionType
     tool_calls: list[ToolCallRequest] = Field(
         description="Tools to execute (can be parallel)",
     )
-    reasoning: str = Field(alias="rationale", description="Why this decision was made")
+    reasoning: str = Field(
+        description="Step-by-step reasoning for this orchestration decision"
+    )
     intents: list[IntentType] = Field(
         default_factory=list,
         description=(

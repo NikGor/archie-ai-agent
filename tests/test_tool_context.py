@@ -1,6 +1,6 @@
 """The user's timezone reaches the web search (ARCHIE-257).
 
-The tool registry gives ToolContext fields to the tools that declare them,
+ToolFactory gives ToolContext fields to the tools that declare them,
 tool_executor and CommandLoop pass the context, and google_search_tool tells
 Gemini to give times in the user's timezone. The LLM never sees the parameter.
 """
@@ -10,8 +10,9 @@ from types import SimpleNamespace
 from typing import Literal
 from unittest.mock import AsyncMock, patch
 import app.tools.google_search_tool as google_search_tool_module
-from app.agents.chat.command_loop import CommandLoop
-from app.agents.chat.metrics import PipelineMetrics
+from app.agent.command_loop import CommandLoop
+from app.agent.context import ConversationContext
+from app.agent.pipeline_metrics import PipelineMetrics
 from app.models.orchestration_sgr import (
     ActionType,
     DecisionResponse,
@@ -19,12 +20,11 @@ from app.models.orchestration_sgr import (
     SGROrchestration,
     ToolCallRequest,
 )
-from app.platform.tools.models import ToolContext, ToolResult
+from app.models.tool_models import ToolContext, ToolResult
 from app.models.ws_models import StatusNotifier
-from app.platform.llm.context import ConversationContext
 from app.tools.google_search_tool import build_search_instruction, google_search_tool
-from app.platform.tools.registry import READ, WRITE, ToolGroup, ToolRegistry
-from app.platform.tools.executor import execute_tool_calls
+from app.tools.tool_factory import ToolFactory
+from app.utils.tool_executor import execute_tool_calls
 from app.utils.tools_utils import openai_parse
 from tests.conftest import make_user_state
 
@@ -40,21 +40,13 @@ async def _tool_without_timezone(query: str) -> dict:
     return {"query": query}
 
 
-def _factory() -> ToolRegistry:
-    registry = ToolRegistry(
-        [
-            ToolGroup(
-                name="test",
-                tools={"google_search_tool": "x", "notes_tool": "y"},
-                capabilities={"google_search_tool": READ, "notes_tool": WRITE},
-            )
-        ]
-    )
-    registry._functions = {
+def _factory() -> ToolFactory:
+    factory = ToolFactory()
+    factory.tools = {
         "google_search_tool": _tool_with_timezone,
         "notes_tool": _tool_without_timezone,
     }
-    return registry
+    return factory
 
 
 def _search_call(query: str) -> ToolCallRequest:
@@ -82,27 +74,27 @@ def _decision(
     )
 
 
-# --- tool registry / executor ---
+# --- ToolFactory / tool_executor ---
 
 
 async def test_execute_tool_gives_context_only_to_tools_that_declare_it():
     factory = _factory()
-    assert await factory.execute("google_search_tool", {"query": "q"}, BERLIN) == {
+    assert await factory.execute_tool("google_search_tool", {"query": "q"}, BERLIN) == {
         "query": "q",
         "user_timezone": "Europe/Berlin",
     }
-    assert await factory.execute("notes_tool", {"query": "q"}, BERLIN) == {
+    assert await factory.execute_tool("notes_tool", {"query": "q"}, BERLIN) == {
         "query": "q"
     }
 
 
 async def test_execute_tool_without_context_keeps_the_tool_default():
-    result = await _factory().execute("google_search_tool", {"query": "q"})
+    result = await _factory().execute_tool("google_search_tool", {"query": "q"})
     assert result["user_timezone"] == "UTC"
 
 
 async def test_context_wins_over_an_argument_from_the_llm():
-    result = await _factory().execute(
+    result = await _factory().execute_tool(
         "google_search_tool", {"query": "q", "user_timezone": "Asia/Tokyo"}, BERLIN
     )
     assert result["user_timezone"] == "Europe/Berlin"
@@ -110,10 +102,7 @@ async def test_context_wins_over_an_argument_from_the_llm():
 
 async def test_execute_tool_calls_passes_context_to_every_call():
     results = await execute_tool_calls(
-        [_search_call("a").to_call(), _search_call("b").to_call()],
-        _factory(),
-        allowed={"google_search_tool"},
-        context=BERLIN,
+        [_search_call("a"), _search_call("b")], _factory(), context=BERLIN
     )
     assert [r.output["user_timezone"] for r in results] == ["Europe/Berlin"] * 2
 
@@ -128,7 +117,7 @@ async def test_command_loop_passes_the_user_timezone_to_tools():
             (_decision("final_response", []), None),
         ]
     )
-    with patch("app.agents.chat.command_loop.execute_tool_calls", executed):
+    with patch("app.agent.command_loop.execute_tool_calls", executed):
         await CommandLoop(_factory(), PipelineMetrics(), max_iterations=3).run(
             make_command_call=make_command_call,
             user_input="Футбол завтра",
