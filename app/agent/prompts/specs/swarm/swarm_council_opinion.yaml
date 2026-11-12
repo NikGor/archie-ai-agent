@@ -5,6 +5,7 @@ sections:
   - style: numbered
     rules:
       - swarm_opinion_language
+      - swarm_opinion_own_lens
       - swarm_opinion_specific_option
       - swarm_opinion_no_tasks
       - {rule: swarm_opinion_alert_nothing, when: "alert"}
