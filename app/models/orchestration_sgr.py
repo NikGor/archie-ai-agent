@@ -25,6 +25,28 @@ ToolName = Literal[
     "skill_loader_tool",
 ]
 
+# Tools the chat may call. Swarm-only tools stay out of the Stage 1 schema, so
+# the LLM cannot pick a tool it has no description of (ARCHIE-305). Kept equal
+# to the non-swarm groups of TOOLS_CONFIG by a drift test.
+ChatToolName = Literal[
+    "smarthome_control_tool",
+    "smarthome_status_tool",
+    "spotify_tool",
+    "tv_tool",
+    "google_search_tool",
+    "google_places_search_tool",
+    "task_tool",
+    "notes_tool",
+    "events_tool",
+    "gmail_tool",
+    "cron_tool",
+    "announce_tool",
+    "awtrix_tool",
+    "agent_task_tool",
+    "document_search_tool",
+    "skill_loader_tool",
+]
+
 
 class ActionType(BaseModel):
     type: Literal["function_call", "parameters_request", "final_response"]
@@ -55,13 +77,20 @@ class ToolCallRequest(BaseModel):
     reason: str = Field(description="Why this tool is needed")
 
 
+
+class ChatToolCallRequest(ToolCallRequest):
+    """Stage 1 tool call: only the tools of the chat (ARCHIE-305)."""
+
+    tool_name: ChatToolName = Field(description="Name of the tool to call")
+
+
 class SGROrchestration(BaseModel):
     """Decision of the command stage"""
 
     model_config = ConfigDict(populate_by_name=True)
 
     action: ActionType
-    tool_calls: list[ToolCallRequest] = Field(
+    tool_calls: list[ChatToolCallRequest] = Field(
         description="Tools to execute (can be parallel)",
     )
     reasoning: str = Field(alias="rationale", description="Why this decision was made")
