@@ -15,10 +15,10 @@ from app.agent.context import ConversationContext
 from app.agent.pipeline_metrics import PipelineMetrics
 from app.models.orchestration_sgr import (
     ActionType,
+    ChatToolCallRequest,
     DecisionResponse,
     Parameter,
     SGROrchestration,
-    ToolCallRequest,
 )
 from app.models.tool_models import ToolContext, ToolResult
 from app.models.ws_models import StatusNotifier
@@ -49,8 +49,8 @@ def _factory() -> ToolFactory:
     return factory
 
 
-def _search_call(query: str) -> ToolCallRequest:
-    return ToolCallRequest(
+def _search_call(query: str) -> ChatToolCallRequest:
+    return ChatToolCallRequest(
         tool_name="google_search_tool",
         arguments=[Parameter(name="query", value=query)],
         missing_parameters=[],
@@ -61,7 +61,7 @@ def _search_call(query: str) -> ToolCallRequest:
 
 def _decision(
     action_type: Literal["function_call", "final_response"],
-    tool_calls: list[ToolCallRequest],
+    tool_calls: list[ChatToolCallRequest],
 ) -> DecisionResponse:
     return DecisionResponse(
         sgr=SGROrchestration(
